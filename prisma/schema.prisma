@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  FOUNDER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Profile {
+  id                String            @id @db.Uuid
+  full_name         String
+  email             String            @unique
+  role              UserRole          @default(MEMBER)
+  is_active         Boolean           @default(true)
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updated_at
+  tasks_assigned    Task[]            @relation("TasksAssignedTo")
+  tasks_created     Task[]            @relation("TasksAssignedBy")
+  daily_plans       DailyPlan[]       @relation("PlansCreatedBy")
+  daily_assignments DailyAssignment[]
+
+  @@map("profiles")
+}
+
+model Department {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String            @unique
+  description       String?
+  created_at        DateTime          @default(now())
+  tasks             Task[]
+  daily_assignments DailyAssignment[]
+
+  @@map("departments")
+}
+
+model Task {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title         String
+  description   String?
+  status        TaskStatus   @default(TODO)
+  priority      TaskPriority @default(MEDIUM)
+  deadline      DateTime     @db.Date
+  assigned_to   String       @db.Uuid
+  assigned_by   String       @db.Uuid
+  department_id String?      @db.Uuid
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updated_at
+
+  assignee   Profile     @relation("TasksAssignedTo", fields: [assigned_to], references: [id])
+  creator    Profile     @relation("TasksAssignedBy", fields: [assigned_by], references: [id])
+  department Department? @relation(fields: [department_id], references: [id])
+
+  @@map("tasks")
+}
+
+model DailyPlan {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plan_date   DateTime          @unique @db.Date
+  created_by  String?           @db.Uuid
+  created_at  DateTime          @default(now())
+  creator     Profile?          @relation("PlansCreatedBy", fields: [created_by], references: [id])
+  assignments DailyAssignment[]
+
+  @@map("daily_plans")
+}
+
+model DailyAssignment {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plan_id       String     @db.Uuid
+  user_id       String     @db.Uuid
+  department_id String     @db.Uuid
+  created_at    DateTime   @default(now())
+
+  plan       DailyPlan  @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  user       Profile    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [department_id], references: [id], onDelete: Cascade)
+
+  @@unique([plan_id, user_id, department_id])
+  @@map("daily_assignments")
+}

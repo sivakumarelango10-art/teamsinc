@@ -121,6 +121,8 @@ export const CallNotificationProvider = ({ children }) => {
     clearIncomingRing();
     const targetCall = call || incomingCall || ongoingCall;
     if (targetCall) {
+      // Tell SW to close the incoming-call push notification if showing
+      notificationService.notifyCallAnswered(targetCall.id);
       setActiveCallSession(targetCall);
     }
   };
@@ -128,6 +130,8 @@ export const CallNotificationProvider = ({ children }) => {
   const declineCall = () => {
     if (incomingCall) {
       dismissedCallIdsRef.current.add(incomingCall.id);
+      // Tell SW to close the ringing notification
+      notificationService.notifyCallCancelled(incomingCall.id);
     }
     clearIncomingRing();
   };
@@ -158,6 +162,10 @@ export const CallNotificationProvider = ({ children }) => {
   };
 
   const leaveCall = () => {
+    if (activeCallSession?.id) {
+      // Dismiss any lingering call push notifications
+      notificationService.notifyCallCancelled(activeCallSession.id);
+    }
     setActiveCallSession(null);
     clearIncomingRing();
   };

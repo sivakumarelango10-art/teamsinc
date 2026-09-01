@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { authApi } from '../api/authApi';
 import { supabase } from '../api/supabase';
+import notificationService from '../utils/notificationService';
 
 const AuthContext = createContext(null);
 
@@ -66,7 +67,20 @@ export const AuthProvider = ({ children }) => {
           setUser(session.user);
           setProfile(verification.profile);
           setError(null);
+
+          // Initialize Web Push subscription asynchronously (non-blocking)
+          // Requires VITE_VAPID_PUBLIC_KEY; degrades gracefully if not set.
+          const profileId = verification.profile?.id;
+          if (profileId) {
+            notificationService.initWebPush(profileId).catch(() => {});
+          }
+
         } else if (event === 'SIGNED_OUT') {
+          // Clean up push subscription for this device on logout
+          const prevProfile = currentUserRef.current;
+          if (prevProfile?.id) {
+            notificationService.onLogout(prevProfile.id).catch(() => {});
+          }
           setUser(null);
           setProfile(null);
         }

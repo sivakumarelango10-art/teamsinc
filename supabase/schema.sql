@@ -397,4 +397,41 @@ CREATE INDEX IF NOT EXISTS idx_call_history_room_status ON public.call_history(r
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned_status ON public.tasks(assigned_to, status);
 CREATE INDEX IF NOT EXISTS idx_profiles_active_email ON public.profiles(email, is_active);
 
+-- -----------------------------------------------------------------------------
+-- 9. PUSH NOTIFICATION SUBSCRIPTIONS
+--    Supports multiple subscriptions per user (one per device/browser).
+--    The VAPID private key NEVER lives here — it lives in Edge Function secrets.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    device_id   TEXT        NOT NULL,
+    endpoint    TEXT        NOT NULL,
+    p256dh      TEXT        NOT NULL,
+    auth        TEXT        NOT NULL,
+    user_agent  TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_used_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_user_device UNIQUE (user_id, device_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON public.push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON public.push_subscriptions(endpoint);
+
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- Users can only manage their own push subscriptions
+DROP POLICY IF EXISTS "Users manage own push subscriptions" ON public.push_subscriptions;
+CREATE POLICY "Users manage own push subscriptions"
+    ON public.push_subscriptions FOR ALL
+    TO authenticated
+    USING (
+        user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+    )
+    WITH CHECK (
+        user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+    );
+
+-- Service role (Edge Functions) can read all subscriptions to send pushes
+-- (No RLS policy needed for service_role — it bypasses RLS by design)
 

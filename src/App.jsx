@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { CallNotificationProvider } from './context/CallNotificationContext';
 import AppRoutes from './routes/AppRoutes';
+import PushPermissionPrompt from './components/notifications/PushPermissionPrompt';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <PresenceProvider>
           <CallNotificationProvider>
             <AppRoutes />
+            <PushPermissionPrompt />
           </CallNotificationProvider>
         </PresenceProvider>
       </AuthProvider>

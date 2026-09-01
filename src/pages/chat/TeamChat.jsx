@@ -224,6 +224,14 @@ export const TeamChat = () => {
   };
 
   useEffect(() => {
+    // Tell SW that the chat page is active (suppresses background push for chat messages)
+    notificationService.setForegroundState(true);
+
+    const handleVisibilityChange = () => {
+      notificationService.setForegroundState(!document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     loadMessages();
 
     // Supabase Realtime subscription for incoming messages, deletions, and typing
@@ -252,13 +260,14 @@ export const TeamChat = () => {
               });
               setTimeout(() => scrollToBottom(true), 50);
 
-              // Notify if from someone else
+              // Notify if from someone else — pass messageId for deduplication tag
               const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
               if (newMsg.sender_email && myEmail && newMsg.sender_email.toLowerCase() !== myEmail) {
                 notificationService.notifyChatMessage({
                   senderName: newMsg.sender_name,
                   content: newMsg.content || newMsg.file_name,
-                  currentPath: window.location.pathname
+                  currentPath: window.location.pathname,
+                  messageId: newMsg.id
                 });
               }
             }
@@ -313,10 +322,13 @@ export const TeamChat = () => {
     } catch {}
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (channel && supabase) supabase.removeChannel(channel);
       if (bc) bc.close();
       if (typingBc) typingBc.close();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      // Tell SW we are no longer viewing chat
+      notificationService.setForegroundState(false);
     };
   }, [handleTypingSignal, profile?.email, user?.email]);
 

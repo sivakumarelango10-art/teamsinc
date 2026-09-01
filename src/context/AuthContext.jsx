@@ -173,6 +173,8 @@ export const AuthProvider = ({ children }) => {
   const isFounder = role === 'FOUNDER';
   const isAdmin = role === 'ADMIN';
   const isMember = role === 'MEMBER';
+  const isFoundingAdvisor = role === 'FOUNDING_ADVISOR';
+  const isLeadership = ['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR'].includes(role);
 
   const value = {
     user,
@@ -181,6 +183,8 @@ export const AuthProvider = ({ children }) => {
     isFounder,
     isAdmin,
     isMember,
+    isFoundingAdvisor,
+    isLeadership,
     loading,
     error,
     signInWithGoogle,

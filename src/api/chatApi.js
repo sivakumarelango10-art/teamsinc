@@ -12,12 +12,13 @@ const fileToDataUrl = (file) => {
 };
 
 export const chatApi = {
-  async getMessages(limit = 100, before = null) {
+  async getMessages(limit = 100, before = null, channel = 'general') {
     if (supabase) {
       try {
         let query = supabase
           .from('messages')
-          .select('id, content, sender_id, sender_name, sender_email, sender_role, file_url, file_name, file_size, file_type, created_at')
+          .select('id, content, sender_id, sender_name, sender_email, sender_role, file_url, file_name, file_size, file_type, channel, created_at')
+          .eq('channel', channel)
           .order('created_at', { ascending: false })
           .limit(limit);
 
@@ -35,13 +36,15 @@ export const chatApi = {
     }
 
     try {
-      const stored = localStorage.getItem(STORAGE_CHAT_KEY);
+      const storageKey = `${STORAGE_CHAT_KEY}_${channel}`;
+      const stored = localStorage.getItem(storageKey) || localStorage.getItem(STORAGE_CHAT_KEY);
       const all = stored ? JSON.parse(stored) : [];
+      const channelMessages = all.filter(m => (m.channel || 'general') === channel);
       if (before) {
         const beforeTime = new Date(before).getTime();
-        return all.filter(m => new Date(m.created_at).getTime() < beforeTime).slice(-limit);
+        return channelMessages.filter(m => new Date(m.created_at).getTime() < beforeTime).slice(-limit);
       }
-      return all.slice(-limit);
+      return channelMessages.slice(-limit);
     } catch {
       return [];
     }
@@ -103,7 +106,7 @@ export const chatApi = {
     }
   },
 
-  async sendMessage({ content = '', senderId, senderName, senderEmail, senderRole, attachment = null }) {
+  async sendMessage({ content = '', senderId, senderName, senderEmail, senderRole, attachment = null, channel = 'general' }) {
     let fileUrl = null;
     let fileName = null;
     let fileSize = null;
@@ -153,7 +156,8 @@ export const chatApi = {
           file_url: fileUrl,
           file_name: fileName,
           file_size: fileSize,
-          file_type: fileType
+          file_type: fileType,
+          channel: channel || 'general'
         }])
         .select()
         .single();
@@ -177,13 +181,15 @@ export const chatApi = {
       file_name: fileName,
       file_size: fileSize,
       file_type: fileType,
+      channel: channel || 'general',
       created_at: new Date().toISOString()
     };
 
     try {
-      const current = await this.getMessages();
+      const storageKey = `${STORAGE_CHAT_KEY}_${channel || 'general'}`;
+      const current = await this.getMessages(100, null, channel || 'general');
       current.push(newMessage);
-      localStorage.setItem(STORAGE_CHAT_KEY, JSON.stringify(current));
+      localStorage.setItem(storageKey, JSON.stringify(current));
     } catch {}
 
     return newMessage;

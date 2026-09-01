@@ -25,6 +25,8 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
       return <Navigate to="/founder/dashboard" replace />;
     } else if (profile.role === 'ADMIN') {
       return <Navigate to="/admin/dashboard" replace />;
+    } else if (profile.role === 'FOUNDING_ADVISOR') {
+      return <Navigate to="/founding-advisor/dashboard" replace />;
     } else {
       return <Navigate to="/member/dashboard" replace />;
     }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, ShieldAlert, User, Edit, Power, Trash2 } from 'lucide-react';
+import { Shield, ShieldAlert, User, Edit, Power, Trash2, Award } from 'lucide-react';
 import { usePresence } from '../../context/PresenceContext';
 
 export const UserRoleBadge = ({ role }) => {
@@ -13,6 +13,11 @@ export const UserRoleBadge = ({ role }) => {
       label: 'Admin',
       icon: Shield,
       classes: 'bg-neutral-800 text-white border-neutral-700 font-semibold'
+    },
+    FOUNDING_ADVISOR: {
+      label: 'Founding Advisor',
+      icon: Award,
+      classes: 'bg-purple-950/80 text-purple-200 border-purple-800 font-semibold shadow-sm'
     },
     MEMBER: {
       label: 'Member',
@@ -104,6 +109,7 @@ export const UserTable = ({
                       >
                         <option value="MEMBER">Member</option>
                         <option value="ADMIN">Admin</option>
+                        <option value="FOUNDING_ADVISOR">Founding Advisor</option>
                       </select>
                     </div>
                   ) : (

@@ -93,6 +93,7 @@ async function handleChatMessage(record: Record<string, unknown>) {
   const senderName = String(record.sender_name || 'Team Member');
   const messageId = String(record.id || '');
   const content = String(record.content || '');
+  const channel = String(record.channel || 'general');
   const fileType = record.file_type as string | null;
 
   // Craft preview text
@@ -108,11 +109,33 @@ async function handleChatMessage(record: Record<string, unknown>) {
     preview = preview.substring(0, 97) + '...';
   }
 
-  // Get ALL push subscriptions except the sender's
+  // Get allowed roles for this channel
+  const allowedRoles = channel === 'leadership'
+    ? ['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR']
+    : ['FOUNDER', 'ADMIN', 'MEMBER'];
+
+  // Query profiles of allowed recipients
+  const { data: allowedProfiles } = await adminSupabase
+    .from('profiles')
+    .select('id, email, role')
+    .in('role', allowedRoles);
+
+  const allowedUserIds = new Set((allowedProfiles || []).map((p) => p.id));
+
+  // Find sender profile id to exclude
+  let senderProfileId: string | null = null;
+  if (senderEmail) {
+    const sender = (allowedProfiles || []).find(
+      (p) => p.email?.toLowerCase() === senderEmail
+    );
+    senderProfileId = sender?.id ?? null;
+  }
+
+  // Get ALL push subscriptions matching allowed users except sender
   const { data: subscriptions, error } = await adminSupabase
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth, user_id')
-    .neq('endpoint', '') // Skip empty
+    .neq('endpoint', '')
     .limit(100);
 
   if (error || !subscriptions?.length) {
@@ -120,28 +143,17 @@ async function handleChatMessage(record: Record<string, unknown>) {
     return;
   }
 
-  // Filter out the sender's own subscriptions
-  // We get the sender's profile to match user_id
-  let senderProfileId: string | null = null;
-  if (senderEmail) {
-    const { data: senderProfile } = await adminSupabase
-      .from('profiles')
-      .select('id')
-      .ilike('email', senderEmail)
-      .maybeSingle();
-    senderProfileId = senderProfile?.id ?? null;
-  }
-
   const targetSubscriptions = subscriptions.filter(
-    (sub) => sub.user_id !== senderProfileId
+    (sub) => allowedUserIds.has(sub.user_id) && sub.user_id !== senderProfileId
   );
 
   const payload = JSON.stringify({
     type: 'chat_message',
-    senderName,
+    senderName: channel === 'leadership' ? `[Leadership] ${senderName}` : senderName,
     preview,
     messageId,
-    roomId: 'general'
+    roomId: channel,
+    url: channel === 'leadership' ? '/leadership-chat' : '/chat'
   });
 
   await sendPushToSubscriptions(targetSubscriptions, payload);

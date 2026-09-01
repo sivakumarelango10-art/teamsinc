@@ -207,6 +207,7 @@ export const Users = () => {
               <option value="ALL">All Roles</option>
               <option value="FOUNDER">Founders</option>
               <option value="ADMIN">Admins</option>
+              <option value="FOUNDING_ADVISOR">Founding Advisors</option>
               <option value="MEMBER">Members</option>
             </select>
           </div>

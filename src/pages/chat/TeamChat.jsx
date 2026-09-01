@@ -41,8 +41,13 @@ import { format, parseISO } from 'date-fns';
 
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '🚀', '❤️', '✅', '👏', '💯', '🎯', '💡', '✨', '🙌'];
 
-export const TeamChat = () => {
-  const { user, profile, isFounder } = useAuth();
+export const TeamChat = ({
+  channel = 'general',
+  title = 'TeamSync Company HQ',
+  subtitle = 'All Team Members',
+  isLeadershipMode = false
+}) => {
+  const { user, profile, isFounder, isLeadership } = useAuth();
   const { isUserOnline, onlineCount } = usePresence();
 
   const [messages, setMessages] = useState([]);
@@ -102,7 +107,7 @@ export const TeamChat = () => {
 
   const loadMessages = async () => {
     try {
-      const list = await chatApi.getMessages(50);
+      const list = await chatApi.getMessages(50, null, channel);
       list.forEach(m => processedMsgIdsRef.current.add(m.id));
       setMessages(list);
       if (list.length < 50) setHasMoreOlder(false);
@@ -118,7 +123,7 @@ export const TeamChat = () => {
     setLoadingOlder(true);
     try {
       const oldestDate = messages[0]?.created_at;
-      const olderList = await chatApi.getMessages(50, oldestDate);
+      const olderList = await chatApi.getMessages(50, oldestDate, channel);
       if (olderList.length < 50) {
         setHasMoreOlder(false);
       }
@@ -146,16 +151,16 @@ export const TeamChat = () => {
       realtimeChannelRef.current.send({
         type: 'broadcast',
         event: 'typing',
-        payload: { email: senderEmail, name: senderName, isTyping }
+        payload: { email: senderEmail, name: senderName, isTyping, channel }
       }).catch(() => {});
     }
 
     try {
-      const bc = new BroadcastChannel('teamsync_typing_channel');
-      bc.postMessage({ email: senderEmail, name: senderName, isTyping });
+      const bc = new BroadcastChannel(`teamsync_typing_channel_${channel}`);
+      bc.postMessage({ email: senderEmail, name: senderName, isTyping, channel });
       bc.close();
     } catch {}
-  }, [profile, user]);
+  }, [profile, user, channel]);
 
   const handleInputChange = (val) => {
     setInputValue(val);
@@ -235,16 +240,17 @@ export const TeamChat = () => {
     loadMessages();
 
     // Supabase Realtime subscription for incoming messages, deletions, and typing
-    let channel = null;
+    let rtChannel = null;
     if (supabase) {
-      channel = supabase
-        .channel('realtime-whatsapp-chat')
+      rtChannel = supabase
+        .channel(`realtime-chat-${channel}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
             if (payload.new) {
               const newMsg = payload.new;
+              if ((newMsg.channel || 'general') !== channel) return;
               if (processedMsgIdsRef.current.has(newMsg.id)) return;
               processedMsgIdsRef.current.add(newMsg.id);
 
@@ -284,21 +290,24 @@ export const TeamChat = () => {
           }
         )
         .on('broadcast', { event: 'typing' }, ({ payload }) => {
-          handleTypingSignal(payload);
+          if (payload?.channel === channel) {
+            handleTypingSignal(payload);
+          }
         })
         .subscribe();
 
-      realtimeChannelRef.current = channel;
+      realtimeChannelRef.current = rtChannel;
     }
 
     // Cross-tab synchronization
     let bc = null;
     let typingBc = null;
     try {
-      bc = new BroadcastChannel('teamsync_chat_channel');
+      bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
       bc.onmessage = (event) => {
         if (event.data?.type === 'NEW_MESSAGE' && event.data.message) {
           const msg = event.data.message;
+          if ((msg.channel || 'general') !== channel) return;
           if (processedMsgIdsRef.current.has(msg.id)) return;
           processedMsgIdsRef.current.add(msg.id);
 
@@ -313,9 +322,9 @@ export const TeamChat = () => {
         }
       };
 
-      typingBc = new BroadcastChannel('teamsync_typing_channel');
+      typingBc = new BroadcastChannel(`teamsync_typing_channel_${channel}`);
       typingBc.onmessage = (event) => {
-        if (event.data) {
+        if (event.data && event.data.channel === channel) {
           handleTypingSignal(event.data);
         }
       };
@@ -323,14 +332,14 @@ export const TeamChat = () => {
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (channel && supabase) supabase.removeChannel(channel);
+      if (rtChannel && supabase) supabase.removeChannel(rtChannel);
       if (bc) bc.close();
       if (typingBc) typingBc.close();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       // Tell SW we are no longer viewing chat
       notificationService.setForegroundState(false);
     };
-  }, [handleTypingSignal, profile?.email, user?.email]);
+  }, [handleTypingSignal, profile?.email, user?.email, channel]);
 
   useEffect(() => {
     if (!loading) {
@@ -436,7 +445,8 @@ export const TeamChat = () => {
         senderName,
         senderEmail,
         senderRole,
-        attachment: attachmentData
+        attachment: attachmentData,
+        channel
       });
 
       if (newMsg) {
@@ -444,7 +454,7 @@ export const TeamChat = () => {
         setMessages(prev => prev.map(m => (m.id === optId ? newMsg : m)));
 
         try {
-          const bc = new BroadcastChannel('teamsync_chat_channel');
+          const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
           bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
           bc.close();
         } catch {}
@@ -502,7 +512,8 @@ export const TeamChat = () => {
         senderName,
         senderEmail,
         senderRole,
-        attachment: attachmentData
+        attachment: attachmentData,
+        channel
       });
 
       if (newMsg) {
@@ -511,7 +522,7 @@ export const TeamChat = () => {
         setMessages(prev => prev.map(m => (m.id === optId ? enrichedMsg : m)));
 
         try {
-          const bc = new BroadcastChannel('teamsync_chat_channel');
+          const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
           bc.postMessage({ type: 'NEW_MESSAGE', message: enrichedMsg });
           bc.close();
         } catch {}
@@ -530,7 +541,7 @@ export const TeamChat = () => {
       await chatApi.deleteMessage(msgId);
       setMessages(prev => prev.filter(m => m.id !== msgId));
       try {
-        const bc = new BroadcastChannel('teamsync_chat_channel');
+        const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
         bc.postMessage({ type: 'DELETE_MESSAGE', id: msgId });
         bc.close();
       } catch {}
@@ -632,16 +643,23 @@ export const TeamChat = () => {
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm md:text-base font-bold text-white tracking-tight truncate">
-                TeamSync Company HQ
+                {title}
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300">
-                #general
-              </span>
+              {isLeadershipMode || channel === 'leadership' ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-950/80 border border-purple-800 text-purple-200 flex items-center gap-1">
+                  <Shield className="w-2.5 h-2.5 text-purple-400" />
+                  #leadership
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300">
+                  #general
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-xs text-neutral-400 mt-0.5">
-              <span className="flex items-center gap-1 text-[11px] text-neutral-400">
+              <span className="flex items-center gap-1 text-[11px] text-neutral-400 truncate max-w-[200px] sm:max-w-none">
                 <Users className="w-3 h-3 text-neutral-500" />
-                All Team Members
+                {subtitle}
               </span>
               <span className="text-neutral-600">•</span>
               <span className="text-emerald-400 font-medium text-[11px] flex items-center gap-1">

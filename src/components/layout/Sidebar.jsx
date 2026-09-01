@@ -14,14 +14,16 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import BrandLogo from '../common/BrandLogo';
+import { Shield } from 'lucide-react';
 
 export const Sidebar = ({ isOpen, onClose }) => {
-  const { profile, role, isFounder, isAdmin, logout } = useAuth();
+  const { profile, role, isFounder, isAdmin, isFoundingAdvisor, logout } = useAuth();
 
   const getNavLinks = () => {
     if (isFounder) {
       return [
         { to: '/founder/dashboard', label: 'Founder Dashboard', icon: LayoutDashboard },
+        { to: '/leadership-chat', label: 'Leadership Chat', icon: Shield },
         { to: '/chat', label: 'Team Chat', icon: MessageSquare },
         { to: '/founder/users', label: 'User Management', icon: Users },
         { to: '/founder/departments', label: 'Departments', icon: Building2 },
@@ -32,10 +34,17 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else if (isAdmin) {
       return [
         { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
+        { to: '/leadership-chat', label: 'Leadership Chat', icon: Shield },
         { to: '/chat', label: 'Team Chat', icon: MessageSquare },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
         { to: '/admin/assign-task', label: 'Assign New Task', icon: PlusCircle },
         { to: '/admin/daily-planning', label: 'Daily Team Planner', icon: Calendar }
+      ];
+    } else if (isFoundingAdvisor) {
+      return [
+        { to: '/founding-advisor/dashboard', label: 'Overview', icon: LayoutDashboard },
+        { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare },
+        { to: '/leadership-chat', label: 'Leadership Chat', icon: Shield }
       ];
     } else {
       return [
@@ -90,8 +99,16 @@ export const Sidebar = ({ isOpen, onClose }) => {
             </div>
             <div className="mt-2.5 pt-2 border-t border-neutral-800 flex items-center justify-between">
               <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Role</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-neutral-200">
-                {role}
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                role === 'FOUNDING_ADVISOR'
+                  ? 'border-purple-800 bg-purple-950/80 text-purple-200'
+                  : role === 'FOUNDER'
+                  ? 'border-white bg-white text-black'
+                  : role === 'ADMIN'
+                  ? 'border-neutral-700 bg-neutral-900 text-white'
+                  : 'border-neutral-800 bg-neutral-900 text-neutral-300'
+              }`}>
+                {role === 'FOUNDING_ADVISOR' ? 'Founding Advisor' : role === 'FOUNDER' ? 'Founder' : role === 'ADMIN' ? 'Admin' : 'Member'}
               </span>
             </div>
           </div>

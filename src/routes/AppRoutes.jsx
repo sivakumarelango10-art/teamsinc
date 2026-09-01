@@ -23,6 +23,9 @@ import MemberDashboard from '../pages/member/MemberDashboard';
 import MyTasks from '../pages/member/MyTasks';
 import MyDailyPlan from '../pages/member/MyDailyPlan';
 import TeamChat from '../pages/chat/TeamChat';
+import LeadershipChat from '../pages/chat/LeadershipChat';
+import AdvisorDashboard from '../pages/advisor/AdvisorDashboard';
+import AdvisorTasks from '../pages/advisor/AdvisorTasks';
 
 export const AppRoutes = () => {
   const { user, profile, loading } = useAuth();
@@ -39,6 +42,7 @@ export const AppRoutes = () => {
     if (!user || !profile) return <Navigate to="/login" replace />;
     if (profile.role === 'FOUNDER') return <Navigate to="/founder/dashboard" replace />;
     if (profile.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
+    if (profile.role === 'FOUNDING_ADVISOR') return <Navigate to="/founding-advisor/dashboard" replace />;
     return <Navigate to="/member/dashboard" replace />;
   };
 
@@ -82,6 +86,20 @@ export const AppRoutes = () => {
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
+      {/* Founding Advisor Protected Routes (Oversight Portal) */}
+      <Route
+        path="/founding-advisor"
+        element={
+          <ProtectedRoute allowedRoles={['FOUNDING_ADVISOR']}>
+            <DashboardLayout title="Founding Advisor Portal" />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="dashboard" element={<AdvisorDashboard />} />
+        <Route path="tasks" element={<AdvisorTasks />} />
+        <Route index element={<Navigate to="dashboard" replace />} />
+      </Route>
+
       {/* Member Protected Routes */}
       <Route
         path="/member"
@@ -97,11 +115,23 @@ export const AppRoutes = () => {
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
-      {/* Universal Company Team Chat Route */}
+      {/* Restricted Leadership Chat Route (Founder, Admin, Founding Advisor ONLY) */}
+      <Route
+        path="/leadership-chat"
+        element={
+          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR']}>
+            <DashboardLayout title="Leadership Council">
+              <LeadershipChat />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Universal Company Team Chat Route (Founder, Admin, Member — Excludes Founding Advisor) */}
       <Route
         path="/chat"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER']}>
             <DashboardLayout title="Company Chat">
               <TeamChat />
             </DashboardLayout>

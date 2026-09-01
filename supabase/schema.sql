@@ -23,7 +23,7 @@ CREATE TABLE public.profiles (
     auth_user_id UUID UNIQUE,
     full_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('FOUNDER', 'ADMIN', 'MEMBER')) DEFAULT 'MEMBER',
+    role TEXT NOT NULL CHECK (role IN ('FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR')) DEFAULT 'MEMBER',
     is_active BOOLEAN NOT NULL DEFAULT true,
     last_seen_at TIMESTAMPTZ DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -190,6 +190,24 @@ RETURNS BOOLEAN AS $$
     );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
+CREATE OR REPLACE FUNCTION public.is_founding_advisor()
+RETURNS BOOLEAN AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+          AND role = 'FOUNDING_ADVISOR'
+    );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.is_leadership()
+RETURNS BOOLEAN AS $$
+    SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+          AND role IN ('FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR')
+    );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
 -- Enable Realtime Publication for profiles
 DO $$
 BEGIN
@@ -235,11 +253,13 @@ CREATE POLICY "Founder and Admin manage tasks"
     TO authenticated
     USING (public.is_admin_or_founder());
 
-CREATE POLICY "Members view assigned tasks"
+CREATE POLICY "Task View Policy"
     ON public.tasks FOR SELECT
     TO authenticated
     USING (
-        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        public.is_admin_or_founder()
+        OR public.is_founding_advisor()
+        OR assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
     );
 
 CREATE POLICY "Members update assigned task status"
@@ -302,7 +322,7 @@ SET full_name = EXCLUDED.full_name,
     is_active = true;
 
 -- -----------------------------------------------------------------------------
--- 6. COMPANY-WIDE TEAM CHAT MESSAGES
+-- 6. COMPANY-WIDE & LEADERSHIP TEAM CHAT MESSAGES
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -315,6 +335,7 @@ CREATE TABLE IF NOT EXISTS public.messages (
     file_name TEXT,
     file_size BIGINT,
     file_type TEXT,
+    channel TEXT NOT NULL DEFAULT 'general' CHECK (channel IN ('general', 'leadership')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -322,23 +343,66 @@ ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_url TEXT;
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_name TEXT;
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_size BIGINT;
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_type TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'general';
 
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_messages_channel ON public.messages(channel);
 
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
+-- 1. General Team Chat SELECT (Members, Admins, Founder — excludes Founding Advisor per spec)
+DROP POLICY IF EXISTS "General chat select policy" ON public.messages;
 DROP POLICY IF EXISTS "Anyone authenticated can view messages" ON public.messages;
-CREATE POLICY "Anyone authenticated can view messages"
+CREATE POLICY "General chat select policy"
     ON public.messages FOR SELECT
     TO authenticated
-    USING (true);
+    USING (
+        channel = 'general' AND (
+            public.is_admin_or_founder()
+            OR EXISTS (
+                SELECT 1 FROM public.profiles
+                WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+                  AND role = 'MEMBER'
+            )
+        )
+    );
 
+-- 2. Leadership Chat SELECT (Founder, Admin, Founding Advisor ONLY)
+DROP POLICY IF EXISTS "Leadership chat select policy" ON public.messages;
+CREATE POLICY "Leadership chat select policy"
+    ON public.messages FOR SELECT
+    TO authenticated
+    USING (
+        channel = 'leadership' AND public.is_leadership()
+    );
+
+-- 3. General Chat INSERT (Members, Admins, Founder)
+DROP POLICY IF EXISTS "General chat insert policy" ON public.messages;
 DROP POLICY IF EXISTS "Anyone authenticated can insert messages" ON public.messages;
-CREATE POLICY "Anyone authenticated can insert messages"
+CREATE POLICY "General chat insert policy"
     ON public.messages FOR INSERT
     TO authenticated
-    WITH CHECK (true);
+    WITH CHECK (
+        channel = 'general' AND (
+            public.is_admin_or_founder()
+            OR EXISTS (
+                SELECT 1 FROM public.profiles
+                WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+                  AND role = 'MEMBER'
+            )
+        )
+    );
 
+-- 4. Leadership Chat INSERT (Founder, Admin, Founding Advisor ONLY)
+DROP POLICY IF EXISTS "Leadership chat insert policy" ON public.messages;
+CREATE POLICY "Leadership chat insert policy"
+    ON public.messages FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        channel = 'leadership' AND public.is_leadership()
+    );
+
+-- 5. Delete Policy (Founder or author)
 DROP POLICY IF EXISTS "Founder or author can delete messages" ON public.messages;
 CREATE POLICY "Founder or author can delete messages"
     ON public.messages FOR DELETE

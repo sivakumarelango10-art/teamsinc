@@ -125,6 +125,7 @@ export const UserForm = ({
             >
               <option value="MEMBER">Member (Standard Teammate)</option>
               <option value="ADMIN">Admin / Task Manager</option>
+              <option value="FOUNDING_ADVISOR">Founding Advisor (High-Level Oversight)</option>
               <option value="FOUNDER">Founder (Full Administrative Access)</option>
             </select>
             {isPrimaryFounder && (

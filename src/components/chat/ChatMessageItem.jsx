@@ -10,15 +10,21 @@ import {
   ShieldAlert,
   Award
 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import VoiceNotePlayer from './VoiceNotePlayer';
 
 const formatMessageTime = (isoString) => {
   if (!isoString) return '';
   try {
-    const d = new Date(isoString);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const d = typeof isoString === 'string' ? parseISO(isoString) : new Date(isoString);
+    return format(d, 'h:mm a');
   } catch {
-    return '';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch {
+      return '';
+    }
   }
 };
 

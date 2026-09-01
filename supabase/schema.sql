@@ -310,9 +310,18 @@ CREATE TABLE IF NOT EXISTS public.messages (
     sender_name TEXT NOT NULL,
     sender_email TEXT NOT NULL,
     sender_role TEXT NOT NULL DEFAULT 'MEMBER',
-    content TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    file_url TEXT,
+    file_name TEXT,
+    file_size BIGINT,
+    file_type TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_url TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_name TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_size BIGINT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_type TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at ASC);
 

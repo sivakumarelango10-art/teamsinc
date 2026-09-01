@@ -5,6 +5,8 @@ import { chatApi } from '../../api/chatApi';
 import { supabase } from '../../api/supabase';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import BrandLogo from '../../components/common/BrandLogo';
+import VoiceNotePlayer from '../../components/chat/VoiceNotePlayer';
+import VoiceRecorderBar from '../../components/chat/VoiceRecorderBar';
 import {
   Plus,
   Smile,
@@ -38,6 +40,9 @@ export const TeamChat = () => {
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+
+  // Voice recording state
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
 
   // Attachment state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -237,6 +242,52 @@ export const TeamChat = () => {
     } finally {
       setSending(false);
       inputRef.current?.focus();
+    }
+  };
+
+  const handleSendVoice = async (audioFile, duration) => {
+    setIsRecordingVoice(false);
+    setSending(true);
+    setError('');
+
+    try {
+      // Upload audio file (Supabase storage or DataURL fallback)
+      const attachmentData = await chatApi.uploadAttachment(audioFile);
+
+      const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
+      const senderEmail = profile?.email || user?.email || '';
+      const senderRole = profile?.role || 'MEMBER';
+      const senderId = profile?.id || user?.id;
+
+      const newMsg = await chatApi.sendMessage({
+        content: 'Voice message',
+        senderId,
+        senderName,
+        senderEmail,
+        senderRole,
+        attachment: attachmentData
+      });
+
+      if (newMsg) {
+        // Attach client duration if available
+        const enrichedMsg = { ...newMsg, audio_duration: duration };
+        setMessages(prev => {
+          if (prev.some(m => m.id === enrichedMsg.id)) return prev;
+          return [...prev, enrichedMsg];
+        });
+        setTimeout(() => scrollToBottom(true), 50);
+
+        try {
+          const bc = new BroadcastChannel('teamsync_chat_channel');
+          bc.postMessage({ type: 'NEW_MESSAGE', message: enrichedMsg });
+          bc.close();
+        } catch {}
+      }
+    } catch (err) {
+      console.error('Error sending voice message:', err);
+      setError(err.message || 'Failed to send voice message. Please try again.');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -475,7 +526,7 @@ export const TeamChat = () => {
                     )}
                   </div>
 
-                  {/* Attachment Preview (Image or Document) */}
+                  {/* Attachment Preview (Image, Audio Voice Note, or Document) */}
                   {msg.file_url && (
                     <div className="mb-2">
                       {msg.file_type === 'image' ? (
@@ -500,6 +551,13 @@ export const TeamChat = () => {
                             </a>
                           </div>
                         </div>
+                      ) : msg.file_type === 'audio' || /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(msg.file_name || '') ? (
+                        <VoiceNotePlayer
+                          audioUrl={msg.file_url}
+                          duration={msg.audio_duration}
+                          isSelf={isSelf}
+                          fileName={msg.file_name}
+                        />
                       ) : (
                         /* WhatsApp-style Document Card */
                         <div className="p-3 rounded-xl bg-black border border-neutral-800 flex items-center justify-between gap-3">
@@ -532,8 +590,8 @@ export const TeamChat = () => {
                     </div>
                   )}
 
-                  {/* Text Message Content */}
-                  {msg.content && (
+                  {/* Text Message Content (Hidden if purely 'Voice message' label) */}
+                  {msg.content && msg.content !== 'Voice message' && (
                     <p className="text-xs sm:text-sm text-neutral-200 whitespace-pre-wrap leading-relaxed break-words">
                       {msg.content}
                     </p>
@@ -649,73 +707,81 @@ export const TeamChat = () => {
           </div>
         )}
 
-        {/* Pill Bar Form */}
-        <form onSubmit={handleSendMessage} className="flex items-center gap-2 sm:gap-3">
-          {/* Main WhatsApp Pill */}
-          <div className="flex-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 focus-within:border-white rounded-full px-3 py-2 flex items-center gap-2 transition shadow-inner">
-            {/* 1. Attachment '+' Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsAttachMenuOpen(prev => !prev);
-                setIsEmojiPickerOpen(false);
-              }}
-              className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
-              title="Attach documents or photos"
-            >
-              <Plus className={`w-5 h-5 transition-transform ${isAttachMenuOpen ? 'rotate-45 text-white' : ''}`} />
-            </button>
+        {/* Input Bar or Voice Recording Bar */}
+        {isRecordingVoice ? (
+          <VoiceRecorderBar
+            onSend={handleSendVoice}
+            onCancel={() => setIsRecordingVoice(false)}
+          />
+        ) : (
+          <form onSubmit={handleSendMessage} className="flex items-center gap-2 sm:gap-3">
+            {/* Main WhatsApp Pill */}
+            <div className="flex-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 focus-within:border-white rounded-full px-3 py-2 flex items-center gap-2 transition shadow-inner">
+              {/* 1. Attachment '+' Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAttachMenuOpen(prev => !prev);
+                  setIsEmojiPickerOpen(false);
+                }}
+                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
+                title="Attach documents or photos"
+              >
+                <Plus className={`w-5 h-5 transition-transform ${isAttachMenuOpen ? 'rotate-45 text-white' : ''}`} />
+              </button>
 
-            {/* 2. Emoji Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsEmojiPickerOpen(prev => !prev);
-                setIsAttachMenuOpen(false);
-              }}
-              className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
-              title="Emojis"
-            >
-              <Smile className="w-5 h-5" />
-            </button>
+              {/* 2. Emoji Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEmojiPickerOpen(prev => !prev);
+                  setIsAttachMenuOpen(false);
+                }}
+                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
+                title="Emojis"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
 
-            {/* 3. Text Input */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message"
-              disabled={sending}
-              className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none px-1"
-            />
-          </div>
+              {/* 3. Text Input */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type a message"
+                disabled={sending}
+                className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none px-1"
+              />
+            </div>
 
-          {/* 4. Send or Mic Button */}
-          {inputValue.trim() || selectedFile ? (
-            <button
-              type="submit"
-              disabled={sending}
-              className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition flex items-center justify-center shadow-lg cursor-pointer shrink-0"
-              title="Send message"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setInputValue('🎙️ Voice message (demo note)');
-                inputRef.current?.focus();
-              }}
-              className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-300 hover:text-white transition flex items-center justify-center cursor-pointer shrink-0"
-              title="Voice Message"
-            >
-              <Mic className="w-5 h-5" />
-            </button>
-          )}
-        </form>
+            {/* 4. Send or WhatsApp Mic Button */}
+            {inputValue.trim() || selectedFile ? (
+              <button
+                type="submit"
+                disabled={sending}
+                className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition flex items-center justify-center shadow-lg cursor-pointer shrink-0"
+                title="Send message"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAttachMenuOpen(false);
+                  setIsEmojiPickerOpen(false);
+                  setIsRecordingVoice(true);
+                }}
+                className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-emerald-500/60 hover:text-emerald-400 text-neutral-300 transition-all flex items-center justify-center cursor-pointer shrink-0 group shadow-md"
+                title="Record voice message"
+              >
+                <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </button>
+            )}
+          </form>
+        )}
       </div>
     </div>
   );

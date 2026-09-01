@@ -39,16 +39,25 @@ export const chatApi = {
   async uploadAttachment(file) {
     if (!file) return null;
 
+    const resolveType = (f) => {
+      if (f.type?.startsWith('image/')) return 'image';
+      if (f.type?.startsWith('audio/') || /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(f.name || '')) return 'audio';
+      return 'document';
+    };
+
+    const detectedType = resolveType(file);
+
     if (supabase) {
       try {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeName = (file.name || `audio_${Date.now()}.webm`).replace(/[^a-zA-Z0-9._-]/g, '_');
         const filePath = `uploads/${Date.now()}_${safeName}`;
 
         const { data: uploadData, error: uploadErr } = await supabase.storage
           .from('chat-attachments')
           .upload(filePath, file, {
             cacheControl: '3600',
-            upsert: false
+            upsert: false,
+            contentType: file.type || (detectedType === 'audio' ? 'audio/webm' : undefined)
           });
 
         if (!uploadErr && uploadData) {
@@ -58,9 +67,9 @@ export const chatApi = {
 
           return {
             url: pubData?.publicUrl,
-            name: file.name,
-            size: file.size,
-            type: file.type.startsWith('image/') ? 'image' : 'document'
+            name: file.name || 'Voice Message',
+            size: file.size || 0,
+            type: detectedType
           };
         }
       } catch (err) {
@@ -73,9 +82,9 @@ export const chatApi = {
       const dataUrl = await fileToDataUrl(file);
       return {
         url: dataUrl,
-        name: file.name,
-        size: file.size,
-        type: file.type.startsWith('image/') ? 'image' : 'document'
+        name: file.name || 'Voice Message',
+        size: file.size || 0,
+        type: detectedType
       };
     } catch (err) {
       console.error('Failed to encode attachment:', err);
@@ -84,12 +93,6 @@ export const chatApi = {
   },
 
   async sendMessage({ content = '', senderId, senderName, senderEmail, senderRole, attachment = null }) {
-    const cleanContent = content.trim();
-
-    if (!cleanContent && !attachment) {
-      throw new Error('Please type a message or select a file to send');
-    }
-
     let fileUrl = null;
     let fileName = null;
     let fileSize = null;
@@ -100,6 +103,16 @@ export const chatApi = {
       fileName = attachment.name;
       fileSize = attachment.size;
       fileType = attachment.type;
+    }
+
+    // Ensure non-null content for schema constraints if text was empty
+    let cleanContent = content.trim();
+    if (!cleanContent && attachment) {
+      cleanContent = fileType === 'audio' ? 'Voice message' : (attachment.name || 'Attachment');
+    }
+
+    if (!cleanContent && !attachment) {
+      throw new Error('Please type a message or record audio to send');
     }
 
     if (supabase) {

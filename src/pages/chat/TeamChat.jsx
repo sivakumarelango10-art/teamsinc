@@ -630,7 +630,7 @@ export const TeamChat = ({
           ───────────────────────────────────────────────────────────────────────── */}
       {isLeadership && isChatListOpen && (
         <div
-          className={`w-full md:w-80 border-r border-neutral-800 bg-black flex flex-col shrink-0 transition-all ${
+          className={`w-full md:w-80 border-r border-neutral-800 bg-black flex flex-col shrink-0 animate-fadeIn transition-all duration-300 ease-out ${
             isMobileChatOpen ? 'hidden md:flex' : 'flex'
           }`}
         >
@@ -741,7 +741,7 @@ export const TeamChat = ({
           RIGHT PANE: WhatsApp Conversation View
           ───────────────────────────────────────────────────────────────────────── */}
       <div
-        className={`flex-1 flex flex-col min-w-0 bg-neutral-950 ${
+        className={`flex-1 flex flex-col min-w-0 bg-neutral-950 transition-all duration-300 ease-out ${
           !isMobileChatOpen ? 'hidden md:flex' : 'flex'
         }`}
       >

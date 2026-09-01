@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-black text-neutral-100 min-h-screen antialiased selection:bg-white selection:text-black;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -10,6 +14,23 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  }
+
+  /* Universal silky smooth transitions on all interactive elements */
+  button, 
+  [role="button"], 
+  a, 
+  input, 
+  select, 
+  textarea {
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Interactive tactile micro-feedback on click / press */
+  button:active:not(:disabled),
+  [role="button"]:active {
+    transform: scale(0.975);
+    transition: transform 0.08s ease-out;
   }
 }
 
@@ -26,10 +47,11 @@
 ::-webkit-scrollbar-thumb {
   background: #262626;
   border-radius: 9999px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #404040;
+  background: #454545;
 }
 
 /* Black & White Glassmorphism & Panel Utilities */
@@ -43,12 +65,13 @@
 .glass-card {
   background: #0a0a0a;
   border: 1px solid #262626;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card:hover {
   border-color: #525252;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.7);
 }
 
 /* Monochrome Subtle Glow */
@@ -60,9 +83,38 @@
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
+/* Keyframe Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+  from { 
+    opacity: 0; 
+    transform: scale(0.98) translateY(4px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+  }
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 @keyframes floatUp {
@@ -84,19 +136,52 @@
   }
 }
 
+@keyframes slideUp {
+  from { 
+    opacity: 0; 
+    transform: translateX(-50%) translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(-50%) translateY(0); 
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+}
+
+/* Utility Animation Classes */
 .animate-fadeIn {
-  animation: fadeIn 0.2s ease-out forwards;
+  animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.page-enter {
+  animation: pageEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-enter {
+  animation: modalEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-floatUp {
   animation: floatUp 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-@keyframes slideUp {
-  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
 .animate-slideUp {
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulseGlow {
+  animation: pulseGlow 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* Smooth expandable sidebar transitions */
+.transition-smooth {
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }

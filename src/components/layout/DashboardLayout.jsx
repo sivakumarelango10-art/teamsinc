@@ -21,7 +21,7 @@ export const DashboardLayout = ({ title, children }) => {
           title={title}
         />
 
-        <main className="flex-1 p-3 md:p-6 overflow-y-auto bg-black flex flex-col">
+        <main className="flex-1 p-3 md:p-6 overflow-y-auto bg-black flex flex-col page-enter transition-all duration-300">
           {children || <Outlet />}
         </main>
       </div>

@@ -3,6 +3,7 @@ import { planningApi } from '../../api/planningApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { usersApi } from '../../api/usersApi';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../api/supabase';
 import DailyPlanner from '../../components/planning/DailyPlanner';
 import DepartmentAllocation from '../../components/planning/DepartmentAllocation';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -40,6 +41,43 @@ export const DailyPlanning = () => {
 
   useEffect(() => {
     loadData(selectedDate);
+
+    // Realtime synchronization across all tabs and devices
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel(`realtime-planning-${selectedDate}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_assignments' },
+          () => {
+            loadData(selectedDate);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_plans' },
+          () => {
+            loadData(selectedDate);
+          }
+        )
+        .subscribe();
+    }
+
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('teamsync_planning_updates');
+      bc.onmessage = (event) => {
+        if (event.data?.dateStr === selectedDate) {
+          loadData(selectedDate);
+        }
+      };
+    } catch {}
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+      if (bc) bc.close();
+    };
   }, [selectedDate]);
 
   const handleSaveAllocation = async ({ dateStr, departmentId, userIds }) => {
@@ -49,11 +87,23 @@ export const DailyPlanning = () => {
       userIds,
       createdBy: user?.id
     });
+
+    try {
+      const bc = new BroadcastChannel('teamsync_planning_updates');
+      bc.postMessage({ type: 'ALLOCATION_SAVED', dateStr });
+      bc.close();
+    } catch {}
+
     await loadData(dateStr);
   };
 
   const handleRemoveAssignment = async (assignmentId) => {
     await planningApi.removeAssignment(assignmentId);
+    try {
+      const bc = new BroadcastChannel('teamsync_planning_updates');
+      bc.postMessage({ type: 'ALLOCATION_SAVED', dateStr: selectedDate });
+      bc.close();
+    } catch {}
     await loadData(selectedDate);
   };
 

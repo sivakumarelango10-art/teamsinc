@@ -16,6 +16,7 @@ import { planningApi } from '../../api/planningApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { usersApi } from '../../api/usersApi';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../api/supabase';
 import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import DepartmentAllocation from '../../components/planning/DepartmentAllocation';
@@ -61,6 +62,32 @@ export const AdminDashboard = () => {
 
   useEffect(() => {
     loadData();
+
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('admin-dashboard-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          () => loadData()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_assignments' },
+          () => loadData()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_plans' },
+          () => loadData()
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
   }, []);
 
   const myCreatedTasks = tasks.filter(t => t.assigned_by === user?.id);

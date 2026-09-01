@@ -5,7 +5,14 @@ import { useAuth } from '../../hooks/useAuth';
 
 export const Navbar = ({ onToggleSidebar, title = 'Dashboard' }) => {
   const { profile, role } = useAuth();
-  const todayFormatted = format(new Date(), 'EEEE, MMMM d, yyyy');
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <header className="h-16 px-4 md:px-8 bg-black/90 backdrop-blur-md border-b border-neutral-800 sticky top-0 z-30 flex items-center justify-between">
@@ -22,10 +29,12 @@ export const Navbar = ({ onToggleSidebar, title = 'Dashboard' }) => {
       </div>
 
       <div className="flex items-center gap-3 md:gap-5">
-        {/* Date indicator */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs text-neutral-400">
+        {/* Real-time Live Date & Clock indicator */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs font-mono text-neutral-300 shadow-sm">
           <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-          <span>{todayFormatted}</span>
+          <span>{format(currentDateTime, 'EEE, MMM d, yyyy')}</span>
+          <span className="text-neutral-600">•</span>
+          <span className="text-white font-bold">{format(currentDateTime, 'hh:mm:ss a')}</span>
         </div>
 
         {/* User Info & Avatar */}

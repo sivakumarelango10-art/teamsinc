@@ -15,6 +15,7 @@ import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { planningApi } from '../../api/planningApi';
+import { supabase } from '../../api/supabase';
 import { BarChart3, CheckCircle2, Clock, Users, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -54,6 +55,32 @@ export const Reports = () => {
     };
 
     fetchData();
+
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('reports-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          () => fetchData()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_assignments' },
+          () => fetchData()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          () => fetchData()
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
   }, []);
 
   if (loading) {

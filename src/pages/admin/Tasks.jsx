@@ -3,6 +3,7 @@ import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../api/supabase';
 import TaskCard from '../../components/tasks/TaskCard';
 import TaskForm from '../../components/tasks/TaskForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
@@ -52,6 +53,22 @@ export const Tasks = () => {
 
   useEffect(() => {
     loadData();
+
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('admin-tasks-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          () => loadData()
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleCreateOrUpdateTask = async (taskData) => {

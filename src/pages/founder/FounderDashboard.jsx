@@ -19,6 +19,7 @@ import { planningApi } from '../../api/planningApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
 import { usePresence } from '../../context/PresenceContext';
+import { supabase } from '../../api/supabase';
 import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UserForm from '../../components/users/UserForm';
@@ -70,6 +71,37 @@ export const FounderDashboard = () => {
 
   useEffect(() => {
     loadDashboardData();
+
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('founder-dashboard-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          () => loadDashboardData()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_assignments' },
+          () => loadDashboardData()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_plans' },
+          () => loadDashboardData()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          () => loadDashboardData()
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
   }, []);
 
   const totalTeamMembers = users.filter(u => u.role === 'MEMBER').length;

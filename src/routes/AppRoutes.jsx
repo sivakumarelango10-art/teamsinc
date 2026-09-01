@@ -121,29 +121,20 @@ export const AppRoutes = () => {
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
-      {/* Restricted Leadership Chat Route (Founder, Admin, Founding Advisor ONLY) */}
-      <Route
-        path="/leadership-chat"
-        element={
-          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR']}>
-            <DashboardLayout title="Leadership Council">
-              <LeadershipChat />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Universal Company Team Chat Route (Founder, Admin, Member — Excludes Founding Advisor) */}
+      {/* Unified WhatsApp-Style Chats Route (All Authenticated Roles) */}
       <Route
         path="/chat"
         element={
-          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER']}>
-            <DashboardLayout title="Company Chat">
+          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
+            <DashboardLayout title="Chats">
               <TeamChat />
             </DashboardLayout>
           </ProtectedRoute>
         }
       />
+
+      {/* Legacy Redirect for /leadership-chat to unified /chat */}
+      <Route path="/leadership-chat" element={<Navigate to="/chat" replace />} />
 
       {/* Fallback Catch-all Route */}
       <Route path="*" element={getDefaultRedirect()} />

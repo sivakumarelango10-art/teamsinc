@@ -26,8 +26,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     if (isFounder) {
       return [
         { to: '/founder/dashboard', label: 'Founder Dashboard', icon: LayoutDashboard },
-        { to: '/leadership-chat', label: 'Leadership Chat', icon: Shield },
-        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
+        { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/founder/bugs', label: 'Bug Reports', icon: Bug },
         { to: '/founder/users', label: 'User Management', icon: Users },
         { to: '/founder/departments', label: 'Departments', icon: Building2 },
@@ -38,8 +37,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else if (isAdmin) {
       return [
         { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
-        { to: '/leadership-chat', label: 'Leadership Chat', icon: Shield },
-        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
+        { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/admin/bugs', label: 'Bug Reports', icon: Bug },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
         { to: '/admin/assign-task', label: 'Assign New Task', icon: PlusCircle },
@@ -48,13 +46,13 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else if (isFoundingAdvisor) {
       return [
         { to: '/founding-advisor/dashboard', label: 'Overview', icon: LayoutDashboard },
-        { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare },
-        { to: '/leadership-chat', label: 'Leadership Chat', icon: Shield }
+        { to: '/chat', label: 'Chats', icon: MessageSquare },
+        { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare }
       ];
     } else {
       return [
         { to: '/member/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
-        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
+        { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/member/tasks', label: 'My Tasks', icon: CheckSquare },
         { to: '/member/daily-plan', label: 'My Daily Plan', icon: Calendar },
         { to: '/member/bugs', label: 'My Reported Bugs', icon: Bug }

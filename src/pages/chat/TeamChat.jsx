@@ -36,20 +36,29 @@ import {
   Phone,
   Clock,
   Clock3,
-  Loader2
+  Loader2,
+  Search,
+  ChevronLeft
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '🚀', '❤️', '✅', '👏', '💯', '🎯', '💡', '✨', '🙌'];
 
 export const TeamChat = ({
-  channel = 'general',
-  title = 'TeamSync Company HQ',
-  subtitle = 'All Team Members',
-  isLeadershipMode = false
+  channel: initialChannel = 'general',
+  title: initialTitle,
+  subtitle: initialSubtitle
 }) => {
   const { user, profile, isFounder, isLeadership } = useAuth();
   const { isUserOnline, onlineCount } = usePresence();
+
+  // Active channel state (WhatsApp conversation switching)
+  const defaultChannel = profile?.role === 'FOUNDING_ADVISOR' ? 'leadership' : (initialChannel || 'general');
+  const [activeChannel, setActiveChannel] = useState(defaultChannel);
+
+  // Mobile conversation list view toggle
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(true);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -107,12 +116,14 @@ export const TeamChat = ({
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
 
-  const loadMessages = async () => {
+  const loadMessages = async (targetChannel = activeChannel) => {
     try {
-      const list = await chatApi.getMessages(50, null, channel);
+      setLoading(true);
+      processedMsgIdsRef.current.clear();
+      const list = await chatApi.getMessages(50, null, targetChannel);
       list.forEach(m => processedMsgIdsRef.current.add(m.id));
       setMessages(list);
-      if (list.length < 50) setHasMoreOlder(false);
+      setHasMoreOlder(list.length >= 50);
     } catch (err) {
       console.error('Failed to load chat messages:', err);
     } finally {
@@ -125,7 +136,7 @@ export const TeamChat = ({
     setLoadingOlder(true);
     try {
       const oldestDate = messages[0]?.created_at;
-      const olderList = await chatApi.getMessages(50, oldestDate, channel);
+      const olderList = await chatApi.getMessages(50, oldestDate, activeChannel);
       if (olderList.length < 50) {
         setHasMoreOlder(false);
       }
@@ -138,43 +149,63 @@ export const TeamChat = ({
         });
       }
     } catch (e) {
-      console.warn('Load older messages error:', e);
+      console.error('Error loading older messages:', e);
     } finally {
       setLoadingOlder(false);
     }
   };
 
-  // Broadcast typing state to peers
+  // Broadcast typing indicator with throttling
   const broadcastTyping = useCallback((isTyping) => {
-    const senderName = profile?.full_name || user?.user_metadata?.full_name || 'Team Member';
-    const senderEmail = profile?.email || user?.email || '';
+    const myEmail = profile?.email || user?.email;
+    const myName = profile?.full_name || user?.user_metadata?.full_name || 'Team Member';
+    if (!myEmail) return;
+
+    const payload = {
+      email: myEmail,
+      name: myName,
+      isTyping,
+      time: Date.now(),
+      channel: activeChannel
+    };
 
     if (realtimeChannelRef.current) {
       realtimeChannelRef.current.send({
         type: 'broadcast',
         event: 'typing',
-        payload: { email: senderEmail, name: senderName, isTyping, channel }
-      }).catch(() => {});
+        payload
+      });
     }
 
     try {
-      const bc = new BroadcastChannel(`teamsync_typing_channel_${channel}`);
-      bc.postMessage({ email: senderEmail, name: senderName, isTyping, channel });
+      const bc = new BroadcastChannel(`teamsync_typing_channel_${activeChannel}`);
+      bc.postMessage(payload);
       bc.close();
     } catch {}
-  }, [profile, user, channel]);
+  }, [profile, user, activeChannel]);
+
+  const handleTypingSignal = useCallback((payload) => {
+    if (!payload?.email) return;
+    const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+    if (payload.email.toLowerCase() === myEmail) return;
+
+    setTypingUsers(prev => {
+      const updated = { ...prev };
+      if (payload.isTyping) {
+        updated[payload.email] = { name: payload.name, time: Date.now() };
+      } else {
+        delete updated[payload.email];
+      }
+      return updated;
+    });
+  }, [profile?.email, user?.email]);
 
   const handleInputChange = (val) => {
     setInputValue(val);
-    if (!val.trim()) {
-      broadcastTyping(false);
-      return;
-    }
-
     const now = Date.now();
     if (now - lastTypingBroadcastRef.current > 1500) {
-      broadcastTyping(true);
       lastTypingBroadcastRef.current = now;
+      broadcastTyping(true);
     }
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -182,21 +213,6 @@ export const TeamChat = ({
       broadcastTyping(false);
     }, 2500);
   };
-
-  const handleTypingSignal = useCallback(({ email, name, isTyping }) => {
-    const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
-    if (!email || email.toLowerCase() === myEmail) return;
-
-    setTypingUsers(prev => {
-      const next = { ...prev };
-      if (isTyping) {
-        next[email.toLowerCase()] = { name, time: Date.now() };
-      } else {
-        delete next[email.toLowerCase()];
-      }
-      return next;
-    });
-  }, [profile?.email, user?.email]);
 
   // Clean stale typing users after 3s
   useEffect(() => {
@@ -231,7 +247,7 @@ export const TeamChat = ({
   };
 
   useEffect(() => {
-    // Tell SW that the chat page is active (suppresses background push for chat messages)
+    // Tell SW that the chat page is active
     notificationService.setForegroundState(true);
 
     const handleVisibilityChange = () => {
@@ -239,25 +255,24 @@ export const TeamChat = ({
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    loadMessages();
+    loadMessages(activeChannel);
 
     // Supabase Realtime subscription for incoming messages, deletions, and typing
     let rtChannel = null;
     if (supabase) {
       rtChannel = supabase
-        .channel(`realtime-chat-${channel}`)
+        .channel(`realtime-chat-${activeChannel}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
             if (payload.new) {
               const newMsg = payload.new;
-              if ((newMsg.channel || 'general') !== channel) return;
+              if ((newMsg.channel || 'general') !== activeChannel) return;
               if (processedMsgIdsRef.current.has(newMsg.id)) return;
               processedMsgIdsRef.current.add(newMsg.id);
 
               setMessages(prev => {
-                // If there was an optimistic message for this content from same sender, replace it
                 const optIndex = prev.findIndex(m => m.isOptimistic && m.sender_id === newMsg.sender_id && m.content === newMsg.content);
                 if (optIndex !== -1) {
                   const updated = [...prev];
@@ -268,7 +283,6 @@ export const TeamChat = ({
               });
               setTimeout(() => scrollToBottom(true), 50);
 
-              // Notify if from someone else — pass messageId for deduplication tag
               const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
               if (newMsg.sender_email && myEmail && newMsg.sender_email.toLowerCase() !== myEmail) {
                 notificationService.notifyChatMessage({
@@ -292,7 +306,7 @@ export const TeamChat = ({
           }
         )
         .on('broadcast', { event: 'typing' }, ({ payload }) => {
-          if (payload?.channel === channel) {
+          if (payload?.channel === activeChannel) {
             handleTypingSignal(payload);
           }
         })
@@ -305,11 +319,11 @@ export const TeamChat = ({
     let bc = null;
     let typingBc = null;
     try {
-      bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
+      bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
       bc.onmessage = (event) => {
         if (event.data?.type === 'NEW_MESSAGE' && event.data.message) {
           const msg = event.data.message;
-          if ((msg.channel || 'general') !== channel) return;
+          if ((msg.channel || 'general') !== activeChannel) return;
           if (processedMsgIdsRef.current.has(msg.id)) return;
           processedMsgIdsRef.current.add(msg.id);
 
@@ -324,9 +338,9 @@ export const TeamChat = ({
         }
       };
 
-      typingBc = new BroadcastChannel(`teamsync_typing_channel_${channel}`);
+      typingBc = new BroadcastChannel(`teamsync_typing_channel_${activeChannel}`);
       typingBc.onmessage = (event) => {
-        if (event.data && event.data.channel === channel) {
+        if (event.data && event.data.channel === activeChannel) {
           handleTypingSignal(event.data);
         }
       };
@@ -338,22 +352,20 @@ export const TeamChat = ({
       if (bc) bc.close();
       if (typingBc) typingBc.close();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      // Tell SW we are no longer viewing chat
       notificationService.setForegroundState(false);
     };
-  }, [handleTypingSignal, profile?.email, user?.email, channel]);
+  }, [handleTypingSignal, profile?.email, user?.email, activeChannel]);
 
   useEffect(() => {
     if (!loading) {
       scrollToBottom(false);
     }
-  }, [loading]);
+  }, [loading, activeChannel]);
 
   const handleFileSelect = (e, fileTypeHint = 'document') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // File validation limits: 50MB for video, 25MB for document/audio, 10MB for images
     const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(file.name);
     const isImage = file.type.startsWith('image/');
     const maxLimit = isVideo ? 50 * 1024 * 1024 : (isImage ? 10 * 1024 * 1024 : 25 * 1024 * 1024);
@@ -416,7 +428,6 @@ export const TeamChat = ({
     const content = inputValue.trim();
     const fileToSend = selectedFile;
 
-    // Immediately stop typing indicator
     broadcastTyping(false);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
@@ -465,42 +476,39 @@ export const TeamChat = ({
         senderEmail,
         senderRole,
         attachment: attachmentData,
-        channel
+        channel: activeChannel
       });
 
-      if (newMsg) {
-        processedMsgIdsRef.current.add(newMsg.id);
-        setMessages(prev => prev.map(m => (m.id === optId ? newMsg : m)));
+      setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
+      processedMsgIdsRef.current.add(newMsg.id);
 
-        try {
-          const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
-          bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
-          bc.close();
-        } catch {}
-      }
+      try {
+        const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+        bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
+        bc.close();
+      } catch {}
     } catch (err) {
       console.error('Error sending message:', err);
-      // Remove optimistic message on error and restore input
+      setError(err.message || 'Failed to send message. Please try again.');
       setMessages(prev => prev.filter(m => m.id !== optId));
-      setInputValue(content);
-      setError(err.message || 'Failed to deliver message. Please try again.');
     } finally {
       setSending(false);
-      inputRef.current?.focus();
+      setTimeout(() => scrollToBottom(true), 50);
     }
   };
 
-  const handleSendVoice = async (audioFile, duration) => {
+  // WhatsApp-style Voice Note Sender
+  const handleSendVoice = async (audioBlob, duration) => {
     setIsRecordingVoice(false);
-    setError('');
+    if (!audioBlob) return;
 
-    const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
+    const senderName = profile?.full_name || user?.user_metadata?.full_name || 'Team Member';
     const senderEmail = profile?.email || user?.email || '';
     const senderRole = profile?.role || 'MEMBER';
     const senderId = profile?.id || user?.id;
 
-    // Instant Optimistic Voice Message
-    const optId = 'opt-voice-' + Date.now();
+    const optId = 'opt-audio-' + Date.now();
+    const tempAudioUrl = URL.createObjectURL(audioBlob);
     const optimisticMsg = {
       id: optId,
       content: 'Voice message',
@@ -508,64 +516,43 @@ export const TeamChat = ({
       sender_name: senderName,
       sender_email: senderEmail,
       sender_role: senderRole,
-      file_url: URL.createObjectURL(audioFile),
-      file_name: 'voice_note.webm',
-      file_size: audioFile.size,
+      file_url: tempAudioUrl,
+      file_name: `Voice note (${Math.round(duration)}s)`,
+      file_size: audioBlob.size,
       file_type: 'audio',
       created_at: new Date().toISOString(),
-      audio_duration: duration,
       isOptimistic: true
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
     setTimeout(() => scrollToBottom(true), 20);
 
-    setSending(true);
-
     try {
+      const audioFile = new File([audioBlob], `voice_note_${Date.now()}.webm`, { type: 'audio/webm' });
       const attachmentData = await chatApi.uploadAttachment(audioFile);
 
       const newMsg = await chatApi.sendMessage({
-        content: 'Voice message',
+        content: `Voice message (${Math.round(duration)}s)`,
         senderId,
         senderName,
         senderEmail,
         senderRole,
         attachment: attachmentData,
-        channel
+        channel: activeChannel
       });
 
-      if (newMsg) {
-        const enrichedMsg = { ...newMsg, audio_duration: duration };
-        processedMsgIdsRef.current.add(enrichedMsg.id);
-        setMessages(prev => prev.map(m => (m.id === optId ? enrichedMsg : m)));
+      setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
+      processedMsgIdsRef.current.add(newMsg.id);
 
-        try {
-          const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
-          bc.postMessage({ type: 'NEW_MESSAGE', message: enrichedMsg });
-          bc.close();
-        } catch {}
-      }
-    } catch (err) {
-      console.error('Error sending voice message:', err);
-      setMessages(prev => prev.filter(m => m.id !== optId));
-      setError(err.message || 'Failed to send voice message. Please try again.');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleDeleteMessage = async (msgId) => {
-    try {
-      await chatApi.deleteMessage(msgId);
-      setMessages(prev => prev.filter(m => m.id !== msgId));
       try {
-        const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
-        bc.postMessage({ type: 'DELETE_MESSAGE', id: msgId });
+        const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+        bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
         bc.close();
       } catch {}
     } catch (err) {
-      console.error('Failed to delete message:', err);
+      console.error('Failed to send voice note:', err);
+      setError('Failed to upload voice note.');
+      setMessages(prev => prev.filter(m => m.id !== optId));
     }
   };
 
@@ -581,466 +568,544 @@ export const TeamChat = ({
     inputRef.current?.focus();
   };
 
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
-
-  const formatMessageTime = (dateStr) => {
+  const handleDeleteMessage = async (msgId) => {
     try {
-      const date = parseISO(dateStr);
-      return format(date, 'h:mm a');
-    } catch {
-      return '';
+      await chatApi.deleteMessage(msgId);
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+      try {
+        const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+        bc.postMessage({ type: 'DELETE_MESSAGE', id: msgId });
+        bc.close();
+      } catch {}
+    } catch (err) {
+      console.error('Failed to delete message:', err);
     }
   };
 
-  const getRoleBadge = (role) => {
-    if (role === 'FOUNDER') {
-      return (
-        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-neutral-900 px-1.5 py-0.5 rounded border border-neutral-700">
-          <ShieldAlert className="w-2.5 h-2.5 text-white" />
-          Founder
-        </span>
-      );
-    }
-    if (role === 'ADMIN') {
-      return (
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-neutral-300 bg-neutral-900 px-1.5 py-0.5 rounded border border-neutral-700">
-          <Shield className="w-2.5 h-2.5 text-neutral-300" />
-          Admin
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-neutral-400 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">
-        <User className="w-2.5 h-2.5" />
-        Member
-      </span>
-    );
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
+
+  // Determine current active chat title and info
+  const isLeadershipActive = activeChannel === 'leadership';
+  const currentChatTitle = isLeadershipActive ? 'Leadership Council' : 'Team Chat';
+  const currentChatSubtitle = isLeadershipActive
+    ? 'Restricted Executive Channel (Founder, Admin & Advisor)'
+    : `Company HQ • All Members • ${onlineCount} online`;
 
   return (
-    <div className="h-[calc(100vh-6.5rem)] flex flex-col bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
-        {/* Hidden Inputs for File Uploads */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.zip"
-          onChange={(e) => handleFileSelect(e, 'document')}
-          className="hidden"
-        />
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleFileSelect(e, 'image')}
-          className="hidden"
-        />
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/mp4,video/webm,video/quicktime"
-          onChange={(e) => handleFileSelect(e, 'video')}
-          className="hidden"
-        />
+    <div className="h-[calc(100vh-6.5rem)] flex bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
+      {/* Hidden File Inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.zip"
+        onChange={(e) => handleFileSelect(e, 'document')}
+        className="hidden"
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => handleFileSelect(e, 'image')}
+        className="hidden"
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/mp4,video/webm,video/quicktime"
+        onChange={(e) => handleFileSelect(e, 'video')}
+        className="hidden"
+      />
 
-      {/* 1. Optimized WhatsApp Group Header */}
-      <div className="px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          {/* Clean Logo Avatar */}
-          <div className="relative shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-white p-0.5 flex items-center justify-center shadow-md overflow-hidden">
-              <img
-                src="/logo.jpg"
-                alt="TeamSync"
-                className="w-full h-full object-contain"
-              />
+      {/* ─────────────────────────────────────────────────────────────────────────
+          LEFT PANE: WhatsApp Conversation & Channel Selector
+          ───────────────────────────────────────────────────────────────────────── */}
+      <div
+        className={`w-full md:w-80 border-r border-neutral-800 bg-black flex flex-col shrink-0 transition-all ${
+          isMobileChatOpen ? 'hidden md:flex' : 'flex'
+        }`}
+      >
+        {/* Top Header */}
+        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-neutral-900 border border-neutral-750 flex items-center justify-center font-bold text-xs text-white">
+              {profile?.full_name?.charAt(0) || 'U'}
             </div>
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-black"
-              title="Group online"
+            <div>
+              <h2 className="text-base font-bold text-white tracking-tight">Chats</h2>
+              <p className="text-[11px] text-neutral-400">Team Channels</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400">
+            {onlineCount} Online
+          </span>
+        </div>
+
+        {/* Search Bar */}
+        <div className="p-3 border-b border-neutral-800/80">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={chatSearchQuery}
+              onChange={(e) => setChatSearchQuery(e.target.value)}
+              placeholder="Search chats..."
+              className="w-full pl-8 pr-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder:text-neutral-500 outline-none focus:border-neutral-700 transition"
             />
           </div>
-
-          {/* Clean Group Meta Info */}
-          <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm md:text-base font-bold text-white tracking-tight truncate">
-                {title}
-              </h2>
-              {isLeadershipMode || channel === 'leadership' ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-950/80 border border-purple-800 text-purple-200 flex items-center gap-1">
-                  <Shield className="w-2.5 h-2.5 text-purple-400" />
-                  #leadership
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300">
-                  #general
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-neutral-400 mt-0.5">
-              <span className="flex items-center gap-1 text-[11px] text-neutral-400 truncate max-w-[200px] sm:max-w-none">
-                <Users className="w-3 h-3 text-neutral-500" />
-                {subtitle}
-              </span>
-              <span className="text-neutral-600">•</span>
-              <span className="text-emerald-400 font-medium text-[11px] flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {onlineCount} Online Now
-              </span>
-            </div>
-          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Start Group Video Call Button */}
+        {/* Channel / Conversation Items List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          {/* 1. Team Chat (General) */}
           <button
             type="button"
-            onClick={() => handleStartCall('video')}
-            className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 text-xs font-bold transition shadow-sm cursor-pointer"
-            title="Start Group Video Call"
+            onClick={() => {
+              setActiveChannel('general');
+              setIsMobileChatOpen(true);
+            }}
+            className={`w-full p-3 rounded-2xl flex items-center gap-3 transition text-left cursor-pointer ${
+              activeChannel === 'general'
+                ? 'bg-neutral-900 border border-neutral-700 text-white shadow-md'
+                : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
+            }`}
           >
-            <Video className="w-4 h-4" />
-            <span className="hidden sm:inline">Video Call</span>
+            <div className="w-11 h-11 rounded-2xl bg-emerald-950/60 border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white truncate">Team Chat</span>
+                <span className="text-[10px] text-emerald-400 font-medium">All Team</span>
+              </div>
+              <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                Company HQ • All Members
+              </p>
+            </div>
           </button>
 
-          {/* Start Group Voice Call Button */}
-          <button
-            type="button"
-            onClick={() => handleStartCall('voice')}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 text-neutral-300 hover:text-white border border-neutral-800 flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
-            title="Start Group Voice Call"
-          >
-            <Phone className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Voice Call</span>
-          </button>
-
-          {/* View Call History Button */}
-          <button
-            type="button"
-            onClick={() => setIsHistoryModalOpen(true)}
-            className="p-2 rounded-xl bg-neutral-900 hover:bg-neutral-850 text-neutral-400 hover:text-white border border-neutral-800 transition cursor-pointer"
-            title="Call History"
-          >
-            <Clock className="w-4 h-4" />
-          </button>
-
-          <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-neutral-400 bg-neutral-900/90 px-2.5 py-1 rounded-xl border border-neutral-800 ml-1">
-            <Lock className="w-3 h-3 text-neutral-400" />
-            <span>Official</span>
-          </div>
+          {/* 2. Leadership Chat (Restricted - Founder, Admin, Founding Advisor) */}
+          {isLeadership && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveChannel('leadership');
+                setIsMobileChatOpen(true);
+              }}
+              className={`w-full p-3 rounded-2xl flex items-center gap-3 transition text-left cursor-pointer ${
+                activeChannel === 'leadership'
+                  ? 'bg-neutral-900 border border-amber-800/80 text-white shadow-md'
+                  : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
+              }`}
+            >
+              <div className="w-11 h-11 rounded-2xl bg-amber-950/60 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                    <span>Leadership Chat</span>
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/80 font-bold">
+                    🔒 Executive
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                  Founder, Admin & Advisor
+                </p>
+              </div>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Ongoing Call Announcement Banner */}
-      {ongoingCall && ongoingCall.id !== dismissedCallId && !activeCallSession && (
-        <ActiveCallBanner
-          activeCall={ongoingCall}
-          onJoin={() => handleJoinCall(ongoingCall)}
-          onDismiss={() => setDismissedCallId(ongoingCall.id)}
-        />
-      )}
-
-      {/* 2. Messages Stream (WhatsApp Canvas with Wallpaper pattern) */}
+      {/* ─────────────────────────────────────────────────────────────────────────
+          RIGHT PANE: WhatsApp Conversation View
+          ───────────────────────────────────────────────────────────────────────── */}
       <div
-        className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-black/60 relative"
-        style={{
-          backgroundImage: `radial-gradient(#262626 1px, transparent 1px)`,
-          backgroundSize: '24px 24px'
-        }}
+        className={`flex-1 flex flex-col min-w-0 bg-neutral-950 ${
+          !isMobileChatOpen ? 'hidden md:flex' : 'flex'
+        }`}
       >
-        {/* Load Earlier Messages Button */}
-        {hasMoreOlder && messages.length >= 50 && (
-          <div className="text-center py-1">
+        {/* 1. WhatsApp Group Header */}
+        <div className="px-4 md:px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {/* Mobile Back Button to Channel List */}
             <button
               type="button"
-              onClick={loadOlderMessages}
-              disabled={loadingOlder}
-              className="px-4 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-xs text-neutral-400 hover:text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+              onClick={() => setIsMobileChatOpen(false)}
+              className="md:hidden p-1.5 -ml-1 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 transition cursor-pointer"
+              title="Back to all chats"
             >
-              {loadingOlder ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Loading earlier messages...</span>
-                </>
-              ) : (
-                <span>↑ Load earlier messages</span>
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            {/* Avatar Icon */}
+            <div className="relative shrink-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md overflow-hidden ${
+                isLeadershipActive
+                  ? 'bg-amber-950/80 border border-amber-800 text-amber-300'
+                  : 'bg-emerald-950/80 border border-emerald-800 text-emerald-300'
+              }`}>
+                {isLeadershipActive ? <Shield className="w-5 h-5" /> : <Users className="w-5 h-5" />}
+              </div>
+              <span
+                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-black"
+                title="Channel online"
+              />
+            </div>
+
+            {/* Group Meta Info */}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm md:text-base font-bold text-white tracking-tight truncate">
+                  {currentChatTitle}
+                </h2>
+                {isLeadershipActive ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 border border-amber-800 text-amber-200 flex items-center gap-1">
+                    <Shield className="w-2.5 h-2.5 text-amber-400" />
+                    #leadership
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300">
+                    #general
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-neutral-400 truncate">
+                {currentChatSubtitle}
+              </p>
+            </div>
+          </div>
+
+          {/* Call Launcher Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleStartCall('video')}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:border-neutral-600"
+              title="Start Group Video Call"
+            >
+              <Video className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">Video Call</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleStartCall('voice')}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:border-neutral-600"
+              title="Start Group Voice Call"
+            >
+              <Phone className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">Voice Call</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsHistoryModalOpen(true)}
+              className="p-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-neutral-400 hover:text-white transition cursor-pointer shadow-sm"
+              title="View Call Logs"
+            >
+              <Clock className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* 2. Active Call Banner */}
+        {ongoingCall && !activeCallSession && ongoingCall.id !== dismissedCallId && (
+          <div className="p-3 bg-neutral-900/90 border-b border-neutral-800 shrink-0">
+            <ActiveCallBanner
+              call={ongoingCall}
+              onJoin={handleJoinCall}
+              onDismiss={() => setDismissedCallId(ongoingCall.id)}
+            />
+          </div>
+        )}
+
+        {/* 3. WhatsApp Message History Canvas */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 relative bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]">
+          {/* Infinite Scroll "Load Older Messages" Button */}
+          {hasMoreOlder && (
+            <div className="flex justify-center pb-2">
+              <button
+                type="button"
+                onClick={loadOlderMessages}
+                disabled={loadingOlder}
+                className="px-3.5 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs font-semibold flex items-center gap-1.5 shadow-md transition cursor-pointer"
+              >
+                {loadingOlder ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Loading history...</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock3 className="w-3.5 h-3.5" />
+                    <span>Load older messages</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="h-full flex items-center justify-center">
+              <LoadingSpinner text="Loading messages..." />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-500 shadow-inner">
+                {isLeadershipActive ? <Shield className="w-7 h-7 text-amber-400/80" /> : <MessageSquare className="w-7 h-7 text-emerald-400/80" />}
+              </div>
+              <h3 className="text-base font-bold text-white">No Messages Yet</h3>
+              <p className="text-xs text-neutral-400 max-w-sm">
+                {isLeadershipActive
+                  ? 'Start the confidential leadership briefing with Founder, Admins, and Founding Advisor.'
+                  : 'Start the conversation with your team. Share updates, attachments, or voice notes.'}
+              </p>
+            </div>
+          ) : (
+            messages.map((msg) => {
+              const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+              const isSelf = Boolean(
+                (msg.sender_id && user && msg.sender_id === user.id) ||
+                (msg.sender_email && myEmail && msg.sender_email.toLowerCase() === myEmail)
+              );
+              const isOnline = isUserOnline(msg.sender_email);
+              const canDelete = isFounder || isSelf;
+
+              return (
+                <ChatMessageItem
+                  key={msg.id}
+                  msg={msg}
+                  isSelf={isSelf}
+                  isOnline={isOnline}
+                  canDelete={canDelete}
+                  onDelete={handleDeleteMessage}
+                />
+              );
+            })
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Attachment Upload Progress/Preview */}
+        {attachmentPreview && (
+          <div className="px-4 py-2 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3 overflow-hidden">
+              {attachmentPreview.type === 'image' && attachmentPreview.url && (
+                <img
+                  src={attachmentPreview.url}
+                  alt="Preview"
+                  className="w-10 h-10 object-cover rounded-lg border border-neutral-700"
+                />
               )}
+              {attachmentPreview.type === 'video' && (
+                <div className="w-10 h-10 bg-neutral-800 rounded-lg flex items-center justify-center text-white border border-neutral-700">
+                  <Video className="w-5 h-5" />
+                </div>
+              )}
+              {attachmentPreview.type === 'document' && (
+                <div className="w-10 h-10 bg-neutral-800 rounded-lg flex items-center justify-center text-white border border-neutral-700">
+                  <FileText className="w-5 h-5" />
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-bold text-white truncate max-w-xs sm:max-w-md">
+                  {attachmentPreview.name}
+                </p>
+                <p className="text-[10px] text-neutral-400">
+                  {formatFileSize(attachmentPreview.size)} • Ready to send
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={removeAttachment}
+              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition cursor-pointer"
+              title="Remove attachment"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
-        {loading ? (
-          <div className="h-full flex items-center justify-center">
-            <LoadingSpinner text="Opening secure company channel..." />
+        {/* Quick Emoji Picker Drawer */}
+        {isEmojiPickerOpen && (
+          <div ref={emojiPickerRef} className="p-3 bg-black border-t border-neutral-800 flex items-center gap-2 overflow-x-auto shrink-0 shadow-inner">
+            <span className="text-[11px] text-neutral-400 mr-1 font-semibold">Emojis:</span>
+            {QUICK_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => addEmoji(emoji)}
+                className="p-1.5 text-base hover:scale-125 transition cursor-pointer"
+              >
+                {emoji}
+              </button>
+            ))}
           </div>
-        ) : messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-400 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-400 shadow-inner">
-              <MessageSquare className="w-6 h-6 text-white" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm md:text-base font-bold text-white">TeamSync Company Channel</h3>
-              <p className="text-xs text-neutral-400 max-w-sm">
-                Say hello, discuss project tasks, or attach documents to share with everyone.
-              </p>
-            </div>
+        )}
 
-            {/* Quick Conversation Starters */}
-            <div className="flex items-center gap-2 flex-wrap justify-center pt-2">
-              {[
-                '👋 Hello team!',
-                '🚀 Ready for standup',
-                '📄 Sharing document',
-                '✅ Task update'
-              ].map((starter) => (
+        {/* WhatsApp-Style Input Bar */}
+        <div className="p-3 sm:p-4 bg-black border-t border-neutral-800 shrink-0 relative">
+          {error && (
+            <div className="mb-2 text-xs text-red-400 px-3 flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError('')} className="underline cursor-pointer">
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Attachment Floating Menu */}
+          {isAttachMenuOpen && (
+            <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-52 text-xs text-neutral-200">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                  <FileText className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className="font-bold text-white block">Document</span>
+                  <span className="text-[10px] text-neutral-400 block">PDF, DOCX, XLSX, TXT (25MB)</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                  <ImageIcon className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className="font-bold text-white block">Photos & Media</span>
+                  <span className="text-[10px] text-neutral-400 block">PNG, JPG, WebP (10MB)</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                  <Video className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className="font-bold text-white block">Video File</span>
+                  <span className="text-[10px] text-neutral-400 block">MP4, WebM, MOV (50MB)</span>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Live Typing Indicator */}
+          {Object.keys(typingUsers).length > 0 && (
+            <div className="px-3 pb-2 text-xs text-emerald-400 flex items-center gap-2 animate-fadeIn font-medium">
+              <div className="flex gap-1 items-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:0.2s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:0.4s]" />
+              </div>
+              <span>
+                {Object.values(typingUsers).map(u => u.name).join(', ')} {Object.keys(typingUsers).length > 1 ? 'are typing...' : 'is typing...'}
+              </span>
+            </div>
+          )}
+
+          {/* Input Bar or Voice Recording Bar */}
+          {isRecordingVoice ? (
+            <VoiceRecorderBar
+              onSend={handleSendVoice}
+              onCancel={() => setIsRecordingVoice(false)}
+            />
+          ) : (
+            <form onSubmit={handleSendMessage} className="flex items-center gap-2 sm:gap-3">
+              {/* Main WhatsApp Pill */}
+              <div className="flex-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 focus-within:border-white rounded-full px-3 py-2 flex items-center gap-2 transition shadow-inner">
+                {/* 1. Attachment '+' Button */}
                 <button
-                  key={starter}
                   type="button"
                   onClick={() => {
-                    setInputValue(starter);
-                    inputRef.current?.focus();
+                    setIsAttachMenuOpen(prev => !prev);
+                    setIsEmojiPickerOpen(false);
                   }}
-                  className="px-3 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-xs text-neutral-300 transition cursor-pointer"
+                  className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
+                  title="Attach documents or photos"
                 >
-                  {starter}
+                  <Plus className={`w-5 h-5 transition-transform ${isAttachMenuOpen ? 'rotate-45 text-white' : ''}`} />
                 </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((msg, index) => {
-            const isSelf =
-              (msg.sender_email && profile?.email && msg.sender_email.toLowerCase() === profile.email.toLowerCase()) ||
-              (msg.sender_id && profile?.id && msg.sender_id === profile.id);
 
-            const isOnline = isUserOnline(msg.sender_email);
-            const canDelete = isSelf || isFounder;
+                {/* 2. Emoji Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEmojiPickerOpen(prev => !prev);
+                    setIsAttachMenuOpen(false);
+                  }}
+                  className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
+                  title="Emojis"
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
 
-            return (
-              <ChatMessageItem
-                key={msg.id || `msg-${index}`}
-                msg={msg}
-                isSelf={isSelf}
-                isOnline={isOnline}
-                canDelete={canDelete}
-                onDelete={handleDeleteMessage}
-              />
-            );
-          })
-        )}
-        <div ref={messagesEndRef} />
+                {/* 3. Text Input */}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => handleInputChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message"
+                  disabled={sending}
+                  className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none px-1"
+                />
+              </div>
+
+              {/* 4. Send or WhatsApp Mic Button */}
+              {inputValue.trim() || selectedFile ? (
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition flex items-center justify-center shadow-lg cursor-pointer shrink-0"
+                  title="Send message"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAttachMenuOpen(false);
+                    setIsEmojiPickerOpen(false);
+                    setIsRecordingVoice(true);
+                  }}
+                  className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-emerald-500/60 hover:text-emerald-400 text-neutral-300 transition-all flex items-center justify-center cursor-pointer shrink-0 group shadow-md"
+                  title="Record voice message"
+                >
+                  <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                </button>
+              )}
+            </form>
+          )}
+        </div>
       </div>
 
-      {/* 3. Attachment Preview Chip (Shown before sending) */}
-      {attachmentPreview && (
-        <div className="px-4 py-2 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            {attachmentPreview.type === 'image' ? (
-              <img
-                src={attachmentPreview.url}
-                alt="Preview"
-                className="w-10 h-10 rounded-lg object-cover border border-neutral-700"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center text-white">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-            )}
-            <div>
-              <p className="text-xs font-bold text-white truncate max-w-xs sm:max-w-md">
-                {attachmentPreview.name}
-              </p>
-              <p className="text-[10px] text-neutral-400">
-                {formatFileSize(attachmentPreview.size)} • Ready to send
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={removeAttachment}
-            className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition cursor-pointer"
-            title="Remove attachment"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* 4. Quick Emoji Picker Drawer */}
-      {isEmojiPickerOpen && (
-        <div ref={emojiPickerRef} className="p-3 bg-black border-t border-neutral-800 flex items-center gap-2 overflow-x-auto shrink-0 shadow-inner">
-          <span className="text-[11px] text-neutral-400 mr-1 font-semibold">Emojis:</span>
-          {QUICK_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => addEmoji(emoji)}
-              className="p-1.5 text-base hover:scale-125 transition cursor-pointer"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 5. WhatsApp-Style Input Bar (Matches User Screenshot 2 Exactly) */}
-      <div className="p-3 sm:p-4 bg-black border-t border-neutral-800 shrink-0 relative">
-        {error && (
-          <div className="mb-2 text-xs text-red-400 px-3 flex items-center justify-between">
-            <span>{error}</span>
-            <button onClick={() => setError('')} className="underline cursor-pointer">
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Attachment Floating Menu */}
-        {isAttachMenuOpen && (
-          <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-52 text-xs text-neutral-200">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
-            >
-              <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
-                <FileText className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <span className="font-bold text-white block">Document</span>
-                <span className="text-[10px] text-neutral-400 block">PDF, DOCX, XLSX, TXT (25MB)</span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
-            >
-              <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
-                <ImageIcon className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <span className="font-bold text-white block">Photos & Media</span>
-                <span className="text-[10px] text-neutral-400 block">PNG, JPG, WebP (10MB)</span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => videoInputRef.current?.click()}
-              className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
-            >
-              <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
-                <Video className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <span className="font-bold text-white block">Video File</span>
-                <span className="text-[10px] text-neutral-400 block">MP4, WebM, MOV (250MB)</span>
-              </div>
-            </button>
-          </div>
-        )}
-
-        {/* Live Typing Indicator */}
-        {Object.keys(typingUsers).length > 0 && (
-          <div className="px-3 pb-2 text-xs text-emerald-400 flex items-center gap-2 animate-fadeIn font-medium">
-            <div className="flex gap-1 items-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" />
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:0.2s]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:0.4s]" />
-            </div>
-            <span>
-              {Object.values(typingUsers).map(u => u.name).join(', ')} {Object.keys(typingUsers).length > 1 ? 'are typing...' : 'is typing...'}
-            </span>
-          </div>
-        )}
-
-        {/* Input Bar or Voice Recording Bar */}
-        {isRecordingVoice ? (
-          <VoiceRecorderBar
-            onSend={handleSendVoice}
-            onCancel={() => setIsRecordingVoice(false)}
-          />
-        ) : (
-          <form onSubmit={handleSendMessage} className="flex items-center gap-2 sm:gap-3">
-            {/* Main WhatsApp Pill */}
-            <div className="flex-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 focus-within:border-white rounded-full px-3 py-2 flex items-center gap-2 transition shadow-inner">
-              {/* 1. Attachment '+' Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAttachMenuOpen(prev => !prev);
-                  setIsEmojiPickerOpen(false);
-                }}
-                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
-                title="Attach documents or photos"
-              >
-                <Plus className={`w-5 h-5 transition-transform ${isAttachMenuOpen ? 'rotate-45 text-white' : ''}`} />
-              </button>
-
-              {/* 2. Emoji Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEmojiPickerOpen(prev => !prev);
-                  setIsAttachMenuOpen(false);
-                }}
-                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
-                title="Emojis"
-              >
-                <Smile className="w-5 h-5" />
-              </button>
-
-              {/* 3. Text Input */}
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputValue}
-                onChange={(e) => handleInputChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type a message"
-                disabled={sending}
-                className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none px-1"
-              />
-            </div>
-
-            {/* 4. Send or WhatsApp Mic Button */}
-            {inputValue.trim() || selectedFile ? (
-              <button
-                type="submit"
-                disabled={sending}
-                className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition flex items-center justify-center shadow-lg cursor-pointer shrink-0"
-                title="Send message"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAttachMenuOpen(false);
-                  setIsEmojiPickerOpen(false);
-                  setIsRecordingVoice(true);
-                }}
-                className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-emerald-500/60 hover:text-emerald-400 text-neutral-300 transition-all flex items-center justify-center cursor-pointer shrink-0 group shadow-md"
-                title="Record voice message"
-              >
-                <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              </button>
-            )}
-          </form>
-        )}
-      </div>
-
-      {/* 6. Past Call History Modal */}
+      {/* Past Call History Modal */}
       <CallHistoryModal
-        roomId="general"
+        roomId={activeChannel}
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
       />

@@ -74,8 +74,16 @@ const ChatMessageItemComponent = ({
       {/* Compact Round Avatar for incoming messages */}
       {!isSelf && (
         <div className="relative shrink-0 mb-0.5">
-          <div className="w-7 h-7 rounded-full bg-purple-950/80 border border-purple-800/80 flex items-center justify-center font-bold text-[11px] text-purple-300 shadow-sm">
-            {msg.sender_name?.charAt(0) || 'U'}
+          <div className="w-7 h-7 rounded-full bg-purple-950/80 border border-purple-800/80 flex items-center justify-center font-bold text-[11px] text-purple-300 shadow-sm overflow-hidden">
+            {msg.sender_avatar_url ? (
+              <img
+                src={msg.sender_avatar_url}
+                alt={msg.sender_name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span>{msg.sender_name?.charAt(0) || 'U'}</span>
+            )}
           </div>
           <span
             className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-black ${

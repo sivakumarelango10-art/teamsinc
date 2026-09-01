@@ -29,6 +29,7 @@ import AdvisorTasks from '../pages/advisor/AdvisorTasks';
 
 import BugManagement from '../pages/bugs/BugManagement';
 import MyReportedBugs from '../pages/bugs/MyReportedBugs';
+import Profile from '../pages/profile/Profile';
 
 export const AppRoutes = () => {
   const { user, profile, loading } = useAuth();
@@ -128,6 +129,18 @@ export const AppRoutes = () => {
           <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
             <DashboardLayout title="Chats">
               <TeamChat />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* User Profile Management Route (All Authenticated Roles) */}
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
+            <DashboardLayout title="My Profile">
+              <Profile />
             </DashboardLayout>
           </ProtectedRoute>
         }

@@ -141,5 +141,68 @@ export const authApi = {
     }
 
     return null;
+  },
+
+  // Upload Avatar to Supabase Storage
+  async uploadAvatar(file) {
+    if (!supabase) throw new Error('Supabase client not initialized');
+    if (!file) throw new Error('No image file selected');
+
+    const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filePath = `avatars/${Date.now()}_${cleanName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('chat-attachments')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.error('Avatar upload failed:', uploadError);
+      throw new Error(uploadError.message || 'Failed to upload avatar image');
+    }
+
+    const { data: publicData } = supabase.storage
+      .from('chat-attachments')
+      .getPublicUrl(filePath);
+
+    return publicData?.publicUrl;
+  },
+
+  // Update profile full_name and/or avatar_url
+  async updateProfile(profileId, { full_name, avatar_url }) {
+    const updates = {
+      updated_at: new Date().toISOString()
+    };
+    if (full_name !== undefined) updates.full_name = full_name.trim();
+    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', profileId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update Supabase Auth metadata
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            full_name: updates.full_name,
+            avatar_url: updates.avatar_url
+          }
+        });
+      } catch (authErr) {
+        console.warn('Could not update user metadata:', authErr);
+      }
+
+      return data;
+    }
+
+    return { id: profileId, ...updates };
   }
 };

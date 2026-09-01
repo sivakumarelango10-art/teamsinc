@@ -169,6 +169,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const uploadUserAvatar = async (file) => {
+    const avatarUrl = await authApi.uploadAvatar(file);
+    return avatarUrl;
+  };
+
+  const updateCurrentUserProfile = async (updates) => {
+    const profileId = profile?.id;
+    if (!profileId) throw new Error('Not authenticated');
+    const updated = await authApi.updateProfile(profileId, updates);
+    setProfile(prev => ({ ...prev, ...updated }));
+    return updated;
+  };
+
   const role = profile?.role || null;
   const isFounder = role === 'FOUNDER';
   const isAdmin = role === 'ADMIN';
@@ -189,7 +202,9 @@ export const AuthProvider = ({ children }) => {
     error,
     signInWithGoogle,
     logout,
-    refreshProfile
+    refreshProfile,
+    uploadUserAvatar,
+    updateCurrentUserProfile
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

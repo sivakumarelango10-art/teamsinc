@@ -49,6 +49,21 @@ export const TeamChat = () => {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  const attachMenuRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target)) {
+        setIsAttachMenuOpen(false);
+      }
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setIsEmojiPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -293,7 +308,7 @@ export const TeamChat = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-7rem)] flex flex-col bg-neutral-950 rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
+    <div className="h-[calc(100vh-6.5rem)] flex flex-col bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
       {/* Hidden File Inputs */}
       <input
         type="file"
@@ -310,44 +325,51 @@ export const TeamChat = () => {
         accept="image/*"
       />
 
-      {/* 1. WhatsApp Group Header */}
-      <div className="px-5 py-3.5 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
+      {/* 1. Optimized WhatsApp Group Header */}
+      <div className="px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-2xl bg-neutral-900 border border-neutral-700 flex items-center justify-center text-white shadow-md">
-              <BrandLogo size="small" />
+          {/* Clean Logo Avatar */}
+          <div className="relative shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-white p-0.5 flex items-center justify-center shadow-md overflow-hidden">
+              <img
+                src="/logo.jpg"
+                alt="TeamSync"
+                className="w-full h-full object-contain"
+              />
             </div>
             <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-black"
-              title="Group live"
+              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-black"
+              title="Group online"
             />
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm md:text-base font-extrabold text-white tracking-tight">
+          {/* Clean Group Meta Info */}
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm md:text-base font-bold text-white tracking-tight truncate">
                 TeamSync Company HQ
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300">
                 #general
               </span>
             </div>
-            <p className="text-xs text-neutral-400 flex items-center gap-2 mt-0.5">
-              <span className="flex items-center gap-1 text-[11px]">
+            <div className="flex items-center gap-2 text-xs text-neutral-400 mt-0.5">
+              <span className="flex items-center gap-1 text-[11px] text-neutral-400">
                 <Users className="w-3 h-3 text-neutral-500" />
                 All Team Members
               </span>
-              <span>•</span>
-              <span className="text-emerald-400 font-medium text-[11px]">
+              <span className="text-neutral-600">•</span>
+              <span className="text-emerald-400 font-medium text-[11px] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 {onlineCount} Online Now
               </span>
-            </p>
+            </div>
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 text-xs text-neutral-400 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-800">
+        <div className="hidden sm:flex items-center gap-2 text-xs text-neutral-400 bg-neutral-900/90 px-3 py-1.5 rounded-xl border border-neutral-800">
           <Lock className="w-3.5 h-3.5 text-neutral-400" />
-          <span className="text-[11px]">Official Company Group</span>
+          <span className="text-[11px] font-medium">Official Channel</span>
         </div>
       </div>
 
@@ -355,7 +377,7 @@ export const TeamChat = () => {
       <div
         className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-black/60 relative"
         style={{
-          backgroundImage: `radial-gradient(#222 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(#262626 1px, transparent 1px)`,
           backgroundSize: '24px 24px'
         }}
       >
@@ -365,13 +387,37 @@ export const TeamChat = () => {
           </div>
         ) : messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-400 space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-500">
-              <MessageSquare className="w-7 h-7" />
+            <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-400 shadow-inner">
+              <MessageSquare className="w-6 h-6 text-white" />
             </div>
-            <h3 className="text-base font-bold text-white">Welcome to TeamSync Company Chat</h3>
-            <p className="text-xs text-neutral-400 max-w-sm">
-              This is the official unified channel for all company communications and document sharing. Say hello or share project docs to kick off collaboration!
-            </p>
+            <div className="space-y-1">
+              <h3 className="text-sm md:text-base font-bold text-white">TeamSync Company Channel</h3>
+              <p className="text-xs text-neutral-400 max-w-sm">
+                Say hello, discuss project tasks, or attach documents to share with everyone.
+              </p>
+            </div>
+
+            {/* Quick Conversation Starters */}
+            <div className="flex items-center gap-2 flex-wrap justify-center pt-2">
+              {[
+                '👋 Hello team!',
+                '🚀 Ready for standup',
+                '📄 Sharing document',
+                '✅ Task update'
+              ].map((starter) => (
+                <button
+                  key={starter}
+                  type="button"
+                  onClick={() => {
+                    setInputValue(starter);
+                    inputRef.current?.focus();
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-xs text-neutral-300 transition cursor-pointer"
+                >
+                  {starter}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           messages.map((msg, index) => {
@@ -544,7 +590,7 @@ export const TeamChat = () => {
 
       {/* 4. Quick Emoji Picker Drawer */}
       {isEmojiPickerOpen && (
-        <div className="p-3 bg-black border-t border-neutral-800 flex items-center gap-2 overflow-x-auto shrink-0 shadow-inner">
+        <div ref={emojiPickerRef} className="p-3 bg-black border-t border-neutral-800 flex items-center gap-2 overflow-x-auto shrink-0 shadow-inner">
           <span className="text-[11px] text-neutral-400 mr-1 font-semibold">Emojis:</span>
           {QUICK_EMOJIS.map((emoji) => (
             <button
@@ -572,7 +618,7 @@ export const TeamChat = () => {
 
         {/* Attachment Floating Menu */}
         {isAttachMenuOpen && (
-          <div className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-48 text-xs text-neutral-200">
+          <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-48 text-xs text-neutral-200">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}

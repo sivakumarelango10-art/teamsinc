@@ -889,7 +889,7 @@ export const TeamChat = ({
         {/* 3. WhatsApp Message History Canvas */}
         <div
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 relative bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]"
+          className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 relative bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]"
         >
           {/* Infinite Scroll "Load Older Messages" Button */}
           {hasMoreOlder && (

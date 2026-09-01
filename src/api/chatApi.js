@@ -2,8 +2,17 @@ import { supabase } from './supabase';
 
 const STORAGE_CHAT_KEY = 'teamsync_chat_messages';
 
+const fileToDataUrl = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
 export const chatApi = {
-  async getMessages(limit = 150) {
+  async getMessages(limit = 200) {
     if (supabase) {
       try {
         const { data, error } = await supabase
@@ -27,10 +36,71 @@ export const chatApi = {
     }
   },
 
-  async sendMessage({ content, senderId, senderName, senderEmail, senderRole }) {
-    if (!content?.trim()) throw new Error('Message cannot be empty');
+  async uploadAttachment(file) {
+    if (!file) return null;
 
+    if (supabase) {
+      try {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `uploads/${Date.now()}_${safeName}`;
+
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('chat-attachments')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (!uploadErr && uploadData) {
+          const { data: pubData } = supabase.storage
+            .from('chat-attachments')
+            .getPublicUrl(filePath);
+
+          return {
+            url: pubData?.publicUrl,
+            name: file.name,
+            size: file.size,
+            type: file.type.startsWith('image/') ? 'image' : 'document'
+          };
+        }
+      } catch (err) {
+        console.warn('Storage bucket upload notice, using DataURL fallback:', err);
+      }
+    }
+
+    // High-res DataURL fallback
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      return {
+        url: dataUrl,
+        name: file.name,
+        size: file.size,
+        type: file.type.startsWith('image/') ? 'image' : 'document'
+      };
+    } catch (err) {
+      console.error('Failed to encode attachment:', err);
+      return null;
+    }
+  },
+
+  async sendMessage({ content = '', senderId, senderName, senderEmail, senderRole, attachment = null }) {
     const cleanContent = content.trim();
+
+    if (!cleanContent && !attachment) {
+      throw new Error('Please type a message or select a file to send');
+    }
+
+    let fileUrl = null;
+    let fileName = null;
+    let fileSize = null;
+    let fileType = null;
+
+    if (attachment) {
+      fileUrl = attachment.url;
+      fileName = attachment.name;
+      fileSize = attachment.size;
+      fileType = attachment.type;
+    }
 
     if (supabase) {
       // Resolve valid profile ID
@@ -55,7 +125,11 @@ export const chatApi = {
           sender_id: resolvedSenderId,
           sender_name: senderName || 'Team Member',
           sender_email: senderEmail || '',
-          sender_role: senderRole || 'MEMBER'
+          sender_role: senderRole || 'MEMBER',
+          file_url: fileUrl,
+          file_name: fileName,
+          file_size: fileSize,
+          file_type: fileType
         }])
         .select()
         .single();
@@ -75,6 +149,10 @@ export const chatApi = {
       sender_name: senderName,
       sender_email: senderEmail,
       sender_role: senderRole,
+      file_url: fileUrl,
+      file_name: fileName,
+      file_size: fileSize,
+      file_type: fileType,
       created_at: new Date().toISOString()
     };
 

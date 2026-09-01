@@ -6,18 +6,27 @@ import { supabase } from '../../api/supabase';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import BrandLogo from '../../components/common/BrandLogo';
 import {
+  Plus,
+  Smile,
+  Mic,
   Send,
-  MessageSquare,
+  FileText,
+  Image as ImageIcon,
+  Download,
+  X,
   Shield,
   ShieldAlert,
   User,
   Trash2,
   Users,
   CheckCheck,
-  Smile,
-  Lock
+  Paperclip,
+  Lock,
+  ExternalLink
 } from 'lucide-react';
-import { format, isToday, isYesterday, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+
+const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '🚀', '❤️', '✅', '👏', '💯', '🎯', '💡', '✨', '🙌'];
 
 export const TeamChat = () => {
   const { user, profile, isFounder } = useAuth();
@@ -29,8 +38,16 @@ export const TeamChat = () => {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
+  // Attachment state
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
 
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -50,11 +67,11 @@ export const TeamChat = () => {
   useEffect(() => {
     loadMessages();
 
-    // 1. Supabase Realtime subscription for incoming messages
+    // Supabase Realtime subscription for incoming messages
     let channel = null;
     if (supabase) {
       channel = supabase
-        .channel('realtime-group-chat')
+        .channel('realtime-whatsapp-chat')
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages' },
@@ -80,7 +97,7 @@ export const TeamChat = () => {
         .subscribe();
     }
 
-    // 2. Cross-tab synchronization
+    // Cross-tab synchronization
     let bc = null;
     try {
       bc = new BroadcastChannel('teamsync_chat_channel');
@@ -103,23 +120,74 @@ export const TeamChat = () => {
     };
   }, []);
 
-  // Auto-scroll when messages initial load completes
   useEffect(() => {
     if (!loading) {
       scrollToBottom(false);
     }
   }, [loading]);
 
+  const handleFileSelect = (e, fileTypeHint = 'document') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit: 15MB
+    if (file.size > 15 * 1024 * 1024) {
+      setError('File is larger than 15MB limit.');
+      return;
+    }
+
+    setSelectedFile(file);
+    setIsAttachMenuOpen(false);
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachmentPreview({
+          url: reader.result,
+          name: file.name,
+          size: file.size,
+          type: 'image'
+        });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setAttachmentPreview({
+        url: null,
+        name: file.name,
+        size: file.size,
+        type: 'document'
+      });
+    }
+
+    inputRef.current?.focus();
+  };
+
+  const removeAttachment = () => {
+    setSelectedFile(null);
+    setAttachmentPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
-    if (!inputValue.trim() || sending) return;
+    if ((!inputValue.trim() && !selectedFile) || sending) return;
 
     const content = inputValue.trim();
+    const fileToSend = selectedFile;
+
     setInputValue('');
+    removeAttachment();
     setSending(true);
     setError('');
+    setIsEmojiPickerOpen(false);
 
     try {
+      let attachmentData = null;
+      if (fileToSend) {
+        attachmentData = await chatApi.uploadAttachment(fileToSend);
+      }
+
       const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
       const senderEmail = profile?.email || user?.email || '';
       const senderRole = profile?.role || 'MEMBER';
@@ -130,7 +198,8 @@ export const TeamChat = () => {
         senderId,
         senderName,
         senderEmail,
-        senderRole
+        senderRole,
+        attachment: attachmentData
       });
 
       if (newMsg) {
@@ -148,7 +217,7 @@ export const TeamChat = () => {
       }
     } catch (err) {
       console.error('Error sending message:', err);
-      setError('Failed to deliver message. Please try again.');
+      setError(err.message || 'Failed to deliver message. Please try again.');
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -176,9 +245,16 @@ export const TeamChat = () => {
     }
   };
 
-  const addQuickEmoji = (emoji) => {
+  const addEmoji = (emoji) => {
     setInputValue(prev => prev + emoji);
     inputRef.current?.focus();
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   const formatMessageTime = (dateStr) => {
@@ -216,23 +292,39 @@ export const TeamChat = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col bg-neutral-950 rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl">
-      {/* 1. Group Chat Header (WhatsApp style) */}
-      <div className="px-6 py-4 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3.5">
+    <div className="h-[calc(100vh-7rem)] flex flex-col bg-neutral-950 rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
+      {/* Hidden File Inputs */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={(e) => handleFileSelect(e, 'document')}
+        className="hidden"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
+      />
+      <input
+        type="file"
+        ref={imageInputRef}
+        onChange={(e) => handleFileSelect(e, 'image')}
+        className="hidden"
+        accept="image/*"
+      />
+
+      {/* 1. WhatsApp Group Header */}
+      <div className="px-5 py-3.5 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-11 h-11 rounded-2xl bg-neutral-900 border border-neutral-700 flex items-center justify-center text-white shadow-md">
+            <div className="w-10 h-10 rounded-2xl bg-neutral-900 border border-neutral-700 flex items-center justify-center text-white shadow-md">
               <BrandLogo size="small" />
             </div>
             <span
-              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-black"
-              title="Group active"
+              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-black"
+              title="Group live"
             />
           </div>
 
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-extrabold text-white tracking-tight">
+              <h2 className="text-sm md:text-base font-extrabold text-white tracking-tight">
                 TeamSync Company HQ
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300">
@@ -240,30 +332,35 @@ export const TeamChat = () => {
               </span>
             </div>
             <p className="text-xs text-neutral-400 flex items-center gap-2 mt-0.5">
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 text-[11px]">
                 <Users className="w-3 h-3 text-neutral-500" />
                 All Team Members
               </span>
               <span>•</span>
-              <span className="text-emerald-400 font-medium">
+              <span className="text-emerald-400 font-medium text-[11px]">
                 {onlineCount} Online Now
               </span>
             </p>
           </div>
         </div>
 
-        {/* Security & System info */}
         <div className="hidden sm:flex items-center gap-2 text-xs text-neutral-400 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-800">
           <Lock className="w-3.5 h-3.5 text-neutral-400" />
-          <span>Official Company Group</span>
+          <span className="text-[11px]">Official Company Group</span>
         </div>
       </div>
 
-      {/* 2. Messages Canvas */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-black/50">
+      {/* 2. Messages Stream (WhatsApp Canvas with Wallpaper pattern) */}
+      <div
+        className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-black/60 relative"
+        style={{
+          backgroundImage: `radial-gradient(#222 1px, transparent 1px)`,
+          backgroundSize: '24px 24px'
+        }}
+      >
         {loading ? (
           <div className="h-full flex items-center justify-center">
-            <LoadingSpinner text="Connecting to real-time team stream..." />
+            <LoadingSpinner text="Opening secure company channel..." />
           </div>
         ) : messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-400 space-y-3">
@@ -272,7 +369,7 @@ export const TeamChat = () => {
             </div>
             <h3 className="text-base font-bold text-white">Welcome to TeamSync Company Chat</h3>
             <p className="text-xs text-neutral-400 max-w-sm">
-              This is the official unified channel for all company communications. Say hello to kick off collaboration!
+              This is the official unified channel for all company communications and document sharing. Say hello or share project docs to kick off collaboration!
             </p>
           </div>
         ) : (
@@ -287,9 +384,9 @@ export const TeamChat = () => {
             return (
               <div
                 key={msg.id || index}
-                className={`flex gap-3 group ${isSelf ? 'justify-end' : 'justify-start'}`}
+                className={`flex gap-2.5 group ${isSelf ? 'justify-end' : 'justify-start'}`}
               >
-                {/* Incoming Message Avatar */}
+                {/* Avatar for incoming messages */}
                 {!isSelf && (
                   <div className="relative shrink-0 self-end mb-1">
                     <div className="w-8 h-8 rounded-xl bg-neutral-900 border border-neutral-700 flex items-center justify-center font-bold text-xs text-white">
@@ -303,12 +400,12 @@ export const TeamChat = () => {
                   </div>
                 )}
 
-                {/* Message Bubble Container */}
+                {/* WhatsApp Message Bubble */}
                 <div
-                  className={`max-w-[85%] sm:max-w-[70%] rounded-2xl p-3.5 relative shadow-md transition ${
+                  className={`max-w-[85%] sm:max-w-[65%] rounded-2xl p-3 relative shadow-md transition ${
                     isSelf
-                      ? 'bg-neutral-900 border border-neutral-750 text-white rounded-br-sm'
-                      : 'bg-neutral-950 border border-neutral-800 text-neutral-100 rounded-bl-sm'
+                      ? 'bg-neutral-900 border border-neutral-750 text-white rounded-br-none'
+                      : 'bg-neutral-950 border border-neutral-800 text-neutral-100 rounded-bl-none'
                   }`}
                 >
                   {/* Sender Header */}
@@ -320,7 +417,6 @@ export const TeamChat = () => {
                       {getRoleBadge(msg.sender_role)}
                     </div>
 
-                    {/* Delete action */}
                     {canDelete && (
                       <button
                         onClick={() => handleDeleteMessage(msg.id)}
@@ -332,15 +428,74 @@ export const TeamChat = () => {
                     )}
                   </div>
 
-                  {/* Message Content */}
-                  <p className="text-xs sm:text-sm text-neutral-200 whitespace-pre-wrap leading-relaxed break-words">
-                    {msg.content}
-                  </p>
+                  {/* Attachment Preview (Image or Document) */}
+                  {msg.file_url && (
+                    <div className="mb-2">
+                      {msg.file_type === 'image' ? (
+                        <div className="rounded-xl overflow-hidden border border-neutral-800 bg-black/40">
+                          <img
+                            src={msg.file_url}
+                            alt={msg.file_name || 'Attached image'}
+                            className="max-h-72 w-full object-cover cursor-pointer hover:opacity-95 transition"
+                            onClick={() => window.open(msg.file_url, '_blank')}
+                          />
+                          <div className="p-2 bg-neutral-950 flex items-center justify-between text-[11px] text-neutral-400">
+                            <span className="truncate max-w-[200px]">{msg.file_name}</span>
+                            <a
+                              href={msg.file_url}
+                              download={msg.file_name || 'image'}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-white hover:underline flex items-center gap-1 font-semibold"
+                            >
+                              <Download className="w-3 h-3" />
+                              Save
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        /* WhatsApp-style Document Card */
+                        <div className="p-3 rounded-xl bg-black border border-neutral-800 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 overflow-hidden">
+                            <div className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center shrink-0 text-white">
+                              <FileText className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-semibold text-white truncate max-w-[220px]">
+                                {msg.file_name || 'Document'}
+                              </p>
+                              <p className="text-[10px] text-neutral-400">
+                                {formatFileSize(msg.file_size)}
+                              </p>
+                            </div>
+                          </div>
 
-                  {/* Footer / Timestamp & Delivery */}
-                  <div className="flex items-center justify-end gap-1.5 mt-2 text-[10px] text-neutral-400">
+                          <a
+                            href={msg.file_url}
+                            download={msg.file_name || 'document'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 bg-white text-black hover:bg-neutral-200 rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0 shadow-sm"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download</span>
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Text Message Content */}
+                  {msg.content && (
+                    <p className="text-xs sm:text-sm text-neutral-200 whitespace-pre-wrap leading-relaxed break-words">
+                      {msg.content}
+                    </p>
+                  )}
+
+                  {/* Footer Timestamp & Delivery Checks */}
+                  <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[10px] text-neutral-400">
                     <span>{formatMessageTime(msg.created_at)}</span>
-                    {isSelf && <CheckCheck className="w-3 h-3 text-neutral-300" />}
+                    {isSelf && <CheckCheck className="w-3.5 h-3.5 text-neutral-300" />}
                   </div>
                 </div>
               </div>
@@ -350,49 +505,169 @@ export const TeamChat = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 3. Quick Emoji Reactions Bar */}
-      <div className="px-4 py-2 bg-neutral-950 border-t border-neutral-900 flex items-center gap-1.5 overflow-x-auto text-xs shrink-0">
-        <span className="text-[11px] text-neutral-400 mr-1 flex items-center gap-1">
-          <Smile className="w-3.5 h-3.5 text-neutral-400" />
-          Quick:
-        </span>
-        {['👍', '🚀', '🔥', '❤️', '✅', '👏', '🎯', '💡'].map((emoji) => (
+      {/* 3. Attachment Preview Chip (Shown before sending) */}
+      {attachmentPreview && (
+        <div className="px-4 py-2 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            {attachmentPreview.type === 'image' ? (
+              <img
+                src={attachmentPreview.url}
+                alt="Preview"
+                className="w-10 h-10 rounded-lg object-cover border border-neutral-700"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center text-white">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-bold text-white truncate max-w-xs sm:max-w-md">
+                {attachmentPreview.name}
+              </p>
+              <p className="text-[10px] text-neutral-400">
+                {formatFileSize(attachmentPreview.size)} • Ready to send
+              </p>
+            </div>
+          </div>
+
           <button
-            key={emoji}
             type="button"
-            onClick={() => addQuickEmoji(emoji)}
-            className="px-2 py-1 bg-neutral-900 hover:bg-neutral-800 rounded-lg text-sm transition cursor-pointer"
+            onClick={removeAttachment}
+            className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition cursor-pointer"
+            title="Remove attachment"
           >
-            {emoji}
+            <X className="w-4 h-4" />
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
-      {/* 4. Chat Input Bar (WhatsApp style) */}
-      <div className="p-3 sm:p-4 bg-black border-t border-neutral-800 shrink-0">
+      {/* 4. Quick Emoji Picker Drawer */}
+      {isEmojiPickerOpen && (
+        <div className="p-3 bg-black border-t border-neutral-800 flex items-center gap-2 overflow-x-auto shrink-0 shadow-inner">
+          <span className="text-[11px] text-neutral-400 mr-1 font-semibold">Emojis:</span>
+          {QUICK_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => addEmoji(emoji)}
+              className="p-1.5 text-base hover:scale-125 transition cursor-pointer"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 5. WhatsApp-Style Input Bar (Matches User Screenshot 2 Exactly) */}
+      <div className="p-3 sm:p-4 bg-black border-t border-neutral-800 shrink-0 relative">
         {error && (
-          <div className="mb-2 text-xs text-red-400 px-2">{error}</div>
+          <div className="mb-2 text-xs text-red-400 px-3 flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError('')} className="underline cursor-pointer">
+              Dismiss
+            </button>
+          </div>
         )}
-        <form onSubmit={handleSendMessage} className="flex items-center gap-2 sm:gap-3">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message to the team... (Press Enter to send)"
-            disabled={sending}
-            className="flex-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 focus:border-white rounded-2xl px-4 py-3 text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none transition"
-          />
 
-          <button
-            type="submit"
-            disabled={!inputValue.trim() || sending}
-            className="px-5 py-3 rounded-2xl bg-white text-black hover:bg-neutral-200 disabled:opacity-40 font-bold text-xs sm:text-sm transition flex items-center gap-2 shadow-md cursor-pointer shrink-0"
-          >
-            <span>{sending ? 'Sending...' : 'Send'}</span>
-            <Send className="w-4 h-4" />
-          </button>
+        {/* Attachment Floating Menu */}
+        {isAttachMenuOpen && (
+          <div className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-48 text-xs text-neutral-200">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                <FileText className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <span className="font-bold text-white block">Document</span>
+                <span className="text-[10px] text-neutral-400 block">PDF, DOCX, XLSX, TXT</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                <ImageIcon className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <span className="font-bold text-white block">Photos & Media</span>
+                <span className="text-[10px] text-neutral-400 block">PNG, JPG, WebP</span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Pill Bar Form */}
+        <form onSubmit={handleSendMessage} className="flex items-center gap-2 sm:gap-3">
+          {/* Main WhatsApp Pill */}
+          <div className="flex-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 focus-within:border-white rounded-full px-3 py-2 flex items-center gap-2 transition shadow-inner">
+            {/* 1. Attachment '+' Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsAttachMenuOpen(prev => !prev);
+                setIsEmojiPickerOpen(false);
+              }}
+              className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
+              title="Attach documents or photos"
+            >
+              <Plus className={`w-5 h-5 transition-transform ${isAttachMenuOpen ? 'rotate-45 text-white' : ''}`} />
+            </button>
+
+            {/* 2. Emoji Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsEmojiPickerOpen(prev => !prev);
+                setIsAttachMenuOpen(false);
+              }}
+              className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
+              title="Emojis"
+            >
+              <Smile className="w-5 h-5" />
+            </button>
+
+            {/* 3. Text Input */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message"
+              disabled={sending}
+              className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none px-1"
+            />
+          </div>
+
+          {/* 4. Send or Mic Button */}
+          {inputValue.trim() || selectedFile ? (
+            <button
+              type="submit"
+              disabled={sending}
+              className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition flex items-center justify-center shadow-lg cursor-pointer shrink-0"
+              title="Send message"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setInputValue('🎙️ Voice message (demo note)');
+                inputRef.current?.focus();
+              }}
+              className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-300 hover:text-white transition flex items-center justify-center cursor-pointer shrink-0"
+              title="Voice Message"
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+          )}
         </form>
       </div>
     </div>

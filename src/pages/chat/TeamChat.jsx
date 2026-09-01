@@ -623,13 +623,14 @@ export const TeamChat = ({
       />
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          LEFT PANE: WhatsApp Conversation & Channel Selector
+          LEFT PANE: WhatsApp Conversation & Channel Selector (Admin & Founder Only)
           ───────────────────────────────────────────────────────────────────────── */}
-      <div
-        className={`w-full md:w-80 border-r border-neutral-800 bg-black flex flex-col shrink-0 transition-all ${
-          isMobileChatOpen ? 'hidden md:flex' : 'flex'
-        }`}
-      >
+      {isLeadership && (
+        <div
+          className={`w-full md:w-80 border-r border-neutral-800 bg-black flex flex-col shrink-0 transition-all ${
+            isMobileChatOpen ? 'hidden md:flex' : 'flex'
+          }`}
+        >
         {/* Top Header */}
         <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -690,39 +691,38 @@ export const TeamChat = ({
           </button>
 
           {/* 2. Leadership Chat (Restricted - Founder, Admin, Founding Advisor) */}
-          {isLeadership && (
-            <button
-              type="button"
-              onClick={() => {
-                setActiveChannel('leadership');
-                setIsMobileChatOpen(true);
-              }}
-              className={`w-full p-3 rounded-2xl flex items-center gap-3 transition text-left cursor-pointer ${
-                activeChannel === 'leadership'
-                  ? 'bg-neutral-900 border border-amber-800/80 text-white shadow-md'
-                  : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
-              }`}
-            >
-              <div className="w-11 h-11 rounded-2xl bg-amber-950/60 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0">
-                <Shield className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={() => {
+              setActiveChannel('leadership');
+              setIsMobileChatOpen(true);
+            }}
+            className={`w-full p-3 rounded-2xl flex items-center gap-3 transition text-left cursor-pointer ${
+              activeChannel === 'leadership'
+                ? 'bg-neutral-900 border border-amber-800/80 text-white shadow-md'
+                : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
+            }`}
+          >
+            <div className="w-11 h-11 rounded-2xl bg-amber-950/60 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                  <span>Leadership Chat</span>
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/80 font-bold">
+                  🔒 Executive
+                </span>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                    <span>Leadership Chat</span>
-                  </span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/80 font-bold">
-                    🔒 Executive
-                  </span>
-                </div>
-                <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                  Founder, Admin & Advisor
-                </p>
-              </div>
-            </button>
-          )}
+              <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                Founder, Admin & Advisor
+              </p>
+            </div>
+          </button>
         </div>
       </div>
+    )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
           RIGHT PANE: WhatsApp Conversation View
@@ -735,15 +735,17 @@ export const TeamChat = ({
         {/* 1. WhatsApp Group Header */}
         <div className="px-4 md:px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            {/* Mobile Back Button to Channel List */}
-            <button
-              type="button"
-              onClick={() => setIsMobileChatOpen(false)}
-              className="md:hidden p-1.5 -ml-1 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 transition cursor-pointer"
-              title="Back to all chats"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
+            {/* Mobile Back Button (Only for Admin & Founder who have conversation switcher) */}
+            {isLeadership && (
+              <button
+                type="button"
+                onClick={() => setIsMobileChatOpen(false)}
+                className="md:hidden p-1.5 -ml-1 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 transition cursor-pointer"
+                title="Back to all chats"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
 
             {/* Avatar Icon */}
             <div className="relative shrink-0">

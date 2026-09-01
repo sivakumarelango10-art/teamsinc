@@ -52,7 +52,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else {
       return [
         { to: '/member/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
-        { to: '/chat', label: 'Chats', icon: MessageSquare },
+        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
         { to: '/member/tasks', label: 'My Tasks', icon: CheckSquare },
         { to: '/member/daily-plan', label: 'My Daily Plan', icon: Calendar },
         { to: '/member/bugs', label: 'My Reported Bugs', icon: Bug }

@@ -9,7 +9,8 @@ import {
   BarChart3,
   PlusCircle,
   LogOut,
-  Sparkles
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import BrandLogo from '../common/BrandLogo';
@@ -21,6 +22,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     if (isFounder) {
       return [
         { to: '/founder/dashboard', label: 'Founder Dashboard', icon: LayoutDashboard },
+        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
         { to: '/founder/users', label: 'User Management', icon: Users },
         { to: '/founder/departments', label: 'Departments', icon: Building2 },
         { to: '/admin/tasks', label: 'All Tasks', icon: CheckSquare },
@@ -30,6 +32,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else if (isAdmin) {
       return [
         { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
+        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
         { to: '/admin/assign-task', label: 'Assign New Task', icon: PlusCircle },
         { to: '/admin/daily-planning', label: 'Daily Team Planner', icon: Calendar }
@@ -37,6 +40,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else {
       return [
         { to: '/member/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
+        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
         { to: '/member/tasks', label: 'My Tasks', icon: CheckSquare },
         { to: '/member/daily-plan', label: 'My Daily Plan', icon: Calendar }
       ];

@@ -300,3 +300,41 @@ ON CONFLICT (email) DO UPDATE
 SET full_name = EXCLUDED.full_name,
     role = EXCLUDED.role,
     is_active = true;
+
+-- -----------------------------------------------------------------------------
+-- 6. COMPANY-WIDE TEAM CHAT MESSAGES
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sender_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    sender_name TEXT NOT NULL,
+    sender_email TEXT NOT NULL,
+    sender_role TEXT NOT NULL DEFAULT 'MEMBER',
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at ASC);
+
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone authenticated can view messages" ON public.messages;
+CREATE POLICY "Anyone authenticated can view messages"
+    ON public.messages FOR SELECT
+    TO authenticated
+    USING (true);
+
+DROP POLICY IF EXISTS "Anyone authenticated can insert messages" ON public.messages;
+CREATE POLICY "Anyone authenticated can insert messages"
+    ON public.messages FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Founder or author can delete messages" ON public.messages;
+CREATE POLICY "Founder or author can delete messages"
+    ON public.messages FOR DELETE
+    TO authenticated
+    USING (
+        public.is_founder() OR
+        sender_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+    );

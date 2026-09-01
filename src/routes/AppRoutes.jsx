@@ -22,6 +22,7 @@ import DailyPlanning from '../pages/admin/DailyPlanning';
 import MemberDashboard from '../pages/member/MemberDashboard';
 import MyTasks from '../pages/member/MyTasks';
 import MyDailyPlan from '../pages/member/MyDailyPlan';
+import TeamChat from '../pages/chat/TeamChat';
 
 export const AppRoutes = () => {
   const { user, profile, loading } = useAuth();
@@ -95,6 +96,18 @@ export const AppRoutes = () => {
         <Route path="daily-plan" element={<MyDailyPlan />} />
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
+
+      {/* Universal Company Team Chat Route */}
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout title="Company Chat">
+              <TeamChat />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Root and Fallback */}
       <Route path="/" element={getDefaultRedirect()} />

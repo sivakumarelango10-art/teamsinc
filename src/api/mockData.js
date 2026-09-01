@@ -12,6 +12,15 @@ export const INITIAL_DEPARTMENTS = [
   { id: 'dept-6', name: 'Management', description: 'Scrum management, product roadmap, and strategic planning' }
 ];
 
+export const AUTHORIZED_EMAILS = [
+  'sivakumarelango10@gmail.com',
+  'alinasyedali786@gmail.com',
+  'yashas1325143@gmail.com',
+  'kavyaramesh293@gmail.com',
+  'prajith.p.dev.1@gmail.com',
+  'sgjitbros@gmail.com'
+];
+
 export const INITIAL_PROFILES = [
   {
     id: 'usr-founder-1',
@@ -22,67 +31,43 @@ export const INITIAL_PROFILES = [
     created_at: new Date().toISOString()
   },
   {
-    id: 'usr-admin-1',
-    full_name: 'Alex Rivera',
-    email: 'admin@teamsync.com',
-    role: 'ADMIN',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'usr-admin-2',
-    full_name: 'Rachel Chen',
-    email: 'rachel.admin@teamsync.com',
-    role: 'ADMIN',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
     id: 'usr-member-1',
-    full_name: 'David Kim',
-    email: 'david@teamsync.com',
+    full_name: 'Alina Syed Ali',
+    email: 'alinasyedali786@gmail.com',
     role: 'MEMBER',
     is_active: true,
     created_at: new Date().toISOString()
   },
   {
     id: 'usr-member-2',
-    full_name: 'Sarah Jenkins',
-    email: 'sarah@teamsync.com',
+    full_name: 'Yashas',
+    email: 'yashas1325143@gmail.com',
     role: 'MEMBER',
     is_active: true,
     created_at: new Date().toISOString()
   },
   {
     id: 'usr-member-3',
-    full_name: 'Marcus Vance',
-    email: 'marcus@teamsync.com',
+    full_name: 'Kavya Ramesh',
+    email: 'kavyaramesh293@gmail.com',
     role: 'MEMBER',
     is_active: true,
     created_at: new Date().toISOString()
   },
   {
     id: 'usr-member-4',
-    full_name: 'Elena Rostova',
-    email: 'elena@teamsync.com',
+    full_name: 'Prajith P',
+    email: 'prajith.p.dev.1@gmail.com',
     role: 'MEMBER',
     is_active: true,
     created_at: new Date().toISOString()
   },
   {
     id: 'usr-member-5',
-    full_name: 'Liam Patel',
-    email: 'liam@teamsync.com',
+    full_name: 'SG Jitbros',
+    email: 'sgjitbros@gmail.com',
     role: 'MEMBER',
     is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'usr-member-6',
-    full_name: 'Zoe Martinez',
-    email: 'zoe@teamsync.com',
-    role: 'MEMBER',
-    is_active: false,
     created_at: new Date().toISOString()
   }
 ];
@@ -97,7 +82,7 @@ export const INITIAL_PLANS = [
   {
     id: 'plan-tomorrow',
     plan_date: tomorrowStr,
-    created_by: 'usr-admin-1',
+    created_by: 'usr-founder-1',
     created_at: new Date().toISOString()
   }
 ];
@@ -132,13 +117,13 @@ export const INITIAL_TASKS = [
   },
   {
     id: 'task-2',
-    title: 'Create dashboard UI component kit',
-    description: 'Build reusable Tailwind card widgets, charts, and metrics indicators.',
+    title: 'Design UI component kit',
+    description: 'Build reusable monochrome card widgets, charts, and metrics indicators.',
     status: 'TODO',
     priority: 'MEDIUM',
     deadline: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
-    assigned_to: 'usr-member-1',
-    assigned_by: 'usr-admin-1',
+    assigned_to: 'usr-member-2',
+    assigned_by: 'usr-founder-1',
     department_id: 'dept-1',
     created_at: new Date().toISOString()
   },
@@ -162,7 +147,7 @@ export const INITIAL_TASKS = [
     priority: 'HIGH',
     deadline: format(addDays(new Date(), 2), 'yyyy-MM-dd'),
     assigned_to: 'usr-member-4',
-    assigned_by: 'usr-admin-1',
+    assigned_by: 'usr-founder-1',
     department_id: 'dept-2',
     created_at: new Date().toISOString()
   },
@@ -173,21 +158,9 @@ export const INITIAL_TASKS = [
     status: 'TODO',
     priority: 'LOW',
     deadline: format(addDays(new Date(), 4), 'yyyy-MM-dd'),
-    assigned_to: 'usr-member-2',
-    assigned_by: 'usr-admin-1',
-    department_id: 'dept-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'task-6',
-    title: 'Q3 Campaign Launch Collaterals',
-    description: 'Prepare social banners, email newsletters, and ad visuals for launch.',
-    status: 'TODO',
-    priority: 'MEDIUM',
-    deadline: format(addDays(new Date(), 5), 'yyyy-MM-dd'),
     assigned_to: 'usr-member-5',
     assigned_by: 'usr-founder-1',
-    department_id: 'dept-3',
+    department_id: 'dept-1',
     created_at: new Date().toISOString()
   }
 ];
@@ -209,7 +182,24 @@ export const getStored = (key, initial) => {
       localStorage.setItem(key, JSON.stringify(initial));
       return initial;
     }
-    return JSON.parse(item);
+    const parsed = JSON.parse(item);
+    // If profiles key, filter out any old legacy test accounts that were purged
+    if (key === STORAGE_KEYS.PROFILES && Array.isArray(parsed)) {
+      const valid = parsed.filter(p =>
+        p.email && (
+          AUTHORIZED_EMAILS.includes(p.email.toLowerCase()) ||
+          p.created_by_founder === true
+        )
+      );
+      INITIAL_PROFILES.forEach(initP => {
+        if (!valid.some(v => v.email.toLowerCase() === initP.email.toLowerCase())) {
+          valid.push(initP);
+        }
+      });
+      localStorage.setItem(key, JSON.stringify(valid));
+      return valid;
+    }
+    return parsed;
   } catch {
     return initial;
   }

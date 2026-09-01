@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../api/authApi';
 import { supabase, isDemoMode } from '../api/supabase';
-import { INITIAL_PROFILES } from '../api/mockData';
+import { AUTHORIZED_EMAILS } from '../api/mockData';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +22,7 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (err) {
         console.error('Session initialization error:', err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -33,6 +34,18 @@ export const AuthProvider = ({ children }) => {
     if (!isDemoMode && supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
+          const email = session.user.email?.toLowerCase();
+          const isAuthorized = await authApi.isEmailAuthorized(email);
+
+          if (!isAuthorized) {
+            console.warn('Unauthorized login attempt blocked for:', email);
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            setError('Access denied. Only authorized team members invited by the Founder can access TeamSync.');
+            return;
+          }
+
           const { data: userProfile } = await supabase
             .from('profiles')
             .select('*')
@@ -41,9 +54,16 @@ export const AuthProvider = ({ children }) => {
 
           setUser(session.user);
           if (userProfile) {
+            if (!userProfile.is_active) {
+              await supabase.auth.signOut();
+              setUser(null);
+              setProfile(null);
+              setError('This account has been deactivated by the Founder.');
+              return;
+            }
             setProfile(userProfile);
           } else {
-            const isFounder = session.user.email?.toLowerCase() === 'sivakumarelango10@gmail.com';
+            const isFounder = email === 'sivakumarelango10@gmail.com';
             setProfile({
               id: session.user.id,
               full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
@@ -87,15 +107,6 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setProfile(null);
     }
-  };
-
-  // Quick switcher helper to switch between demo roles in 1 click
-  const switchDemoRole = async (targetRole) => {
-    let email = 'sivakumarelango10@gmail.com'; // Default Founder
-    if (targetRole === 'ADMIN') email = 'admin@teamsync.com';
-    if (targetRole === 'MEMBER') email = 'david@teamsync.com';
-
-    return await login(email, 'password123');
   };
 
   const refreshProfile = async () => {
@@ -142,7 +153,6 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     signInWithGoogle,
-    switchDemoRole,
     refreshProfile
   };
 

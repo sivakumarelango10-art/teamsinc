@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Sparkles, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import BrandLogo from '../../components/common/BrandLogo';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -9,9 +10,11 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const { login, signInWithGoogle } = useAuth();
+  const { login, signInWithGoogle, error: authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const activeError = formError || authError;
 
   const handleLoginSubmit = async (e) => {
     e?.preventDefault();
@@ -60,13 +63,8 @@ export const Login = () => {
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-neutral-900/40 rounded-full blur-3xl pointer-events-none" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
-        <div className="flex items-center justify-center gap-2.5 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-white text-black flex items-center justify-center font-black shadow-lg">
-            <Sparkles className="w-5 h-5 text-black fill-black" />
-          </div>
-          <h1 className="font-black text-2xl text-white tracking-tight">
-            Team<span className="text-neutral-400">Sync</span>
-          </h1>
+        <div className="flex justify-center mb-3">
+          <BrandLogo size="large" />
         </div>
         <p className="text-xs text-neutral-400">
           Enterprise Task Management & Daily Workforce Allocation System
@@ -115,10 +113,10 @@ export const Login = () => {
             </span>
           </div>
 
-          {formError && (
+          {activeError && (
             <div className="mb-5 p-3.5 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 text-xs flex items-center gap-2.5">
               <AlertCircle className="w-4 h-4 text-neutral-400 shrink-0" />
-              <span>{formError}</span>
+              <span>{activeError}</span>
             </div>
           )}
 

@@ -105,27 +105,46 @@ BEFORE UPDATE ON public.tasks
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- -----------------------------------------------------------------------------
--- AUTHENTICATION TRIGGER: AUTO PROFILE GENERATION & FOUNDER ASSIGNMENT
+-- AUTHENTICATION TRIGGER: STRICT WHITELIST & FOUNDER ACCESS ENFORCEMENT
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
     user_role TEXT;
+    is_whitelisted BOOLEAN;
+    pre_existing_profile public.profiles%ROWTYPE;
 BEGIN
+    -- Check if user is in authorized whitelist
+    is_whitelisted := LOWER(NEW.email) IN (
+        'sivakumarelango10@gmail.com',
+        'alinasyedali786@gmail.com',
+        'yashas1325143@gmail.com',
+        'kavyaramesh293@gmail.com',
+        'prajith.p.dev.1@gmail.com',
+        'sgjitbros@gmail.com'
+    );
+
+    SELECT * INTO pre_existing_profile FROM public.profiles WHERE LOWER(email) = LOWER(NEW.email);
+
+    -- Reject new users not authorized in whitelist and not invited by Founder
+    IF NOT is_whitelisted AND pre_existing_profile.id IS NULL THEN
+        RAISE EXCEPTION 'Access denied. Only authorized team members invited by the Founder can sign in.';
+    END IF;
+
     -- Special Rule: sivakumarelango10@gmail.com is strictly FOUNDER
     IF LOWER(NEW.email) = 'sivakumarelango10@gmail.com' THEN
         user_role := 'FOUNDER';
     ELSE
-        user_role := COALESCE(NEW.raw_user_meta_data->>'role', 'MEMBER');
+        user_role := COALESCE(pre_existing_profile.role, NEW.raw_user_meta_data->>'role', 'MEMBER');
     END IF;
 
     INSERT INTO public.profiles (id, full_name, email, role, is_active)
     VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+        COALESCE(pre_existing_profile.full_name, NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
         NEW.email,
         user_role,
-        true
+        COALESCE(pre_existing_profile.is_active, true)
     )
     ON CONFLICT (id) DO UPDATE
     SET email = EXCLUDED.email,
@@ -288,3 +307,16 @@ INSERT INTO public.departments (name, description) VALUES
     ('Content', 'Technical copywriting, marketing copy, and documentation'),
     ('Management', 'Scrum management, product roadmap, and strategic planning')
 ON CONFLICT (name) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- PURGE UNAPPROVED PROFILES (Keep only Founder + 5 Authorized Team Members)
+-- -----------------------------------------------------------------------------
+DELETE FROM public.profiles
+WHERE LOWER(email) NOT IN (
+    'sivakumarelango10@gmail.com',
+    'alinasyedali786@gmail.com',
+    'yashas1325143@gmail.com',
+    'kavyaramesh293@gmail.com',
+    'prajith.p.dev.1@gmail.com',
+    'sgjitbros@gmail.com'
+);

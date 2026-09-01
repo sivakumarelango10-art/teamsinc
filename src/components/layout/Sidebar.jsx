@@ -12,6 +12,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import BrandLogo from '../common/BrandLogo';
 
 export const Sidebar = ({ isOpen, onClose }) => {
   const { profile, role, isFounder, isAdmin, logout } = useAuth();
@@ -61,16 +62,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
         }`}
       >
         <div>
-          {/* Brand Logo */}
           <div className="h-16 px-6 flex items-center justify-between border-b border-neutral-800">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center font-black shadow-md">
-                <Sparkles className="w-4 h-4 text-black fill-black" />
-              </div>
-              <span className="font-extrabold text-lg text-white tracking-tight">
-                Team<span className="text-neutral-400">Sync</span>
-              </span>
-            </div>
+            <BrandLogo size="default" />
             <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-neutral-300">
               PROD
             </span>

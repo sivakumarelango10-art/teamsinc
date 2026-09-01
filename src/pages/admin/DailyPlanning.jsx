@@ -6,7 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import DailyPlanner from '../../components/planning/DailyPlanner';
 import DepartmentAllocation from '../../components/planning/DepartmentAllocation';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { Calendar, Users, Building2, CheckCircle2, Layers } from 'lucide-react';
+import { Calendar, Layers } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 export const DailyPlanning = () => {
@@ -49,7 +49,6 @@ export const DailyPlanning = () => {
       userIds,
       createdBy: user?.id
     });
-    // Refresh
     await loadData(dateStr);
   };
 
@@ -63,10 +62,10 @@ export const DailyPlanning = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-          <Calendar className="w-7 h-7 text-indigo-400" />
+          <Calendar className="w-7 h-7 text-white" />
           Daily Workforce Planner
         </h1>
-        <p className="text-xs md:text-sm text-slate-400 mt-1">
+        <p className="text-xs md:text-sm text-neutral-400 mt-1">
           Dynamically schedule team members across departments for any target date. Members see their specific allocation when they sign in.
         </p>
       </div>
@@ -90,14 +89,14 @@ export const DailyPlanning = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+                <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
                   <Layers className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">
                     Allocations for {format(parseISO(selectedDate), 'EEEE, MMMM d, yyyy')}
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-neutral-400">
                     {currentAssignments.length} total team members deployed across {departments.length} departments
                   </p>
                 </div>

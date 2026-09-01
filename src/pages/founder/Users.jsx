@@ -5,7 +5,7 @@ import UserTable from '../../components/users/UserTable';
 import UserForm from '../../components/users/UserForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { Users as UsersIcon, UserPlus, Search, Filter, ShieldCheck } from 'lucide-react';
+import { Users as UsersIcon, UserPlus, Search, Filter } from 'lucide-react';
 
 export const Users = () => {
   const { user: currentUser } = useAuth();
@@ -80,7 +80,6 @@ export const Users = () => {
     }
   };
 
-  // Filtered Users
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
       u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -101,10 +100,10 @@ export const Users = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-            <UsersIcon className="w-7 h-7 text-indigo-400" />
+            <UsersIcon className="w-7 h-7 text-white" />
             User Management
           </h1>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
             Provision team members, assign administrative capabilities, and regulate account statuses.
           </p>
         </div>
@@ -114,46 +113,42 @@ export const Users = () => {
             setEditingUser(null);
             setIsFormOpen(true);
           }}
-          className="px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2 self-start md:self-auto cursor-pointer"
+          className="px-4 py-2.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 self-start md:self-auto cursor-pointer"
         >
-          <UserPlus className="w-4 h-4" />
+          <UserPlus className="w-4 h-4 text-black" />
           <span>Add New User</span>
         </button>
       </div>
 
       {feedback.text && (
-        <div className={`p-3.5 rounded-xl text-xs flex items-center justify-between ${
-          feedback.type === 'success'
-            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-            : 'bg-rose-500/10 border border-rose-500/20 text-rose-300'
-        }`}>
+        <div className="p-3.5 rounded-xl text-xs flex items-center justify-between bg-neutral-900 border border-neutral-700 text-white">
           <span>{feedback.text}</span>
-          <button onClick={() => setFeedback({ type: '', text: '' })} className="underline ml-4">
+          <button onClick={() => setFeedback({ type: '', text: '' })} className="underline ml-4 text-neutral-400 hover:text-white">
             Dismiss
           </button>
         </div>
       )}
 
       {/* Search & Filter Controls */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
           <input
             type="text"
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500 transition"
+            className="w-full pl-10 pr-3.5 py-2 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 text-xs focus:outline-none focus:border-white transition"
           />
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
+            <Filter className="w-3.5 h-3.5 text-neutral-500" />
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 transition"
+              className="px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
             >
               <option value="ALL">All Roles</option>
               <option value="FOUNDER">Founders</option>
@@ -165,7 +160,7 @@ export const Users = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 transition"
+            className="px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
           >
             <option value="ALL">All Statuses</option>
             <option value="ACTIVE">Active Only</option>

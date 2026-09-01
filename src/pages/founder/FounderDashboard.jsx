@@ -10,9 +10,7 @@ import {
   Calendar,
   UserPlus,
   PlusCircle,
-  ArrowUpRight,
-  Building2,
-  Sparkles
+  ArrowUpRight
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { usersApi } from '../../api/usersApi';
@@ -72,7 +70,6 @@ export const FounderDashboard = () => {
     loadDashboardData();
   }, []);
 
-  // Compute Metrics
   const totalTeamMembers = users.filter(u => u.role === 'MEMBER').length;
   const totalAdmins = users.filter(u => u.role === 'ADMIN').length;
   const totalTasks = tasks.length;
@@ -105,14 +102,14 @@ export const FounderDashboard = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-white">
               Founder Control Center
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mt-1.5">
             Executive Operations Overview
           </h1>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
             Real-time telemetry on workforce staffing, department assignments, and project deliverables.
           </p>
         </div>
@@ -121,33 +118,33 @@ export const FounderDashboard = () => {
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => openAddUser('MEMBER')}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 text-xs font-semibold text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
           >
-            <UserPlus className="w-4 h-4 text-indigo-400" />
+            <UserPlus className="w-4 h-4 text-neutral-400" />
             <span>Add User</span>
           </button>
 
           <button
             onClick={() => openAddUser('ADMIN')}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 text-xs font-semibold text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
           >
-            <Shield className="w-4 h-4 text-amber-400" />
+            <Shield className="w-4 h-4 text-neutral-400" />
             <span>Add Admin</span>
           </button>
 
           <button
             onClick={() => setIsTaskModalOpen(true)}
-            className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 text-xs font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
           >
-            <PlusCircle className="w-4 h-4" />
+            <PlusCircle className="w-4 h-4 text-black" />
             <span>Create Task</span>
           </button>
 
           <button
             onClick={() => navigate('/admin/daily-planning')}
-            className="px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition shadow-lg shadow-emerald-600/25 flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
           >
-            <Calendar className="w-4 h-4" />
+            <Calendar className="w-4 h-4 text-white" />
             <span>Plan Workforce</span>
           </button>
         </div>
@@ -160,42 +157,36 @@ export const FounderDashboard = () => {
           value={totalTeamMembers}
           subtitle="Active contributors"
           icon={Users}
-          color="indigo"
         />
         <StatCard
           title="Total Admins"
           value={totalAdmins}
           subtitle="Task managers"
           icon={Shield}
-          color="amber"
         />
         <StatCard
           title="Total Tasks"
           value={totalTasks}
           subtitle="Across all pipelines"
           icon={CheckSquare}
-          color="cyan"
         />
         <StatCard
           title="In Progress"
           value={inProgressTasks}
           subtitle="Currently active"
           icon={Clock}
-          color="amber"
         />
         <StatCard
           title="Completed"
           value={completedTasks}
           subtitle="Finished deliverables"
           icon={CheckCircle2}
-          color="emerald"
         />
         <StatCard
           title="Pending (Todo)"
           value={pendingTasks}
           subtitle="In queue"
           icon={CircleDot}
-          color="rose"
         />
       </div>
 
@@ -205,14 +196,14 @@ export const FounderDashboard = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+              <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
                 <Calendar className="w-4 h-4" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">
                   Today's Team Allocation
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-neutral-400">
                   {format(new Date(), 'EEEE, MMMM d, yyyy')} — {todayAllocations.length} total assignments
                 </p>
               </div>
@@ -220,7 +211,7 @@ export const FounderDashboard = () => {
 
             <button
               onClick={() => navigate('/admin/daily-planning')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold transition"
+              className="text-xs text-white hover:text-neutral-300 flex items-center gap-1 font-semibold transition"
             >
               <span>Manage Today</span>
               <ArrowUpRight className="w-4 h-4" />
@@ -235,17 +226,17 @@ export const FounderDashboard = () => {
         </div>
 
         {/* Tomorrow's Allocation */}
-        <div className="space-y-3 pt-4 border-t border-slate-800/80">
+        <div className="space-y-3 pt-4 border-t border-neutral-850">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+              <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
                 <Calendar className="w-4 h-4" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">
                   Tomorrow's Team Allocation
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-neutral-400">
                   {format(addDays(new Date(), 1), 'EEEE, MMMM d, yyyy')} — {tomorrowAllocations.length} planned assignments
                 </p>
               </div>
@@ -253,7 +244,7 @@ export const FounderDashboard = () => {
 
             <button
               onClick={() => navigate('/admin/daily-planning')}
-              className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold transition"
+              className="text-xs text-white hover:text-neutral-300 flex items-center gap-1 font-semibold transition"
             >
               <span>Plan Tomorrow</span>
               <ArrowUpRight className="w-4 h-4" />

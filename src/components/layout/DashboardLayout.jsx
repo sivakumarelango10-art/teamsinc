@@ -7,7 +7,7 @@ export const DashboardLayout = ({ title }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-black flex text-neutral-100">
       {/* Sidebar Navigation */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -21,7 +21,7 @@ export const DashboardLayout = ({ title }) => {
           title={title}
         />
 
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-black">
           <Outlet />
         </main>
       </div>

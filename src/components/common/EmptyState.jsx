@@ -9,16 +9,16 @@ export const EmptyState = ({
   onAction
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-900/50 border border-slate-800/80 rounded-2xl">
-      <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4 text-indigo-400">
-        <Icon className="w-7 h-7" />
+    <div className="flex flex-col items-center justify-center p-8 text-center bg-neutral-950 border border-neutral-800 rounded-2xl">
+      <div className="w-12 h-12 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-4 text-white">
+        <Icon className="w-6 h-6" />
       </div>
-      <h3 className="text-lg font-semibold text-slate-200 mb-1">{title}</h3>
-      <p className="text-sm text-slate-400 max-w-sm mb-5">{description}</p>
+      <h3 className="text-base font-bold text-white mb-1">{title}</h3>
+      <p className="text-xs text-neutral-400 max-w-sm mb-5">{description}</p>
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+          className="inline-flex items-center px-4 py-2 text-xs font-bold text-black bg-white rounded-xl hover:bg-neutral-200 transition shadow-sm cursor-pointer"
         >
           {actionLabel}
         </button>

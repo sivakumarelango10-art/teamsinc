@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, User, Building2, AlertCircle, Check } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const TaskForm = ({
@@ -50,7 +50,6 @@ export const TaskForm = ({
 
   if (!isOpen) return null;
 
-  // Filter out deactivated members per Rule 8
   const activeMembers = members.filter(m => m.is_active !== false);
 
   const handleSubmit = async (e) => {
@@ -84,11 +83,11 @@ export const TaskForm = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl p-6 relative">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white transition"
+          className="absolute top-5 right-5 text-neutral-400 hover:text-white transition"
         >
           <X className="w-5 h-5" />
         </button>
@@ -98,15 +97,15 @@ export const TaskForm = ({
         </h3>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="mb-4 p-3 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-neutral-400 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
               Task Title *
             </label>
             <input
@@ -115,12 +114,12 @@ export const TaskForm = ({
               placeholder="e.g., Design onboarding experience in Figma"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm transition"
+              className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-white text-sm transition"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
               Description
             </label>
             <textarea
@@ -128,19 +127,19 @@ export const TaskForm = ({
               placeholder="Provide context, acceptance criteria, or relevant links..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm transition"
+              className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-white text-sm transition"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                 Assign To *
               </label>
               <select
                 value={formData.assigned_to}
                 onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-sm transition"
+                className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-white text-sm transition"
               >
                 <option value="">Select Team Member</option>
                 {activeMembers.map(m => (
@@ -152,13 +151,13 @@ export const TaskForm = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                 Department
               </label>
               <select
                 value={formData.department_id}
                 onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-sm transition"
+                className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-white text-sm transition"
               >
                 <option value="">Select Department</option>
                 {departments.map(d => (
@@ -172,13 +171,13 @@ export const TaskForm = ({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                 Priority
               </label>
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-sm transition"
+                className="w-full px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-white text-sm transition"
               >
                 <option value="LOW">Low</option>
                 <option value="MEDIUM">Medium</option>
@@ -188,13 +187,13 @@ export const TaskForm = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                 Status
               </label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-sm transition"
+                className="w-full px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-white text-sm transition"
               >
                 <option value="TODO">To Do</option>
                 <option value="IN_PROGRESS">In Progress</option>
@@ -203,7 +202,7 @@ export const TaskForm = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                 Deadline *
               </label>
               <input
@@ -211,23 +210,23 @@ export const TaskForm = ({
                 required
                 value={formData.deadline}
                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-sm transition"
+                className="w-full px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-white text-sm transition"
               />
             </div>
           </div>
 
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-800">
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-neutral-850">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-sm font-medium text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 rounded-xl transition"
+              className="px-4 py-2 text-sm font-medium text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 rounded-xl transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2"
+              className="px-5 py-2 text-sm font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md"
             >
               {loading ? 'Saving...' : initialData ? 'Update Task' : 'Create Task'}
             </button>

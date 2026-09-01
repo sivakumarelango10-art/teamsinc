@@ -1,21 +1,21 @@
 import React from 'react';
-import { Clock, CheckCircle2, AlertCircle, CircleDot } from 'lucide-react';
+import { Clock, CheckCircle2, CircleDot } from 'lucide-react';
 
 export const TaskStatusBadge = ({ status }) => {
   const configs = {
     TODO: {
       label: 'To Do',
-      color: 'bg-slate-800 text-slate-300 border-slate-700',
+      classes: 'bg-neutral-950 text-neutral-400 border-neutral-800',
       icon: CircleDot
     },
     IN_PROGRESS: {
       label: 'In Progress',
-      color: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      classes: 'bg-neutral-900 text-white border-neutral-700 font-medium',
       icon: Clock
     },
     COMPLETED: {
       label: 'Completed',
-      color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+      classes: 'bg-white text-black border-white font-bold shadow-sm',
       icon: CheckCircle2
     }
   };
@@ -24,7 +24,7 @@ export const TaskStatusBadge = ({ status }) => {
   const Icon = config.icon;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${config.color}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs border ${config.classes}`}>
       <Icon className="w-3.5 h-3.5" />
       {config.label}
     </span>
@@ -35,26 +35,26 @@ export const TaskPriorityBadge = ({ priority }) => {
   const configs = {
     LOW: {
       label: 'Low',
-      color: 'bg-slate-800/80 text-slate-400 border-slate-700/60'
+      classes: 'bg-neutral-950 text-neutral-500 border-neutral-800'
     },
     MEDIUM: {
       label: 'Medium',
-      color: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+      classes: 'bg-neutral-900 text-neutral-300 border-neutral-700'
     },
     HIGH: {
       label: 'High',
-      color: 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+      classes: 'bg-neutral-800 text-white border-neutral-600 font-semibold'
     },
     URGENT: {
       label: 'Urgent',
-      color: 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse'
+      classes: 'bg-white text-black border-white font-bold'
     }
   };
 
   const config = configs[priority] || configs.MEDIUM;
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${config.color}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] uppercase tracking-wider border ${config.classes}`}>
       {config.label}
     </span>
   );

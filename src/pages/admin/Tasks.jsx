@@ -8,7 +8,7 @@ import TaskForm from '../../components/tasks/TaskForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import EmptyState from '../../components/common/EmptyState';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { CheckSquare, Plus, Search, Filter } from 'lucide-react';
+import { CheckSquare, Plus, Search } from 'lucide-react';
 
 export const Tasks = () => {
   const { user } = useAuth();
@@ -90,7 +90,6 @@ export const Tasks = () => {
     }
   };
 
-  // Filter Tasks
   const filteredTasks = tasks.filter((t) => {
     const matchesSearch =
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -110,10 +109,10 @@ export const Tasks = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-            <CheckSquare className="w-7 h-7 text-indigo-400" />
+            <CheckSquare className="w-7 h-7 text-white" />
             Task Management
           </h1>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
             Dispatch, track, and update deliverables across your active project departments.
           </p>
         </div>
@@ -123,36 +122,32 @@ export const Tasks = () => {
             setEditingTask(null);
             setIsFormOpen(true);
           }}
-          className="px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer self-start md:self-auto"
+          className="px-4 py-2.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 cursor-pointer self-start md:self-auto"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 text-black" />
           <span>Create New Task</span>
         </button>
       </div>
 
       {feedback.text && (
-        <div className={`p-3.5 rounded-xl text-xs flex items-center justify-between ${
-          feedback.type === 'success'
-            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-            : 'bg-rose-500/10 border border-rose-500/20 text-rose-300'
-        }`}>
+        <div className="p-3.5 rounded-xl text-xs flex items-center justify-between bg-neutral-900 border border-neutral-700 text-white">
           <span>{feedback.text}</span>
-          <button onClick={() => setFeedback({ type: '', text: '' })} className="underline ml-4">
+          <button onClick={() => setFeedback({ type: '', text: '' })} className="underline ml-4 text-neutral-400 hover:text-white">
             Dismiss
           </button>
         </div>
       )}
 
       {/* Filter Controls Bar */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col lg:flex-row items-center justify-between gap-3">
+      <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 flex flex-col lg:flex-row items-center justify-between gap-3">
         <div className="relative w-full lg:w-72">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
           <input
             type="text"
             placeholder="Search tasks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500 transition"
+            className="w-full pl-10 pr-3.5 py-2 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 text-xs focus:outline-none focus:border-white transition"
           />
         </div>
 
@@ -161,7 +156,7 @@ export const Tasks = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-2.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 transition"
+            className="px-2.5 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
           >
             <option value="ALL">All Statuses</option>
             <option value="TODO">To Do</option>
@@ -173,7 +168,7 @@ export const Tasks = () => {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="px-2.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 transition"
+            className="px-2.5 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
           >
             <option value="ALL">All Priorities</option>
             <option value="LOW">Low</option>
@@ -186,7 +181,7 @@ export const Tasks = () => {
           <select
             value={deptFilter}
             onChange={(e) => setDeptFilter(e.target.value)}
-            className="px-2.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 transition"
+            className="px-2.5 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
           >
             <option value="ALL">All Departments</option>
             {departments.map((d) => (
@@ -198,7 +193,7 @@ export const Tasks = () => {
           <select
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
-            className="px-2.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 transition"
+            className="px-2.5 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
           >
             <option value="ALL">All Assignees</option>
             {members.map((m) => (

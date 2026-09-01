@@ -28,7 +28,7 @@ export const AppRoutes = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-black">
         <LoadingSpinner text="Starting TeamSync..." size="large" />
       </div>
     );
@@ -81,11 +81,11 @@ export const AppRoutes = () => {
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
-      {/* Member Protected Routes (Accessible by All Authenticated Users) */}
+      {/* Member Protected Routes */}
       <Route
         path="/member"
         element={
-          <ProtectedRoute allowedRoles={['MEMBER', 'ADMIN', 'FOUNDER']}>
+          <ProtectedRoute allowedRoles={['MEMBER']}>
             <DashboardLayout title="Team Workspace" />
           </ProtectedRoute>
         }

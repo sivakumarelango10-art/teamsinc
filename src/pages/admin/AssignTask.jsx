@@ -4,7 +4,7 @@ import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
-import { PlusCircle, Calendar, ArrowLeft, Check, AlertCircle } from 'lucide-react';
+import { PlusCircle, ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
@@ -78,7 +78,7 @@ export const AssignTask = () => {
       setSuccess(true);
       setTimeout(() => {
         navigate('/admin/tasks');
-      }, 1200);
+      }, 1000);
     } catch (err) {
       setError(err.message || 'Failed to dispatch task');
     } finally {
@@ -96,39 +96,39 @@ export const AssignTask = () => {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
+          className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded-xl transition"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <PlusCircle className="w-6 h-6 text-indigo-400" />
+            <PlusCircle className="w-6 h-6 text-white" />
             Assign New Task
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-neutral-400 mt-0.5">
             Delegate operational work items with explicit accountability, department tags, and deadlines.
           </p>
         </div>
       </div>
 
       {success && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-center gap-3">
-          <Check className="w-5 h-5" />
+        <div className="p-4 rounded-2xl bg-neutral-900 border border-neutral-700 text-white text-sm flex items-center gap-3">
+          <Check className="w-5 h-5 text-white" />
           <span>Task successfully created! Redirecting to Task Board...</span>
         </div>
       )}
 
       {error && (
-        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-center gap-3">
-          <AlertCircle className="w-5 h-5" />
+        <div className="p-4 rounded-2xl bg-neutral-900 border border-neutral-700 text-neutral-200 text-sm flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-neutral-400" />
           <span>{error}</span>
         </div>
       )}
 
-      <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl">
+      <div className="bg-neutral-950 p-6 sm:p-8 rounded-3xl border border-neutral-800 shadow-2xl">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
               Task Title *
             </label>
             <input
@@ -137,12 +137,12 @@ export const AssignTask = () => {
               placeholder="e.g. Implement user authentication flow"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition"
+              className="w-full px-4 py-3 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 text-sm focus:outline-none focus:border-white transition"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
               Detailed Description
             </label>
             <textarea
@@ -150,20 +150,20 @@ export const AssignTask = () => {
               placeholder="Provide context, acceptance criteria, wireframe links, or specific instructions..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition"
+              className="w-full px-4 py-3 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 text-sm focus:outline-none focus:border-white transition"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
                 Assign To Teammate *
               </label>
               <select
                 required
                 value={formData.assigned_to}
                 onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-                className="w-full px-3.5 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition"
+                className="w-full px-3.5 py-3 bg-black border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-white transition"
               >
                 <option value="">Select Team Member</option>
                 {members.map((m) => (
@@ -175,13 +175,13 @@ export const AssignTask = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
                 Department
               </label>
               <select
                 value={formData.department_id}
                 onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                className="w-full px-3.5 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition"
+                className="w-full px-3.5 py-3 bg-black border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-white transition"
               >
                 <option value="">Select Department</option>
                 {departments.map((d) => (
@@ -195,13 +195,13 @@ export const AssignTask = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
                 Priority
               </label>
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition"
+                className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-white transition"
               >
                 <option value="LOW">Low</option>
                 <option value="MEDIUM">Medium</option>
@@ -211,13 +211,13 @@ export const AssignTask = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
                 Initial Status
               </label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition"
+                className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-white transition"
               >
                 <option value="TODO">To Do</option>
                 <option value="IN_PROGRESS">In Progress</option>
@@ -226,7 +226,7 @@ export const AssignTask = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
                 Deadline Date *
               </label>
               <input
@@ -234,23 +234,23 @@ export const AssignTask = () => {
                 required
                 value={formData.deadline}
                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-white transition cursor-pointer"
               />
             </div>
           </div>
 
-          <div className="pt-5 border-t border-slate-800 flex items-center justify-end gap-3">
+          <div className="pt-5 border-t border-neutral-850 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={() => navigate('/admin/tasks')}
-              className="px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white bg-slate-850 hover:bg-slate-800 rounded-xl transition"
+              className="px-5 py-2.5 text-sm font-semibold text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 rounded-xl transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-6 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-6 py-2.5 text-sm font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {submitting ? 'Dispatching...' : 'Assign Task'}
             </button>

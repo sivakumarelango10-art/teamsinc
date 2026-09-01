@@ -11,8 +11,8 @@ export const isConfigured = Boolean(
   !supabaseAnonKey.includes('placeholder')
 );
 
-// Toggle demo mode explicitly or if unconfigured
-export const isDemoMode = import.meta.env.VITE_USE_MOCK_DATA === 'true' || !isConfigured;
+// In production, isDemoMode is strictly false unless explicitly set to 'true'
+export const isDemoMode = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
 export const supabase = isConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)

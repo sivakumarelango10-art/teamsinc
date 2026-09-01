@@ -6,17 +6,17 @@ export const UserRoleBadge = ({ role }) => {
     FOUNDER: {
       label: 'Founder',
       icon: ShieldAlert,
-      classes: 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+      classes: 'bg-white text-black border-white font-bold shadow-sm'
     },
     ADMIN: {
       label: 'Admin',
       icon: Shield,
-      classes: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+      classes: 'bg-neutral-800 text-white border-neutral-700 font-semibold'
     },
     MEMBER: {
       label: 'Member',
       icon: User,
-      classes: 'bg-slate-800 text-slate-300 border-slate-700'
+      classes: 'bg-neutral-950 text-neutral-400 border-neutral-800'
     }
   };
 
@@ -24,7 +24,7 @@ export const UserRoleBadge = ({ role }) => {
   const Icon = config.icon;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${config.classes}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs border ${config.classes}`}>
       <Icon className="w-3.5 h-3.5" />
       {config.label}
     </span>
@@ -41,9 +41,9 @@ export const UserTable = ({
   const isFounderAccount = (email) => email.toLowerCase() === 'sivakumarelango10@gmail.com';
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-      <table className="w-full text-left text-sm text-slate-300">
-        <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+    <div className="overflow-x-auto rounded-2xl border border-neutral-800 bg-neutral-950">
+      <table className="w-full text-left text-sm text-neutral-300">
+        <thead className="bg-black text-xs font-semibold uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
           <tr>
             <th className="px-6 py-4">User</th>
             <th className="px-6 py-4">Role</th>
@@ -52,28 +52,28 @@ export const UserTable = ({
             <th className="px-6 py-4 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-800/60">
+        <tbody className="divide-y divide-neutral-850">
           {users.map((u) => {
             const isTargetFounder = isFounderAccount(u.email);
             const isSelf = u.id === currentUserId;
 
             return (
-              <tr key={u.id} className="hover:bg-slate-800/30 transition duration-150">
+              <tr key={u.id} className="hover:bg-neutral-900/40 transition duration-150">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center font-bold text-white shadow-sm">
+                    <div className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center font-bold text-white shadow-sm">
                       {u.full_name?.charAt(0) || 'U'}
                     </div>
                     <div>
-                      <div className="font-medium text-slate-100 flex items-center gap-2">
+                      <div className="font-medium text-white flex items-center gap-2">
                         {u.full_name}
                         {isSelf && (
-                          <span className="text-[10px] bg-slate-800 text-indigo-300 px-1.5 py-0.5 rounded border border-slate-700">
+                          <span className="text-[10px] bg-neutral-900 text-neutral-300 px-1.5 py-0.5 rounded border border-neutral-700">
                             You
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-slate-400">{u.email}</div>
+                      <div className="text-xs text-neutral-400">{u.email}</div>
                     </div>
                   </div>
                 </td>
@@ -84,19 +84,19 @@ export const UserTable = ({
 
                 <td className="px-6 py-4 whitespace-nowrap">
                   {u.is_active ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-neutral-200 bg-neutral-900 px-2.5 py-0.5 rounded border border-neutral-700">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                       Active
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-neutral-500 bg-neutral-950 px-2.5 py-0.5 rounded border border-neutral-800">
                       <XCircle className="w-3.5 h-3.5" />
                       Inactive
                     </span>
                   )}
                 </td>
 
-                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-400">
+                <td className="px-6 py-4 whitespace-nowrap text-xs text-neutral-400">
                   {new Date(u.created_at).toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
@@ -108,7 +108,7 @@ export const UserTable = ({
                   <div className="flex items-center justify-end gap-1.5">
                     <button
                       onClick={() => onEdit(u)}
-                      className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition"
+                      className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded-lg transition"
                       title="Edit User"
                     >
                       <Edit className="w-4 h-4" />
@@ -118,11 +118,7 @@ export const UserTable = ({
                       <>
                         <button
                           onClick={() => onToggleStatus(u)}
-                          className={`p-2 rounded-lg transition ${
-                            u.is_active
-                              ? 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
-                              : 'text-slate-400 hover:text-emerald-400 hover:bg-slate-800'
-                          }`}
+                          className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition"
                           title={u.is_active ? 'Deactivate User' : 'Activate User'}
                         >
                           <Power className="w-4 h-4" />
@@ -130,7 +126,7 @@ export const UserTable = ({
 
                         <button
                           onClick={() => onDelete(u)}
-                          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition"
+                          className="p-2 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-lg transition"
                           title="Delete User"
                         >
                           <Trash2 className="w-4 h-4" />

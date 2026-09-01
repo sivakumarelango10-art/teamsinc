@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { departmentsApi } from '../../api/departmentsApi';
 import { planningApi } from '../../api/planningApi';
-import { Building2, Plus, Edit2, Trash2, Calendar, Users, X, AlertCircle, Check } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { Building2, Plus, Edit2, Trash2, Calendar, X, AlertCircle } from 'lucide-react';
+import { format } from 'date-fns';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
@@ -98,18 +98,18 @@ export const Departments = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-            <Building2 className="w-7 h-7 text-indigo-400" />
+            <Building2 className="w-7 h-7 text-white" />
             Department Management
           </h1>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
             Organize functional operational departments and inspect active workforce assignments.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Date Picker Filter */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
-            <Calendar className="w-4 h-4 text-indigo-400" />
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-300">
+            <Calendar className="w-4 h-4 text-neutral-400" />
             <span>Date:</span>
             <input
               type="date"
@@ -121,9 +121,9 @@ export const Departments = () => {
 
           <button
             onClick={handleOpenCreate}
-            className="px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 text-black" />
             <span>Add Department</span>
           </button>
         </div>
@@ -139,25 +139,25 @@ export const Departments = () => {
             return (
               <div
                 key={dept.id}
-                className="glass-card rounded-2xl p-5 border border-slate-800 flex flex-col justify-between"
+                className="bg-neutral-950 rounded-2xl p-5 border border-neutral-800 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    <div className="p-2.5 rounded-xl bg-neutral-900 text-white border border-neutral-800">
                       <Building2 className="w-5 h-5" />
                     </div>
 
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleOpenEdit(dept)}
-                        className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition"
+                        className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded-lg transition"
                         title="Edit Department"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setDeleteConfirmDept(dept)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition"
+                        className="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-lg transition"
                         title="Delete Department"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -166,17 +166,17 @@ export const Departments = () => {
                   </div>
 
                   <h3 className="text-base font-bold text-white mb-1">{dept.name}</h3>
-                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-4">
+                  <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed mb-4">
                     {dept.description || 'No description provided.'}
                   </p>
                 </div>
 
-                <div className="pt-3 border-t border-slate-800/80">
+                <div className="pt-3 border-t border-neutral-850">
                   <div className="flex items-center justify-between text-xs mb-2">
-                    <span className="text-slate-400 font-medium">
+                    <span className="text-neutral-400 font-medium">
                       Assigned on {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}:
                     </span>
-                    <span className="font-bold text-indigo-400">
+                    <span className="font-bold text-white">
                       {assignedMembers.length} {assignedMembers.length === 1 ? 'member' : 'members'}
                     </span>
                   </div>
@@ -187,14 +187,14 @@ export const Departments = () => {
                         <div
                           key={asgn.id}
                           title={asgn.user?.full_name}
-                          className="w-7 h-7 rounded-full bg-slate-800 text-indigo-300 border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold"
+                          className="w-7 h-7 rounded bg-neutral-900 text-white border border-neutral-800 flex items-center justify-center text-[10px] font-bold"
                         >
                           {asgn.user?.full_name?.charAt(0) || 'U'}
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-slate-500 italic py-1">
+                    <p className="text-[11px] text-neutral-500 italic py-1">
                       No members assigned on this date.
                     </p>
                   )}
@@ -207,11 +207,11 @@ export const Departments = () => {
 
       {/* Create / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl p-6 relative">
             <button
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-white transition"
+              className="absolute top-5 right-5 text-neutral-400 hover:text-white transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -221,15 +221,15 @@ export const Departments = () => {
             </h3>
 
             {error && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="mb-4 p-3 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-neutral-400 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                   Department Name *
                 </label>
                 <input
@@ -238,12 +238,12 @@ export const Departments = () => {
                   placeholder="e.g. Designing"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm transition"
+                  className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-white text-sm transition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                   Description
                 </label>
                 <textarea
@@ -251,22 +251,22 @@ export const Departments = () => {
                   placeholder="Describe the department responsibilities..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm transition"
+                  className="w-full px-3.5 py-2.5 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-white text-sm transition"
                 />
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-800">
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-neutral-850">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white bg-slate-800/80 rounded-xl transition"
+                  className="px-4 py-2 text-sm font-medium text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 rounded-xl transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25"
+                  className="px-5 py-2 text-sm font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md"
                 >
                   {saving ? 'Saving...' : editingDept ? 'Save Changes' : 'Create Department'}
                 </button>

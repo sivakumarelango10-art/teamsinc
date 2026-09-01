@@ -84,15 +84,15 @@ export const AdminDashboard = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5" />
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-white flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-white" />
               Task Manager Operations
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mt-1.5">
             Admin Dashboard
           </h1>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
             Dispatch tasks, balance daily team allocations, and monitor execution milestones.
           </p>
         </div>
@@ -101,17 +101,17 @@ export const AdminDashboard = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsTaskModalOpen(true)}
-            className="px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 cursor-pointer"
           >
-            <PlusCircle className="w-4 h-4" />
+            <PlusCircle className="w-4 h-4 text-black" />
             <span>Assign Task</span>
           </button>
 
           <button
             onClick={() => navigate('/admin/daily-planning')}
-            className="px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition shadow-lg shadow-emerald-600/25 flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2.5 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl transition flex items-center gap-2 cursor-pointer"
           >
-            <Calendar className="w-4 h-4" />
+            <Calendar className="w-4 h-4 text-white" />
             <span>Create Daily Plan</span>
           </button>
         </div>
@@ -124,35 +124,30 @@ export const AdminDashboard = () => {
           value={myCreatedTasks.length}
           subtitle="Your direct assignments"
           icon={CheckSquare}
-          color="indigo"
         />
         <StatCard
           title="Total Assigned Tasks"
           value={totalAssignedTasks}
           subtitle="Across active team"
           icon={CheckSquare}
-          color="cyan"
         />
         <StatCard
           title="In Progress"
           value={inProgressTasks}
           subtitle="Being worked on now"
           icon={Clock}
-          color="amber"
         />
         <StatCard
           title="Completed"
           value={completedTasks}
           subtitle="Successfully closed"
           icon={CheckCircle2}
-          color="emerald"
         />
         <StatCard
           title="Pending (Todo)"
           value={pendingTasks}
           subtitle="Queued up"
           icon={CircleDot}
-          color="rose"
         />
       </div>
 
@@ -162,14 +157,14 @@ export const AdminDashboard = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-                <Calendar className="w-4 h-4" />
+              <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
+                <Calendar className="w-4 h-4 text-white" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">
                   Today's Team Allocation
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-neutral-400">
                   {format(new Date(), 'EEEE, MMMM d, yyyy')} — {todayAllocations.length} total members placed
                 </p>
               </div>
@@ -177,7 +172,7 @@ export const AdminDashboard = () => {
 
             <button
               onClick={() => navigate('/admin/daily-planning')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold transition"
+              className="text-xs text-white hover:text-neutral-300 flex items-center gap-1 font-semibold transition"
             >
               <span>Modify Today's Plan</span>
               <ArrowUpRight className="w-4 h-4" />
@@ -192,17 +187,17 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Tomorrow */}
-        <div className="space-y-3 pt-4 border-t border-slate-800/80">
+        <div className="space-y-3 pt-4 border-t border-neutral-850">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
-                <Calendar className="w-4 h-4" />
+              <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
+                <Calendar className="w-4 h-4 text-white" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">
                   Tomorrow's Team Allocation
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-neutral-400">
                   {format(addDays(new Date(), 1), 'EEEE, MMMM d, yyyy')} — {tomorrowAllocations.length} members planned
                 </p>
               </div>
@@ -210,7 +205,7 @@ export const AdminDashboard = () => {
 
             <button
               onClick={() => navigate('/admin/daily-planning')}
-              className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold transition"
+              className="text-xs text-white hover:text-neutral-300 flex items-center gap-1 font-semibold transition"
             >
               <span>Modify Tomorrow's Plan</span>
               <ArrowUpRight className="w-4 h-4" />

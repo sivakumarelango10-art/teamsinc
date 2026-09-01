@@ -9,7 +9,7 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-black">
         <LoadingSpinner text="Authenticating session..." size="large" />
       </div>
     );

@@ -1,20 +1,12 @@
 import React from 'react';
-import TeamChat from './TeamChat';
+import { Navigate } from 'react-router-dom';
 
 /**
- * LeadershipChat — Restricted Communication Area
- * Access: FOUNDER, ADMIN, FOUNDING_ADVISOR only.
- * Database RLS enforces SELECT / INSERT / DELETE access strictly to these 3 roles.
+ * LeadershipChat redirect
+ * Chats are now unified into the single WhatsApp-style /chat route.
  */
 export const LeadershipChat = () => {
-  return (
-    <TeamChat
-      channel="leadership"
-      title="Leadership Council"
-      subtitle="Founder, Admin & Founding Advisor only"
-      isLeadershipMode={true}
-    />
-  );
+  return <Navigate to="/chat" replace />;
 };
 
 export default LeadershipChat;

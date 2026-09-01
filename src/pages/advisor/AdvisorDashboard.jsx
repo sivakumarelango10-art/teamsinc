@@ -102,11 +102,11 @@ export const AdvisorDashboard = () => {
         {/* Quick Actions */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <Link
-            to="/leadership-chat"
+            to="/chat"
             className="px-4 py-2.5 rounded-xl bg-purple-950/80 hover:bg-purple-900/90 text-purple-200 border border-purple-800 flex items-center gap-2 text-xs font-bold transition shadow-sm"
           >
             <MessageSquare className="w-4 h-4 text-purple-400" />
-            <span>Leadership Chat</span>
+            <span>Chats</span>
           </Link>
           <Link
             to="/founding-advisor/tasks"

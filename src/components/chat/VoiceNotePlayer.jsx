@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Play, Pause, RotateCcw, Volume2, Mic, AlertCircle } from 'lucide-react';
+import { Play, Pause, Mic, CheckCheck, Clock3, AlertCircle } from 'lucide-react';
 
 // Generates stable pseudo-random waveform bar heights for a given string/url
-const generateWaveformHeights = (seedStr, barCount = 32) => {
+const generateWaveformHeights = (seedStr, barCount = 26) => {
   let hash = 0;
   for (let i = 0; i < seedStr.length; i++) {
     hash = (hash << 5) - hash + seedStr.charCodeAt(i);
@@ -10,9 +10,8 @@ const generateWaveformHeights = (seedStr, barCount = 32) => {
   }
   const bars = [];
   for (let i = 0; i < barCount; i++) {
-    const pseudo = Math.abs(Math.sin((hash + i * 19.3) * 1.5));
-    // scale between 20% and 100%
-    const heightPercent = Math.max(20, Math.round(pseudo * 100));
+    const pseudo = Math.abs(Math.sin((hash + i * 17.7) * 1.6));
+    const heightPercent = Math.max(25, Math.round(pseudo * 100));
     bars.push(heightPercent);
   }
   return bars;
@@ -25,12 +24,18 @@ const formatSeconds = (sec) => {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 };
 
-const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, fileName = 'Voice message' }) => {
+const VoiceNotePlayerComponent = ({
+  audioUrl,
+  isSelf = false,
+  senderAvatar = null,
+  senderInitial = 'U',
+  timestamp = '',
+  isOptimistic = false
+}) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [totalDuration, setTotalDuration] = useState(duration || 0);
+  const [totalDuration, setTotalDuration] = useState(0);
   const [speed, setSpeed] = useState(1);
-  const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
 
   const audioRef = useRef(null);
@@ -38,7 +43,7 @@ const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, file
   const playerIdRef = useRef(`audio-${Math.random().toString(36).substring(2, 9)}`);
 
   const bars = useMemo(() => {
-    return generateWaveformHeights(audioUrl || 'voice-note', 32);
+    return generateWaveformHeights(audioUrl || 'voice-note', 26);
   }, [audioUrl]);
 
   // Global listener to ensure only ONE audio plays at any time
@@ -62,7 +67,6 @@ const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, file
       if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
         setTotalDuration(audio.duration);
       }
-      setIsReady(true);
     };
 
     const onTimeUpdate = () => {
@@ -75,7 +79,6 @@ const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, file
     };
 
     const onError = () => {
-      console.warn('Audio playback error on:', audioUrl);
       setHasError(true);
       setIsPlaying(false);
     };
@@ -101,31 +104,28 @@ const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, file
       audio.pause();
       setIsPlaying(false);
     } else {
-      // Announce to other players to pause
       window.dispatchEvent(
         new CustomEvent('teamsync:audio:play', { detail: { id: playerIdRef.current } })
       );
-      audio
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(err => {
-          console.warn('Playback initiation error:', err);
-          setIsPlaying(false);
-        });
+      audio.play().then(() => setIsPlaying(true)).catch((err) => {
+        console.warn('Audio play prevented:', err);
+        setHasError(true);
+      });
     }
   };
 
   const handleWaveformClick = (e) => {
-    if (!waveformRef.current || !audioRef.current) return;
+    if (!audioRef.current || !waveformRef.current || totalDuration === 0) return;
     const rect = waveformRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, clickX / rect.width));
-    const targetTime = ratio * (totalDuration || audioRef.current.duration || 1);
-    audioRef.current.currentTime = targetTime;
-    setCurrentTime(targetTime);
+    const seekTime = ratio * totalDuration;
+    audioRef.current.currentTime = seekTime;
+    setCurrentTime(seekTime);
   };
 
-  const cycleSpeed = () => {
+  const cycleSpeed = (e) => {
+    e.stopPropagation();
     const speeds = [1, 1.5, 2];
     const nextIdx = (speeds.indexOf(speed) + 1) % speeds.length;
     const nextSpeed = speeds[nextIdx];
@@ -139,11 +139,7 @@ const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, file
   const currentBarIndex = Math.floor(progressRatio * bars.length);
 
   return (
-    <div className={`p-2.5 sm:p-3 rounded-2xl border transition-all ${
-      isSelf
-        ? 'bg-neutral-900/90 border-neutral-700/80 shadow-md'
-        : 'bg-neutral-950/90 border-neutral-800 shadow-md'
-    }`}>
+    <div className="flex items-center gap-2.5 min-w-[220px] sm:min-w-[270px] select-none py-0.5">
       {/* Hidden Audio Element */}
       <audio
         ref={audioRef}
@@ -152,39 +148,49 @@ const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, file
         playsInline
       />
 
+      {/* Avatar with Micro Mic Badge (WhatsApp Demo Style) */}
+      <div className="relative shrink-0 self-center">
+        <div className="w-8 h-8 rounded-full bg-emerald-950/80 border border-emerald-800/80 flex items-center justify-center font-bold text-xs text-emerald-300 overflow-hidden shadow-sm">
+          {senderAvatar ? (
+            <img src={senderAvatar} alt="Sender" className="w-full h-full object-cover" />
+          ) : (
+            <span>{senderInitial}</span>
+          )}
+        </div>
+        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-neutral-900 border border-neutral-700 rounded-full flex items-center justify-center text-emerald-400 shadow-sm">
+          <Mic className="w-2 h-2" />
+        </span>
+      </div>
+
       {hasError ? (
-        <div className="flex items-center gap-2 text-xs text-red-400 py-1">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>Audio file could not be loaded.</span>
+        <div className="flex items-center gap-1.5 text-xs text-red-400 py-1">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span className="text-[11px]">Audio unavailable</span>
         </div>
       ) : (
-        <div className="flex items-center gap-3">
-          {/* WhatsApp Play/Pause Circular Button */}
-          <button
-            type="button"
-            onClick={togglePlay}
-            aria-label={isPlaying ? 'Pause voice message' : 'Play voice message'}
-            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 cursor-pointer shadow-md ${
-              isSelf
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-black'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-black'
-            }`}
-          >
-            {isPlaying ? (
-              <Pause className="w-5 h-5 fill-current text-black" />
-            ) : (
-              <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-            )}
-          </button>
+        <div className="flex-1 flex flex-col justify-center min-w-0">
+          {/* Top Row: Play/Pause Button + Waveform */}
+          <div className="flex items-center gap-2">
+            {/* WhatsApp Play/Pause Button */}
+            <button
+              type="button"
+              onClick={togglePlay}
+              className="w-7 h-7 rounded-full bg-white text-black hover:bg-neutral-200 flex items-center justify-center shrink-0 transition-transform active:scale-90 cursor-pointer shadow-sm"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <Pause className="w-3.5 h-3.5 fill-black text-black" />
+              ) : (
+                <Play className="w-3.5 h-3.5 fill-black text-black ml-0.5" />
+              )}
+            </button>
 
-          {/* Waveform and Progress */}
-          <div className="flex-1 min-w-[160px] sm:min-w-[200px] flex flex-col justify-center gap-1.5">
-            {/* WhatsApp Audio Waveform Bar Visualizer */}
+            {/* Waveform Visualizer & Scrubber */}
             <div
               ref={waveformRef}
               onClick={handleWaveformClick}
-              className="h-7 flex items-center gap-[2.5px] cursor-pointer py-1 select-none group"
-              title="Click to seek"
+              className="flex-1 h-5 flex items-center gap-[2px] cursor-pointer relative py-0.5 group"
+              title="Seek"
             >
               {bars.map((heightPercent, idx) => {
                 const isPassed = idx <= currentBarIndex && progressRatio > 0;
@@ -195,45 +201,56 @@ const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, file
                   >
                     <span
                       style={{ height: `${heightPercent}%` }}
-                      className={`w-full rounded-full transition-colors duration-150 ${
+                      className={`w-full rounded-full transition-colors duration-100 ${
                         isPassed
-                          ? isSelf
-                            ? 'bg-emerald-400'
-                            : 'bg-emerald-400'
-                          : isSelf
-                            ? 'bg-neutral-600 group-hover:bg-neutral-500'
-                            : 'bg-neutral-700 group-hover:bg-neutral-600'
+                          ? 'bg-cyan-400'
+                          : 'bg-neutral-600 group-hover:bg-neutral-500'
                       }`}
                     />
                   </div>
                 );
               })}
-            </div>
 
-            {/* Time & Controls Strip */}
-            <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono select-none">
-              <span className="font-medium text-neutral-300">
+              {/* Glowing Scrubber Dot */}
+              {progressRatio > 0 && (
+                <span
+                  style={{ left: `calc(${progressRatio * 100}% - 4px)` }}
+                  className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-black pointer-events-none transition-all duration-75 shadow-sm"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Row: Duration, Speed, Timestamp & Delivery Checks */}
+          <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-1 leading-none">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-neutral-300">
                 {isPlaying || currentTime > 0
                   ? formatSeconds(currentTime)
                   : formatSeconds(totalDuration)}
               </span>
 
-              <div className="flex items-center gap-2">
-                {/* Speed Toggle (WhatsApp style: 1x -> 1.5x -> 2x) */}
-                <button
-                  type="button"
-                  onClick={cycleSpeed}
-                  className="px-1.5 py-0.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-[10px] font-bold text-neutral-200 border border-neutral-750 transition cursor-pointer"
-                  title="Playback Speed"
-                >
-                  {speed}x
-                </button>
+              {/* Speed Button (1x / 1.5x / 2x) */}
+              <button
+                type="button"
+                onClick={cycleSpeed}
+                className="px-1 py-0.2 rounded bg-neutral-800 hover:bg-neutral-700 text-[9px] font-bold text-neutral-300 border border-neutral-700 transition cursor-pointer"
+                title="Playback speed"
+              >
+                {speed}x
+              </button>
+            </div>
 
-                {/* Voice Note Mic Badge */}
-                <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
-                  <Mic className="w-3 h-3" />
-                </span>
-              </div>
+            {/* Timestamp & Ticks */}
+            <div className="flex items-center gap-1 select-none">
+              <span>{timestamp}</span>
+              {isSelf && (
+                isOptimistic ? (
+                  <Clock3 className="w-2.5 h-2.5 text-neutral-500 animate-pulse" />
+                ) : (
+                  <CheckCheck className="w-3 h-3 text-emerald-400" />
+                )
+              )}
             </div>
           </div>
         </div>

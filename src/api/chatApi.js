@@ -54,9 +54,14 @@ export const chatApi = {
     if (!file) return null;
 
     const resolveType = (f) => {
-      if (f.type?.startsWith('image/')) return 'image';
-      if (f.type?.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(f.name || '')) return 'video';
-      if (f.type?.startsWith('audio/') || /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(f.name || '')) return 'audio';
+      const name = (f.name || '').toLowerCase();
+      const mime = (f.type || '').toLowerCase();
+      if (mime.startsWith('audio/') || name.startsWith('voice_note') || (name.endsWith('.webm') && (mime.includes('audio') || name.startsWith('voice_note')))) {
+        return 'audio';
+      }
+      if (mime.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(name)) return 'image';
+      if (mime.startsWith('video/') || /\.(mp4|mov|avi|mkv)$/i.test(name)) return 'video';
+      if (/\.(mp3|wav|ogg|m4a|aac|opus)$/i.test(name)) return 'audio';
       return 'document';
     };
 

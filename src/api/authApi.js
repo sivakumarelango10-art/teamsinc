@@ -1,183 +1,145 @@
 import { supabase, isDemoMode } from './supabase';
-import { getStored, setStored, STORAGE_KEYS, INITIAL_PROFILES, AUTHORIZED_EMAILS } from './mockData';
+import { AUTHORIZED_EMAILS, INITIAL_PROFILES } from './mockData';
+
+const FOUNDER_EMAIL = 'sivakumarelango10@gmail.com';
 
 export const authApi = {
-  // Check if an email is authorized (either in whitelist or pre-created by Founder)
-  async isEmailAuthorized(email) {
+  // Verify if an email is registered in the database
+  async verifyDatabaseRegistration(email) {
     const cleanEmail = email?.trim().toLowerCase();
-    if (!cleanEmail) return false;
-
-    // 1. Check strict pre-approved whitelist
-    if (AUTHORIZED_EMAILS.includes(cleanEmail)) {
-      return true;
+    if (!cleanEmail) {
+      return { registered: false, profile: null, role: null, error: 'Email address is missing.' };
     }
 
-    // 2. Check if a profile was pre-created by the Founder in Supabase
-    if (!isDemoMode && supabase) {
+    // 1. Direct database check against Supabase profiles table
+    if (supabase) {
       try {
-        const { data } = await supabase
+        const { data: profile, error } = await supabase
           .from('profiles')
-          .select('id, is_active')
-          .eq('email', cleanEmail)
+          .select('*')
+          .ilike('email', cleanEmail)
           .maybeSingle();
 
-        if (data) return Boolean(data.is_active);
-      } catch (err) {
-        console.warn('Error checking authorized email in remote profiles:', err);
-      }
-    }
+        if (error) {
+          console.warn('Database registration query error:', error);
+        }
 
-    // 3. Check stored profiles
-    const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
-    const found = profiles.find(p => p.email?.toLowerCase() === cleanEmail);
-    return Boolean(found && found.is_active !== false);
-  },
-
-  async login(email, password) {
-    const cleanEmail = email.trim().toLowerCase();
-
-    // Enforce authorization guard: only authorized emails or founder-created accounts
-    const isAuthorized = await this.isEmailAuthorized(cleanEmail);
-    if (!isAuthorized) {
-      throw new Error(
-        'Access denied. Only authorized team members invited by the Founder can sign in. Please contact sivakumarelango10@gmail.com.'
-      );
-    }
-
-    if (!isDemoMode && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password
-        });
-        if (error) throw error;
-
-        if (data?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-
-          if (profile) {
-            if (!profile.is_active) {
-              await supabase.auth.signOut();
-              throw new Error('This account has been deactivated by the Founder.');
-            }
-            return { user: data.user, profile };
+        if (profile) {
+          if (!profile.is_active) {
+            return {
+              registered: false,
+              profile: null,
+              role: null,
+              error: 'Your account has been deactivated by the Founder.'
+            };
           }
+
+          // Return verified profile with database assigned role
+          const role = cleanEmail === FOUNDER_EMAIL ? 'FOUNDER' : (profile.role || 'MEMBER');
+          return {
+            registered: true,
+            profile: { ...profile, role },
+            role,
+            error: null
+          };
         }
       } catch (err) {
-        // If credentials failed on remote Supabase but email is authorized, continue to fallback or rethrow
-        if (err.message?.includes('Invalid login credentials')) {
-          throw err;
-        }
-        console.warn('Supabase sign-in note:', err.message);
+        console.error('Error verifying database registration in Supabase:', err);
       }
     }
 
-    // Storage lookup for authorized profile
-    const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
-    let profile = profiles.find(p => p.email.toLowerCase() === cleanEmail);
-
-    if (!profile) {
-      const isFounder = cleanEmail === 'sivakumarelango10@gmail.com';
-      profile = {
-        id: 'usr-' + Date.now(),
-        full_name: cleanEmail.split('@')[0],
-        email: cleanEmail,
-        role: isFounder ? 'FOUNDER' : 'MEMBER',
-        is_active: true,
-        created_at: new Date().toISOString()
+    // 2. Strict Whitelist Fallback
+    if (cleanEmail === FOUNDER_EMAIL) {
+      return {
+        registered: true,
+        profile: {
+          id: 'usr-founder-1',
+          full_name: 'Sivakumar Elango',
+          email: cleanEmail,
+          role: 'FOUNDER',
+          is_active: true
+        },
+        role: 'FOUNDER',
+        error: null
       };
-      profiles.push(profile);
-      setStored(STORAGE_KEYS.PROFILES, profiles);
     }
 
-    if (!profile.is_active) {
-      throw new Error('This account has been deactivated. Please contact the Founder.');
+    if (AUTHORIZED_EMAILS.includes(cleanEmail)) {
+      const match = INITIAL_PROFILES.find(p => p.email.toLowerCase() === cleanEmail);
+      return {
+        registered: true,
+        profile: match || {
+          id: 'usr-' + cleanEmail.split('@')[0],
+          full_name: cleanEmail.split('@')[0],
+          email: cleanEmail,
+          role: 'MEMBER',
+          is_active: true
+        },
+        role: 'MEMBER',
+        error: null
+      };
     }
 
-    const mockUser = {
-      id: profile.id,
-      email: profile.email,
-      user_metadata: { full_name: profile.full_name, role: profile.role }
+    return {
+      registered: false,
+      profile: null,
+      role: null,
+      error: `Access Denied: The email "${cleanEmail}" is not registered in TeamSync. Only accounts registered by the Founder can sign in.`
     };
-
-    setStored(STORAGE_KEYS.CURRENT_USER, { user: mockUser, profile });
-    return { user: mockUser, profile };
   },
 
+  // Google OAuth sign-in only
   async signInWithGoogle() {
-    if (!isDemoMode && supabase) {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-      return data;
+    if (!supabase) {
+      throw new Error('Supabase client is not configured. Please check environment variables.');
     }
 
-    // Default to Founder in local test environment
-    return this.login('sivakumarelango10@gmail.com', 'password123');
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+
+    if (error) throw error;
+    return data;
   },
 
   async logout() {
-    if (!isDemoMode && supabase) {
+    if (supabase) {
       await supabase.auth.signOut();
     }
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    localStorage.removeItem('teamsync_current_user');
   },
 
+  // Retrieve currently active session from Supabase
   async getCurrentSession() {
-    if (!isDemoMode && supabase) {
+    if (supabase) {
       const { data } = await supabase.auth.getSession();
-      if (!data.session?.user) return null;
+      if (!data?.session?.user) return null;
 
       const userEmail = data.session.user.email?.toLowerCase();
-      const isAuthorized = await this.isEmailAuthorized(userEmail);
-      if (!isAuthorized) {
+      const verification = await this.verifyDatabaseRegistration(userEmail);
+
+      if (!verification.registered) {
         await supabase.auth.signOut();
-        throw new Error(
-          'Access denied. Your email account is not authorized to access TeamSync. Only invited members can sign in.'
-        );
+        throw new Error(verification.error || 'Access Denied: Account not registered.');
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.session.user.id)
-        .maybeSingle();
-
-      if (profile && !profile.is_active) {
-        await supabase.auth.signOut();
-        throw new Error('This account has been deactivated by the Founder.');
+      // Link auth_user_id in profiles if not yet linked
+      if (verification.profile?.id && verification.profile.auth_user_id !== data.session.user.id) {
+        await supabase
+          .from('profiles')
+          .update({ auth_user_id: data.session.user.id })
+          .eq('id', verification.profile.id);
       }
 
-      return { user: data.session.user, profile };
+      return {
+        user: data.session.user,
+        profile: verification.profile
+      };
     }
 
-    const current = getStored(STORAGE_KEYS.CURRENT_USER, null);
-    if (!current) return null;
-
-    // Verify current user still authorized
-    if (!AUTHORIZED_EMAILS.includes(current.user.email?.toLowerCase())) {
-      const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
-      const found = profiles.find(p => p.email?.toLowerCase() === current.user.email?.toLowerCase());
-      if (!found) {
-        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-        return null;
-      }
-    }
-
-    const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
-    const updatedProfile = profiles.find(p => p.id === current.profile.id);
-    if (updatedProfile) {
-      current.profile = updatedProfile;
-      setStored(STORAGE_KEYS.CURRENT_USER, current);
-    }
-    return current;
+    return null;
   }
 };

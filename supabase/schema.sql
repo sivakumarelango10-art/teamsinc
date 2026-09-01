@@ -6,11 +6,21 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- Clean drop of existing objects to ensure 100% clean slate
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
+DROP TABLE IF EXISTS public.daily_assignments CASCADE;
+DROP TABLE IF EXISTS public.daily_plans CASCADE;
+DROP TABLE IF EXISTS public.tasks CASCADE;
+DROP TABLE IF EXISTS public.departments CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
 -- -----------------------------------------------------------------------------
--- 1. PROFILES TABLE
+-- 1. PROFILES TABLE (Pre-registered Team Members & Access Control)
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+CREATE TABLE public.profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    auth_user_id UUID UNIQUE,
     full_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('FOUNDER', 'ADMIN', 'MEMBER')) DEFAULT 'MEMBER',
@@ -22,7 +32,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- -----------------------------------------------------------------------------
 -- 2. DEPARTMENTS TABLE
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.departments (
+CREATE TABLE public.departments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE,
     description TEXT,
@@ -30,17 +40,17 @@ CREATE TABLE IF NOT EXISTS public.departments (
 );
 
 -- -----------------------------------------------------------------------------
--- 3. TASKS TABLE
+-- 3. TASKS TABLE (Clean Slate)
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.tasks (
+CREATE TABLE public.tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
     description TEXT,
     status TEXT NOT NULL CHECK (status IN ('TODO', 'IN_PROGRESS', 'COMPLETED')) DEFAULT 'TODO',
     priority TEXT NOT NULL CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'URGENT')) DEFAULT 'MEDIUM',
     deadline DATE NOT NULL,
-    assigned_to UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
-    assigned_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+    assigned_to UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    assigned_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     department_id UUID REFERENCES public.departments(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -49,7 +59,7 @@ CREATE TABLE IF NOT EXISTS public.tasks (
 -- -----------------------------------------------------------------------------
 -- 4. DAILY PLANS TABLE
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.daily_plans (
+CREATE TABLE public.daily_plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_date DATE NOT NULL UNIQUE,
     created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -59,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.daily_plans (
 -- -----------------------------------------------------------------------------
 -- 5. DAILY ASSIGNMENTS TABLE
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.daily_assignments (
+CREATE TABLE public.daily_assignments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_id UUID NOT NULL REFERENCES public.daily_plans(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -69,22 +79,20 @@ CREATE TABLE IF NOT EXISTS public.daily_assignments (
 );
 
 -- -----------------------------------------------------------------------------
--- INDEXES FOR MAXIMUM QUERY PERFORMANCE
+-- INDEXES
 -- -----------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
-CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
-CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON public.tasks(assigned_to);
-CREATE INDEX IF NOT EXISTS idx_tasks_assigned_by ON public.tasks(assigned_by);
-CREATE INDEX IF NOT EXISTS idx_tasks_department ON public.tasks(department_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON public.tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON public.tasks(deadline);
-CREATE INDEX IF NOT EXISTS idx_daily_plans_date ON public.daily_plans(plan_date);
-CREATE INDEX IF NOT EXISTS idx_daily_assignments_plan ON public.daily_assignments(plan_id);
-CREATE INDEX IF NOT EXISTS idx_daily_assignments_user ON public.daily_assignments(user_id);
-CREATE INDEX IF NOT EXISTS idx_daily_assignments_department ON public.daily_assignments(department_id);
+CREATE INDEX idx_profiles_role ON public.profiles(role);
+CREATE INDEX idx_profiles_email ON public.profiles(email);
+CREATE INDEX idx_profiles_auth_user_id ON public.profiles(auth_user_id);
+CREATE INDEX idx_tasks_assigned_to ON public.tasks(assigned_to);
+CREATE INDEX idx_tasks_department ON public.tasks(department_id);
+CREATE INDEX idx_tasks_status ON public.tasks(status);
+CREATE INDEX idx_daily_plans_date ON public.daily_plans(plan_date);
+CREATE INDEX idx_daily_assignments_plan ON public.daily_assignments(plan_id);
+CREATE INDEX idx_daily_assignments_user ON public.daily_assignments(user_id);
 
 -- -----------------------------------------------------------------------------
--- AUTOMATED TIMESTAMPS
+-- AUTOMATED UPDATED_AT TRIGGER
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS trigger AS $$
@@ -94,70 +102,56 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER trg_update_profiles_updated_at
 BEFORE UPDATE ON public.profiles
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
-DROP TRIGGER IF EXISTS trg_update_tasks_updated_at ON public.tasks;
 CREATE TRIGGER trg_update_tasks_updated_at
 BEFORE UPDATE ON public.tasks
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- -----------------------------------------------------------------------------
--- AUTHENTICATION TRIGGER: STRICT WHITELIST & FOUNDER ACCESS ENFORCEMENT
+-- AUTHENTICATION TRIGGER: LINK ON SIGN IN & REJECT UNREGISTERED
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
-    user_role TEXT;
-    is_whitelisted BOOLEAN;
-    pre_existing_profile public.profiles%ROWTYPE;
+    reg_profile public.profiles%ROWTYPE;
 BEGIN
-    -- Check if user is in authorized whitelist
-    is_whitelisted := LOWER(NEW.email) IN (
-        'sivakumarelango10@gmail.com',
-        'alinasyedali786@gmail.com',
-        'yashas1325143@gmail.com',
-        'kavyaramesh293@gmail.com',
-        'prajith.p.dev.1@gmail.com',
-        'sgjitbros@gmail.com'
-    );
+    -- Check if email exists in registered profiles
+    SELECT * INTO reg_profile FROM public.profiles WHERE LOWER(email) = LOWER(NEW.email);
 
-    SELECT * INTO pre_existing_profile FROM public.profiles WHERE LOWER(email) = LOWER(NEW.email);
-
-    -- Reject new users not authorized in whitelist and not invited by Founder
-    IF NOT is_whitelisted AND pre_existing_profile.id IS NULL THEN
-        RAISE EXCEPTION 'Access denied. Only authorized team members invited by the Founder can sign in.';
-    END IF;
-
-    -- Special Rule: sivakumarelango10@gmail.com is strictly FOUNDER
+    -- Special Exception: Founder is always registered
     IF LOWER(NEW.email) = 'sivakumarelango10@gmail.com' THEN
-        user_role := 'FOUNDER';
-    ELSE
-        user_role := COALESCE(pre_existing_profile.role, NEW.raw_user_meta_data->>'role', 'MEMBER');
+        IF reg_profile.id IS NULL THEN
+            INSERT INTO public.profiles (auth_user_id, full_name, email, role, is_active)
+            VALUES (NEW.id, 'Sivakumar Elango', LOWER(NEW.email), 'FOUNDER', true);
+        ELSE
+            UPDATE public.profiles
+            SET auth_user_id = NEW.id, role = 'FOUNDER', is_active = true
+            WHERE id = reg_profile.id;
+        END IF;
+        RETURN NEW;
     END IF;
 
-    INSERT INTO public.profiles (id, full_name, email, role, is_active)
-    VALUES (
-        NEW.id,
-        COALESCE(pre_existing_profile.full_name, NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-        NEW.email,
-        user_role,
-        COALESCE(pre_existing_profile.is_active, true)
-    )
-    ON CONFLICT (id) DO UPDATE
-    SET email = EXCLUDED.email,
-        full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
-        role = CASE
-            WHEN LOWER(EXCLUDED.email) = 'sivakumarelango10@gmail.com' THEN 'FOUNDER'
-            ELSE profiles.role
-        END;
+    -- For all other users: They MUST be pre-registered in profiles!
+    IF reg_profile.id IS NULL THEN
+        RAISE EXCEPTION 'Access Denied: Your email % is not registered by the Founder.', NEW.email;
+    END IF;
+
+    IF NOT reg_profile.is_active THEN
+        RAISE EXCEPTION 'Access Denied: Account % has been deactivated by the Founder.', NEW.email;
+    END IF;
+
+    -- Link auth_user_id to the pre-registered profile
+    UPDATE public.profiles
+    SET auth_user_id = NEW.id
+    WHERE id = reg_profile.id;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -171,10 +165,10 @@ ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_assignments ENABLE ROW LEVEL SECURITY;
 
--- Helper security functions (SECURITY DEFINER eliminates recursion)
+-- Helper security functions
 CREATE OR REPLACE FUNCTION public.current_user_role()
 RETURNS TEXT AS $$
-    SELECT role FROM public.profiles WHERE id = auth.uid();
+    SELECT role FROM public.profiles WHERE auth_user_id = auth.uid();
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.is_founder()
@@ -188,116 +182,80 @@ RETURNS BOOLEAN AS $$
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- PROFILES POLICIES
-DROP POLICY IF EXISTS "Founder full access on profiles" ON public.profiles;
-CREATE POLICY "Founder full access on profiles"
+CREATE POLICY "Anyone authenticated can view active profiles"
+    ON public.profiles FOR SELECT
+    TO authenticated
+    USING (is_active = true OR auth_user_id = auth.uid() OR public.is_founder());
+
+CREATE POLICY "Founder can manage all profiles"
     ON public.profiles FOR ALL
+    TO authenticated
     USING (public.is_founder());
 
-DROP POLICY IF EXISTS "Admin view profiles" ON public.profiles;
-CREATE POLICY "Admin view profiles"
+-- Allow anon to read profile by email for registration validation before signin
+CREATE POLICY "Public can check email registration"
     ON public.profiles FOR SELECT
-    USING (public.current_user_role() = 'ADMIN' AND is_active = true);
-
-DROP POLICY IF EXISTS "Users view own profile" ON public.profiles;
-CREATE POLICY "Users view own profile"
-    ON public.profiles FOR SELECT
-    USING (id = auth.uid());
-
-DROP POLICY IF EXISTS "Users update own profile" ON public.profiles;
-CREATE POLICY "Users update own profile"
-    ON public.profiles FOR UPDATE
-    USING (id = auth.uid())
-    WITH CHECK (id = auth.uid());
+    TO anon
+    USING (true);
 
 -- DEPARTMENTS POLICIES
-DROP POLICY IF EXISTS "All authenticated view departments" ON public.departments;
 CREATE POLICY "All authenticated view departments"
     ON public.departments FOR SELECT
     TO authenticated
     USING (true);
 
-DROP POLICY IF EXISTS "Founder manage departments" ON public.departments;
-CREATE POLICY "Founder manage departments"
+CREATE POLICY "Founder and Admin manage departments"
     ON public.departments FOR ALL
-    USING (public.is_founder());
+    TO authenticated
+    USING (public.is_admin_or_founder());
 
 -- TASKS POLICIES
-DROP POLICY IF EXISTS "Founder full access tasks" ON public.tasks;
-CREATE POLICY "Founder full access tasks"
+CREATE POLICY "Founder and Admin manage tasks"
     ON public.tasks FOR ALL
-    USING (public.is_founder());
+    TO authenticated
+    USING (public.is_admin_or_founder());
 
-DROP POLICY IF EXISTS "Admin view tasks" ON public.tasks;
-CREATE POLICY "Admin view tasks"
-    ON public.tasks FOR SELECT
-    USING (public.current_user_role() = 'ADMIN');
-
-DROP POLICY IF EXISTS "Admin insert tasks" ON public.tasks;
-CREATE POLICY "Admin insert tasks"
-    ON public.tasks FOR INSERT
-    WITH CHECK (public.current_user_role() = 'ADMIN');
-
-DROP POLICY IF EXISTS "Admin update tasks" ON public.tasks;
-CREATE POLICY "Admin update tasks"
-    ON public.tasks FOR UPDATE
-    USING (public.current_user_role() = 'ADMIN');
-
-DROP POLICY IF EXISTS "Admin delete tasks" ON public.tasks;
-CREATE POLICY "Admin delete tasks"
-    ON public.tasks FOR DELETE
-    USING (public.current_user_role() = 'ADMIN');
-
-DROP POLICY IF EXISTS "Members view assigned tasks" ON public.tasks;
 CREATE POLICY "Members view assigned tasks"
     ON public.tasks FOR SELECT
-    USING (assigned_to = auth.uid());
-
-DROP POLICY IF EXISTS "Members update assigned task status" ON public.tasks;
-CREATE POLICY "Members update assigned task status"
-    ON public.tasks FOR UPDATE
-    USING (assigned_to = auth.uid())
-    WITH CHECK (assigned_to = auth.uid());
-
--- DAILY PLANS POLICIES
-DROP POLICY IF EXISTS "Founder full access daily plans" ON public.daily_plans;
-CREATE POLICY "Founder full access daily plans"
-    ON public.daily_plans FOR ALL
-    USING (public.is_founder());
-
-DROP POLICY IF EXISTS "Admin full access daily plans" ON public.daily_plans;
-CREATE POLICY "Admin full access daily plans"
-    ON public.daily_plans FOR ALL
-    USING (public.current_user_role() = 'ADMIN');
-
-DROP POLICY IF EXISTS "Members view daily plans with assignment" ON public.daily_plans;
-CREATE POLICY "Members view daily plans with assignment"
-    ON public.daily_plans FOR SELECT
+    TO authenticated
     USING (
-        EXISTS (
-            SELECT 1 FROM public.daily_assignments
-            WHERE daily_assignments.plan_id = daily_plans.id
-              AND daily_assignments.user_id = auth.uid()
-        )
+        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
     );
 
+CREATE POLICY "Members update assigned task status"
+    ON public.tasks FOR UPDATE
+    TO authenticated
+    USING (
+        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+    )
+    WITH CHECK (
+        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+    );
+
+-- DAILY PLANS POLICIES
+CREATE POLICY "Founder and Admin manage daily plans"
+    ON public.daily_plans FOR ALL
+    TO authenticated
+    USING (public.is_admin_or_founder());
+
+CREATE POLICY "All authenticated view daily plans"
+    ON public.daily_plans FOR SELECT
+    TO authenticated
+    USING (true);
+
 -- DAILY ASSIGNMENTS POLICIES
-DROP POLICY IF EXISTS "Founder full access daily assignments" ON public.daily_assignments;
-CREATE POLICY "Founder full access daily assignments"
+CREATE POLICY "Founder and Admin manage daily assignments"
     ON public.daily_assignments FOR ALL
-    USING (public.is_founder());
+    TO authenticated
+    USING (public.is_admin_or_founder());
 
-DROP POLICY IF EXISTS "Admin full access daily assignments" ON public.daily_assignments;
-CREATE POLICY "Admin full access daily assignments"
-    ON public.daily_assignments FOR ALL
-    USING (public.current_user_role() = 'ADMIN');
-
-DROP POLICY IF EXISTS "Members view own assignments" ON public.daily_assignments;
-CREATE POLICY "Members view own assignments"
+CREATE POLICY "All authenticated view daily assignments"
     ON public.daily_assignments FOR SELECT
-    USING (user_id = auth.uid());
+    TO authenticated
+    USING (true);
 
 -- -----------------------------------------------------------------------------
--- SEED INITIAL CORE DEPARTMENTS
+-- SEED INITIAL DEPARTMENTS
 -- -----------------------------------------------------------------------------
 INSERT INTO public.departments (name, description) VALUES
     ('Designing', 'UI/UX design, visual identities, wireframing, and interactive prototyping'),
@@ -309,14 +267,16 @@ INSERT INTO public.departments (name, description) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
--- PURGE UNAPPROVED PROFILES (Keep only Founder + 5 Authorized Team Members)
+-- SEED REGISTERED PROFILES (Founder + 5 Authorized Team Members)
 -- -----------------------------------------------------------------------------
-DELETE FROM public.profiles
-WHERE LOWER(email) NOT IN (
-    'sivakumarelango10@gmail.com',
-    'alinasyedali786@gmail.com',
-    'yashas1325143@gmail.com',
-    'kavyaramesh293@gmail.com',
-    'prajith.p.dev.1@gmail.com',
-    'sgjitbros@gmail.com'
-);
+INSERT INTO public.profiles (full_name, email, role, is_active) VALUES
+    ('Sivakumar Elango', 'sivakumarelango10@gmail.com', 'FOUNDER', true),
+    ('Alina Syed Ali', 'alinasyedali786@gmail.com', 'MEMBER', true),
+    ('Yashas', 'yashas1325143@gmail.com', 'MEMBER', true),
+    ('Kavya Ramesh', 'kavyaramesh293@gmail.com', 'MEMBER', true),
+    ('Prajith P', 'prajith.p.dev.1@gmail.com', 'MEMBER', true),
+    ('SG Jitbros', 'sgjitbros@gmail.com', 'MEMBER', true)
+ON CONFLICT (email) DO UPDATE
+SET full_name = EXCLUDED.full_name,
+    role = EXCLUDED.role,
+    is_active = true;

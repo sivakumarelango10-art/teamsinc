@@ -72,98 +72,9 @@ export const INITIAL_PROFILES = [
   }
 ];
 
-export const INITIAL_PLANS = [
-  {
-    id: 'plan-today',
-    plan_date: todayStr,
-    created_by: 'usr-founder-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'plan-tomorrow',
-    plan_date: tomorrowStr,
-    created_by: 'usr-founder-1',
-    created_at: new Date().toISOString()
-  }
-];
-
-export const INITIAL_ASSIGNMENTS = [
-  // Today's assignments: 2 people to Designing, 2 people to Development
-  { id: 'asgn-1', plan_id: 'plan-today', user_id: 'usr-member-1', department_id: 'dept-1' },
-  { id: 'asgn-2', plan_id: 'plan-today', user_id: 'usr-member-2', department_id: 'dept-1' },
-  { id: 'asgn-3', plan_id: 'plan-today', user_id: 'usr-member-3', department_id: 'dept-2' },
-  { id: 'asgn-4', plan_id: 'plan-today', user_id: 'usr-member-4', department_id: 'dept-2' },
-
-  // Tomorrow's assignments: 4 people to Designing, 1 person to Development
-  { id: 'asgn-5', plan_id: 'plan-tomorrow', user_id: 'usr-member-1', department_id: 'dept-1' },
-  { id: 'asgn-6', plan_id: 'plan-tomorrow', user_id: 'usr-member-2', department_id: 'dept-1' },
-  { id: 'asgn-7', plan_id: 'plan-tomorrow', user_id: 'usr-member-3', department_id: 'dept-1' },
-  { id: 'asgn-8', plan_id: 'plan-tomorrow', user_id: 'usr-member-4', department_id: 'dept-1' },
-  { id: 'asgn-9', plan_id: 'plan-tomorrow', user_id: 'usr-member-5', department_id: 'dept-2' }
-];
-
-export const INITIAL_TASKS = [
-  {
-    id: 'task-1',
-    title: 'Create homepage design & wireframes',
-    description: 'Finalize high-fidelity Figma components and user journeys for the landing page.',
-    status: 'IN_PROGRESS',
-    priority: 'HIGH',
-    deadline: tomorrowStr,
-    assigned_to: 'usr-member-1',
-    assigned_by: 'usr-founder-1',
-    department_id: 'dept-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'task-2',
-    title: 'Design UI component kit',
-    description: 'Build reusable monochrome card widgets, charts, and metrics indicators.',
-    status: 'TODO',
-    priority: 'MEDIUM',
-    deadline: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
-    assigned_to: 'usr-member-2',
-    assigned_by: 'usr-founder-1',
-    department_id: 'dept-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'task-3',
-    title: 'Implement Supabase Auth & RLS policies',
-    description: 'Enforce database-level table security, helper functions, and signup triggers.',
-    status: 'COMPLETED',
-    priority: 'URGENT',
-    deadline: todayStr,
-    assigned_to: 'usr-member-3',
-    assigned_by: 'usr-founder-1',
-    department_id: 'dept-2',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'task-4',
-    title: 'Build workforce calendar allocation module',
-    description: 'Implement multi-member assignment by date and department with conflict prevention.',
-    status: 'IN_PROGRESS',
-    priority: 'HIGH',
-    deadline: format(addDays(new Date(), 2), 'yyyy-MM-dd'),
-    assigned_to: 'usr-member-4',
-    assigned_by: 'usr-founder-1',
-    department_id: 'dept-2',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'task-5',
-    title: 'Brand style guide typography update',
-    description: 'Audit typography hierarchy and ensure WCAG 2.1 AA contrast compliance.',
-    status: 'TODO',
-    priority: 'LOW',
-    deadline: format(addDays(new Date(), 4), 'yyyy-MM-dd'),
-    assigned_to: 'usr-member-5',
-    assigned_by: 'usr-founder-1',
-    department_id: 'dept-1',
-    created_at: new Date().toISOString()
-  }
-];
+export const INITIAL_PLANS = [];
+export const INITIAL_ASSIGNMENTS = [];
+export const INITIAL_TASKS = [];
 
 // Local storage management helpers
 const STORAGE_KEYS = {
@@ -183,6 +94,21 @@ export const getStored = (key, initial) => {
       return initial;
     }
     const parsed = JSON.parse(item);
+
+    // Automatically purge old demo tasks, plans, assignments if present
+    if (key === STORAGE_KEYS.TASKS && Array.isArray(parsed) && parsed.some(t => t.id === 'task-1')) {
+      localStorage.setItem(key, JSON.stringify([]));
+      return [];
+    }
+    if (key === STORAGE_KEYS.ASSIGNMENTS && Array.isArray(parsed) && parsed.some(a => a.id === 'asgn-1')) {
+      localStorage.setItem(key, JSON.stringify([]));
+      return [];
+    }
+    if (key === STORAGE_KEYS.PLANS && Array.isArray(parsed) && parsed.some(p => p.id === 'plan-today')) {
+      localStorage.setItem(key, JSON.stringify([]));
+      return [];
+    }
+
     // If profiles key, filter out any old legacy test accounts that were purged
     if (key === STORAGE_KEYS.PROFILES && Array.isArray(parsed)) {
       const valid = parsed.filter(p =>

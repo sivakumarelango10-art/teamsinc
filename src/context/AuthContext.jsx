@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../api/authApi';
-import { supabase, isDemoMode } from '../api/supabase';
-import { AUTHORIZED_EMAILS } from '../api/mockData';
+import { supabase } from '../api/supabase';
 
 const AuthContext = createContext(null);
 
@@ -12,6 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // 1. Initial Session Check on app mount
     const initAuth = async () => {
       try {
         setLoading(true);
@@ -19,10 +19,15 @@ export const AuthProvider = ({ children }) => {
         if (session) {
           setUser(session.user);
           setProfile(session.profile);
+        } else {
+          setUser(null);
+          setProfile(null);
         }
       } catch (err) {
         console.error('Session initialization error:', err);
         setError(err.message);
+        setUser(null);
+        setProfile(null);
       } finally {
         setLoading(false);
       }
@@ -30,48 +35,33 @@ export const AuthProvider = ({ children }) => {
 
     initAuth();
 
-    // Listen to Supabase auth events (OAuth redirect completion, token refresh, etc.)
-    if (!isDemoMode && supabase) {
+    // 2. Listen to Supabase Auth state changes (OAuth callbacks, token refresh, sign-out)
+    if (supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
           const email = session.user.email?.toLowerCase();
-          const isAuthorized = await authApi.isEmailAuthorized(email);
+          const verification = await authApi.verifyDatabaseRegistration(email);
 
-          if (!isAuthorized) {
-            console.warn('Unauthorized login attempt blocked for:', email);
+          if (!verification.registered) {
+            console.warn('Blocked unauthorized sign-in attempt for:', email);
             await supabase.auth.signOut();
             setUser(null);
             setProfile(null);
-            setError('Access denied. Only authorized team members invited by the Founder can access TeamSync.');
+            setError(verification.error || 'Access Denied: Your email is not registered in TeamSync.');
             return;
           }
 
-          const { data: userProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
+          // Link auth_user_id in profiles if not yet linked
+          if (verification.profile?.id && verification.profile.auth_user_id !== session.user.id) {
+            await supabase
+              .from('profiles')
+              .update({ auth_user_id: session.user.id })
+              .eq('id', verification.profile.id);
+          }
 
           setUser(session.user);
-          if (userProfile) {
-            if (!userProfile.is_active) {
-              await supabase.auth.signOut();
-              setUser(null);
-              setProfile(null);
-              setError('This account has been deactivated by the Founder.');
-              return;
-            }
-            setProfile(userProfile);
-          } else {
-            const isFounder = email === 'sivakumarelango10@gmail.com';
-            setProfile({
-              id: session.user.id,
-              full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
-              email: session.user.email,
-              role: isFounder ? 'FOUNDER' : 'MEMBER',
-              is_active: true
-            });
-          }
+          setProfile(verification.profile);
+          setError(null);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setProfile(null);
@@ -84,16 +74,13 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = async (email, password) => {
+  const signInWithGoogle = async () => {
     setError(null);
     try {
       setLoading(true);
-      const res = await authApi.login(email, password);
-      setUser(res.user);
-      setProfile(res.profile);
-      return res;
+      await authApi.signInWithGoogle();
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Google sign-in failed');
       throw err;
     } finally {
       setLoading(false);
@@ -106,33 +93,16 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setUser(null);
       setProfile(null);
+      setError(null);
     }
   };
 
   const refreshProfile = async () => {
-    if (user?.id) {
-      const session = await authApi.getCurrentSession();
-      if (session?.profile) {
-        setProfile(session.profile);
+    if (user?.email) {
+      const verification = await authApi.verifyDatabaseRegistration(user.email);
+      if (verification.registered) {
+        setProfile(verification.profile);
       }
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    setError(null);
-    try {
-      setLoading(true);
-      const res = await authApi.signInWithGoogle();
-      if (res?.user) {
-        setUser(res.user);
-        setProfile(res.profile);
-      }
-      return res;
-    } catch (err) {
-      setError(err.message || 'Google sign-in failed');
-      throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -150,9 +120,8 @@ export const AuthProvider = ({ children }) => {
     isMember,
     loading,
     error,
-    login,
-    logout,
     signInWithGoogle,
+    logout,
     refreshProfile
   };
 

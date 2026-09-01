@@ -1,25 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { tasksApi } from '../../api/tasksApi';
+import { supabase } from '../../api/supabase';
 import TaskCard from '../../components/tasks/TaskCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
 import { CheckSquare, Search } from 'lucide-react';
 
 export const MyTasks = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
+  const memberId = profile?.id || user?.id;
+  const memberEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+
   const loadTasks = async () => {
-    if (!user?.id) return;
+    if (!memberId) return;
     try {
       setLoading(true);
-      const userTasks = await tasksApi.getTasks({ assigned_to: user.id });
-      setTasks(userTasks);
+      const userTasks = await tasksApi.getTasks({ assigned_to: memberId, user_email: memberEmail });
+      setTasks(userTasks || []);
     } catch (err) {
       console.error('Failed to load my tasks:', err);
     } finally {
@@ -29,7 +33,25 @@ export const MyTasks = () => {
 
   useEffect(() => {
     loadTasks();
-  }, [user?.id]);
+
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('my-tasks-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          () => {
+            loadTasks();
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
+  }, [memberId, memberEmail]);
 
   const handleStatusChange = async (taskId, newStatus) => {
     try {

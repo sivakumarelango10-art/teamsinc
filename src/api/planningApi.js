@@ -72,9 +72,23 @@ export const planningApi = {
         .maybeSingle();
 
       if (!plan) {
+        let creatorId = createdBy;
+        if (creatorId) {
+          try {
+            const { data: cp } = await supabase
+              .from('profiles')
+              .select('id')
+              .or(`id.eq.${creatorId},auth_user_id.eq.${creatorId}`)
+              .maybeSingle();
+            creatorId = cp?.id || null;
+          } catch {
+            creatorId = null;
+          }
+        }
+
         const { data: newPlan, error: createPlanErr } = await supabase
           .from('daily_plans')
-          .insert([{ plan_date: dateStr, created_by: createdBy }])
+          .insert([{ plan_date: dateStr, created_by: creatorId }])
           .select()
           .single();
         if (createPlanErr) throw createPlanErr;

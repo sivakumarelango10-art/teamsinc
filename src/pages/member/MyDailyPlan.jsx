@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { planningApi } from '../../api/planningApi';
+import { supabase } from '../../api/supabase';
 import { Calendar, Building2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 export const MyDailyPlan = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [todayData, setTodayData] = useState({ plan: null, assignment: null, teammates: [] });
@@ -15,37 +16,69 @@ export const MyDailyPlan = () => {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
+  const memberId = profile?.id || user?.id;
+  const memberEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+
+  const loadPlans = async () => {
+    if (!memberId) return;
+    try {
+      setLoading(true);
+      const [todayRes, tomorrowRes] = await Promise.all([
+        planningApi.getDailyAllocations(todayStr),
+        planningApi.getDailyAllocations(tomorrowStr)
+      ]);
+
+      const matchesUser = (a) =>
+        a.user_id === memberId ||
+        (a.user && a.user.email?.toLowerCase() === memberEmail);
+
+      const todayAsgn = todayRes.assignments?.find(matchesUser) || null;
+      const todayTeammates = todayAsgn
+        ? todayRes.assignments.filter(a => a.department_id === todayAsgn.department_id && !matchesUser(a))
+        : [];
+
+      const tomorrowAsgn = tomorrowRes.assignments?.find(matchesUser) || null;
+      const tomorrowTeammates = tomorrowAsgn
+        ? tomorrowRes.assignments.filter(a => a.department_id === tomorrowAsgn.department_id && !matchesUser(a))
+        : [];
+
+      setTodayData({ plan: todayRes.plan, assignment: todayAsgn, teammates: todayTeammates });
+      setTomorrowData({ plan: tomorrowRes.plan, assignment: tomorrowAsgn, teammates: tomorrowTeammates });
+    } catch (err) {
+      console.error('Failed to load my daily plan:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadPlans = async () => {
-      if (!user?.id) return;
-      try {
-        setLoading(true);
-        const [todayRes, tomorrowRes] = await Promise.all([
-          planningApi.getDailyAllocations(todayStr),
-          planningApi.getDailyAllocations(tomorrowStr)
-        ]);
-
-        const todayAsgn = todayRes.assignments?.find(a => a.user_id === user.id) || null;
-        const todayTeammates = todayAsgn
-          ? todayRes.assignments.filter(a => a.department_id === todayAsgn.department_id && a.user_id !== user.id)
-          : [];
-
-        const tomorrowAsgn = tomorrowRes.assignments?.find(a => a.user_id === user.id) || null;
-        const tomorrowTeammates = tomorrowAsgn
-          ? tomorrowRes.assignments.filter(a => a.department_id === tomorrowAsgn.department_id && a.user_id !== user.id)
-          : [];
-
-        setTodayData({ plan: todayRes.plan, assignment: todayAsgn, teammates: todayTeammates });
-        setTomorrowData({ plan: tomorrowRes.plan, assignment: tomorrowAsgn, teammates: tomorrowTeammates });
-      } catch (err) {
-        console.error('Failed to load my daily plan:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadPlans();
-  }, [user?.id]);
+
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('my-daily-plan-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_assignments' },
+          () => {
+            loadPlans();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_plans' },
+          () => {
+            loadPlans();
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
+  }, [memberId, memberEmail]);
 
   if (loading) {
     return <LoadingSpinner text="Retrieving your department schedule..." size="large" />;

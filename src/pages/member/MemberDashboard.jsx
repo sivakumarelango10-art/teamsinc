@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { tasksApi } from '../../api/tasksApi';
 import { planningApi } from '../../api/planningApi';
+import { supabase } from '../../api/supabase';
 import TaskCard from '../../components/tasks/TaskCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
@@ -19,20 +20,27 @@ export const MemberDashboard = () => {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
+  const memberId = profile?.id || user?.id;
+  const memberEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+
   const loadMemberData = async () => {
-    if (!user?.id) return;
+    if (!memberId) return;
     try {
       setLoading(true);
       const [userTasks, todayPlan, tomorrowPlan] = await Promise.all([
-        tasksApi.getTasks({ assigned_to: user.id }),
+        tasksApi.getTasks({ assigned_to: memberId, user_email: memberEmail }),
         planningApi.getDailyAllocations(todayStr),
         planningApi.getDailyAllocations(tomorrowStr)
       ]);
 
-      setTasks(userTasks);
+      setTasks(userTasks || []);
 
-      const userToday = todayPlan.assignments?.find(a => a.user_id === user.id) || null;
-      const userTomorrow = tomorrowPlan.assignments?.find(a => a.user_id === user.id) || null;
+      const matchesUser = (a) =>
+        a.user_id === memberId ||
+        (a.user && a.user.email?.toLowerCase() === memberEmail);
+
+      const userToday = todayPlan.assignments?.find(matchesUser) || null;
+      const userTomorrow = tomorrowPlan.assignments?.find(matchesUser) || null;
 
       setTodayAssignment(userToday);
       setTomorrowAssignment(userTomorrow);
@@ -45,7 +53,33 @@ export const MemberDashboard = () => {
 
   useEffect(() => {
     loadMemberData();
-  }, [user?.id]);
+
+    // Real-time synchronization: Any task assigned or modified reflects instantly
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('member-tasks-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          () => {
+            loadMemberData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_assignments' },
+          () => {
+            loadMemberData();
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
+  }, [memberId, memberEmail]);
 
   const handleStatusChange = async (taskId, newStatus) => {
     try {

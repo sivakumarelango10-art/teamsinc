@@ -22,7 +22,8 @@ import {
   CheckCheck,
   Paperclip,
   Lock,
-  ExternalLink
+  ExternalLink,
+  MessageSquare
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 

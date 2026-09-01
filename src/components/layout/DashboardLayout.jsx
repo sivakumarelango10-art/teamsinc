@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 
-export const DashboardLayout = ({ title }) => {
+export const DashboardLayout = ({ title, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (

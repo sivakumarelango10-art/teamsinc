@@ -35,6 +35,7 @@ export const UserRoleBadge = ({ role }) => {
 export const UserTable = ({
   users = [],
   onEdit,
+  onRoleChange,
   onToggleStatus,
   onDelete,
   currentUserId
@@ -91,7 +92,23 @@ export const UserTable = ({
                 </td>
 
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <UserRoleBadge role={u.role} />
+                  {isTargetFounder ? (
+                    <UserRoleBadge role="FOUNDER" />
+                  ) : onRoleChange ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={u.role}
+                        onChange={(e) => onRoleChange(u.id, e.target.value)}
+                        className="bg-neutral-900 border border-neutral-700 hover:border-neutral-500 rounded-lg text-xs font-semibold text-white px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-white transition cursor-pointer"
+                        title="Click to instantly change role"
+                      >
+                        <option value="MEMBER">Member</option>
+                        <option value="ADMIN">Admin</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <UserRoleBadge role={u.role} />
+                  )}
                 </td>
 
                 <td className="px-6 py-4 whitespace-nowrap">

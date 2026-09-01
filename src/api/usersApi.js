@@ -5,20 +5,26 @@ const FOUNDER_EMAIL = 'sivakumarelango10@gmail.com';
 
 export const usersApi = {
   async getUsers() {
-    if (!isDemoMode && supabase) {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('role', { ascending: false })
+          .order('full_name', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+      } catch (err) {
+        console.error('Error fetching users from Supabase:', err);
+      }
     }
 
     return getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
   },
 
   async getUserById(id) {
-    if (!isDemoMode && supabase) {
+    if (supabase) {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -35,12 +41,9 @@ export const usersApi = {
   async createUser(userData) {
     const cleanEmail = userData.email.trim().toLowerCase();
     const isFounderEmail = cleanEmail === FOUNDER_EMAIL;
-
     const role = isFounderEmail ? 'FOUNDER' : (userData.role || 'MEMBER');
 
-    if (!isDemoMode && supabase) {
-      // In Supabase, creating a user is typically done via signUp or an admin edge function.
-      // Here we insert directly to profiles for schema demonstration
+    if (supabase) {
       const { data, error } = await supabase
         .from('profiles')
         .insert([{
@@ -51,6 +54,7 @@ export const usersApi = {
         }])
         .select()
         .single();
+
       if (error) throw error;
       return data;
     }
@@ -76,30 +80,48 @@ export const usersApi = {
   },
 
   async updateUser(id, updates) {
-    const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
-    const existing = profiles.find(p => p.id === id);
+    if (supabase) {
+      // Protect Founder from being altered maliciously
+      const { data: target } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', id)
+        .maybeSingle();
 
-    if (!existing) throw new Error('User not found');
-
-    // Protect Founder from being altered maliciously
-    if (existing.email.toLowerCase() === FOUNDER_EMAIL) {
-      if (updates.role && updates.role !== 'FOUNDER') {
-        throw new Error('The primary Founder role cannot be changed.');
+      if (target?.email?.toLowerCase() === FOUNDER_EMAIL) {
+        if (updates.role && updates.role !== 'FOUNDER') {
+          throw new Error('The Founder role cannot be changed.');
+        }
+        if (updates.is_active === false) {
+          throw new Error('The Founder account cannot be deactivated.');
+        }
       }
-      if (updates.is_active === false) {
-        throw new Error('The primary Founder account cannot be deactivated.');
-      }
-    }
 
-    if (!isDemoMode && supabase) {
       const { data, error } = await supabase
         .from('profiles')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id)
         .select()
         .single();
+
       if (error) throw error;
       return data;
+    }
+
+    const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
+    const existing = profiles.find(p => p.id === id);
+    if (!existing) throw new Error('User not found');
+
+    if (existing.email.toLowerCase() === FOUNDER_EMAIL) {
+      if (updates.role && updates.role !== 'FOUNDER') {
+        throw new Error('The Founder role cannot be changed.');
+      }
+      if (updates.is_active === false) {
+        throw new Error('The Founder account cannot be deactivated.');
+      }
     }
 
     const updated = profiles.map(p => {
@@ -117,22 +139,35 @@ export const usersApi = {
     return updated.find(p => p.id === id);
   },
 
+  async changeUserRole(id, newRole) {
+    return this.updateUser(id, { role: newRole });
+  },
+
   async toggleUserStatus(id, isActive) {
     return this.updateUser(id, { is_active: isActive });
   },
 
   async deleteUser(id) {
-    const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
-    const target = profiles.find(p => p.id === id);
+    if (supabase) {
+      const { data: target } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', id)
+        .maybeSingle();
 
-    if (target && target.email.toLowerCase() === FOUNDER_EMAIL) {
-      throw new Error('The primary Founder cannot be deleted.');
-    }
+      if (target?.email?.toLowerCase() === FOUNDER_EMAIL) {
+        throw new Error('The primary Founder account cannot be deleted.');
+      }
 
-    if (!isDemoMode && supabase) {
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
       return true;
+    }
+
+    const profiles = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
+    const target = profiles.find(p => p.id === id);
+    if (target?.email?.toLowerCase() === FOUNDER_EMAIL) {
+      throw new Error('The primary Founder account cannot be deleted.');
     }
 
     const filtered = profiles.filter(p => p.id !== id);

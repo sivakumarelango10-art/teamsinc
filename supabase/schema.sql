@@ -25,6 +25,7 @@ CREATE TABLE public.profiles (
     email TEXT UNIQUE NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('FOUNDER', 'ADMIN', 'MEMBER')) DEFAULT 'MEMBER',
     is_active BOOLEAN NOT NULL DEFAULT true,
+    last_seen_at TIMESTAMPTZ DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -168,18 +169,37 @@ ALTER TABLE public.daily_assignments ENABLE ROW LEVEL SECURITY;
 -- Helper security functions
 CREATE OR REPLACE FUNCTION public.current_user_role()
 RETURNS TEXT AS $$
-    SELECT role FROM public.profiles WHERE auth_user_id = auth.uid();
+    SELECT role FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email');
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.is_founder()
 RETURNS BOOLEAN AS $$
-    SELECT public.current_user_role() = 'FOUNDER';
+    SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+          AND role = 'FOUNDER'
+    );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.is_admin_or_founder()
 RETURNS BOOLEAN AS $$
-    SELECT public.current_user_role() IN ('FOUNDER', 'ADMIN');
+    SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+          AND role IN ('FOUNDER', 'ADMIN')
+    );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- Enable Realtime Publication for profiles
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'profiles'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+  END IF;
+END $$;
 
 -- PROFILES POLICIES
 CREATE POLICY "Anyone authenticated can view active profiles"

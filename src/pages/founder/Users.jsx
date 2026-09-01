@@ -7,6 +7,7 @@ import ConfirmModal from '../../components/common/ConfirmModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { Users as UsersIcon, UserPlus, Search, Filter } from 'lucide-react';
 import { usePresence } from '../../context/PresenceContext';
+import { supabase } from '../../api/supabase';
 
 export const Users = () => {
   const { user: currentUser } = useAuth();
@@ -39,7 +40,49 @@ export const Users = () => {
 
   useEffect(() => {
     loadUsers();
+
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel('realtime-users-list')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          () => {
+            loadUsers();
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
   }, []);
+
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      const target = users.find(u => u.id === userId);
+      await usersApi.changeUserRole(userId, newRole);
+
+      // Broadcast to other browser tabs/windows
+      try {
+        if (target?.email) {
+          const bc = new BroadcastChannel('teamsync_role_changes');
+          bc.postMessage({ type: 'ROLE_CHANGED', email: target.email, role: newRole });
+          bc.close();
+        }
+      } catch {}
+
+      setFeedback({
+        type: 'success',
+        text: `Role for ${target?.full_name || 'user'} changed to ${newRole}. Updates reflect immediately.`
+      });
+      await loadUsers();
+    } catch (err) {
+      setFeedback({ type: 'error', text: err.message || 'Failed to update user role.' });
+    }
+  };
 
   const handleCreateOrEditUser = async (formData) => {
     if (editingUser) {
@@ -191,6 +234,7 @@ export const Users = () => {
             setEditingUser(u);
             setIsFormOpen(true);
           }}
+          onRoleChange={handleRoleChange}
           onToggleStatus={handleToggleStatus}
           onDelete={(u) => setDeleteConfirmUser(u)}
           currentUserId={currentUser?.id}

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { authApi } from '../api/authApi';
 import { supabase } from '../api/supabase';
 
@@ -9,6 +9,9 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const currentUserRef = useRef(null);
+  currentUserRef.current = user;
 
   useEffect(() => {
     // 1. Initial Session Check on app mount
@@ -36,8 +39,9 @@ export const AuthProvider = ({ children }) => {
     initAuth();
 
     // 2. Listen to Supabase Auth state changes (OAuth callbacks, token refresh, sign-out)
+    let authSubscription = null;
     if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
           const email = session.user.email?.toLowerCase();
           const verification = await authApi.verifyDatabaseRegistration(email);
@@ -67,11 +71,56 @@ export const AuthProvider = ({ children }) => {
           setProfile(null);
         }
       });
-
-      return () => {
-        subscription?.unsubscribe();
-      };
+      authSubscription = data.subscription;
     }
+
+    // 3. Supabase Realtime Listener for Profile & Role Changes
+    let profileChannel = null;
+    if (supabase) {
+      profileChannel = supabase
+        .channel('realtime-profile-updates')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'profiles' },
+          (payload) => {
+            const updatedProfile = payload.new;
+            const currentEmail = currentUserRef.current?.email?.toLowerCase();
+            if (updatedProfile && currentEmail && updatedProfile.email?.toLowerCase() === currentEmail) {
+              console.log('Realtime role change applied for current user:', updatedProfile.role);
+              setProfile(prev => ({
+                ...(prev || {}),
+                ...updatedProfile
+              }));
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    // 4. Cross-tab BroadcastChannel for role changes
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('teamsync_role_changes');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'ROLE_CHANGED' && event.data.email) {
+          const currentEmail = currentUserRef.current?.email?.toLowerCase();
+          if (event.data.email.toLowerCase() === currentEmail) {
+            setProfile(prev => ({
+              ...(prev || {}),
+              role: event.data.role
+            }));
+          }
+        }
+      };
+    } catch {
+      // BroadcastChannel unavailable
+    }
+
+    return () => {
+      authSubscription?.unsubscribe();
+      if (profileChannel) supabase.removeChannel(profileChannel);
+      if (bc) bc.close();
+    };
   }, []);
 
   const signInWithGoogle = async () => {

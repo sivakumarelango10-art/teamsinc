@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Play, Pause, Mic, CheckCheck, Clock3, AlertCircle } from 'lucide-react';
+import { Play, Pause, Mic, AlertCircle } from 'lucide-react';
+import WhatsAppCheck from './WhatsAppCheck';
 
 // Generates stable pseudo-random waveform bar heights for a given string/url
 const generateWaveformHeights = (seedStr, barCount = 26) => {
@@ -245,11 +246,7 @@ const VoiceNotePlayerComponent = ({
             <div className="flex items-center gap-1 select-none">
               <span>{timestamp}</span>
               {isSelf && (
-                isOptimistic ? (
-                  <Clock3 className="w-2.5 h-2.5 text-neutral-500 animate-pulse" />
-                ) : (
-                  <CheckCheck className="w-3 h-3 text-emerald-400" />
-                )
+                <WhatsAppCheck isOptimistic={isOptimistic} status="read" />
               )}
             </div>
           </div>

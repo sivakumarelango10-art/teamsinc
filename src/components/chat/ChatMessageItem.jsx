@@ -3,14 +3,13 @@ import {
   Trash2,
   Download,
   FileText,
-  Clock3,
-  CheckCheck,
   Shield,
   ShieldAlert,
   Award
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import VoiceNotePlayer from './VoiceNotePlayer';
+import WhatsAppCheck from './WhatsAppCheck';
 
 const formatMessageTime = (isoString) => {
   if (!isoString) return '';
@@ -284,11 +283,7 @@ const ChatMessageItemComponent = ({
               <span className="inline-flex items-center gap-1 ml-2 float-right mt-0.5 text-[10px] text-neutral-400 select-none">
                 <span>{formatMessageTime(msg.created_at)}</span>
                 {isSelf && (
-                  msg.isOptimistic ? (
-                    <Clock3 className="w-2.5 h-2.5 text-neutral-500 animate-pulse" title="Sending..." />
-                  ) : (
-                    <CheckCheck className="w-3 h-3 text-emerald-400" title="Delivered" />
-                  )
+                  <WhatsAppCheck isOptimistic={msg.isOptimistic} status="read" />
                 )}
               </span>
             </div>
@@ -296,11 +291,7 @@ const ChatMessageItemComponent = ({
             <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px] text-neutral-400 select-none">
               <span>{formatMessageTime(msg.created_at)}</span>
               {isSelf && (
-                msg.isOptimistic ? (
-                  <Clock3 className="w-2.5 h-2.5 text-neutral-500 animate-pulse" />
-                ) : (
-                  <CheckCheck className="w-3 h-3 text-emerald-400" />
-                )
+                <WhatsAppCheck isOptimistic={msg.isOptimistic} status="read" />
               )}
             </div>
           )}

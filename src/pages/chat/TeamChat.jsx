@@ -58,9 +58,10 @@ export const TeamChat = ({
   const defaultChannel = profile?.role === 'FOUNDING_ADVISOR' ? 'leadership' : (initialChannel || 'general');
   const [activeChannel, setActiveChannel] = useState(defaultChannel);
 
-  // Chat sidebar collapse/hide state
+  // Chat sidebar collapse/hide state & Mobile animated state
   const [isChatListOpen, setIsChatListOpen] = useState(true);
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(true);
+  const [isMobileClosing, setIsMobileClosing] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
 
   const [messages, setMessages] = useState([]);
@@ -80,10 +81,11 @@ export const TeamChat = ({
   const lastTypingBroadcastRef = useRef(0);
   const realtimeChannelRef = useRef(null);
 
-  // Pagination State
+  // Pagination & Smart Scroll State
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const processedMsgIdsRef = useRef(new Set());
+  const newlyArrivedIdsRef = useRef(new Set());
 
   // Voice recording state
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -94,6 +96,7 @@ export const TeamChat = ({
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
 
+  const scrollContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -115,14 +118,24 @@ export const TeamChat = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const scrollToBottom = (smooth = true) => {
-    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+  // Smart Scroll detection: Only auto-scroll if already near bottom or user forced
+  const isNearBottom = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+  };
+
+  const scrollToBottom = (smooth = true, force = false) => {
+    if (force || isNearBottom()) {
+      messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    }
   };
 
   const loadMessages = async (targetChannel = activeChannel) => {
     try {
       setLoading(true);
       processedMsgIdsRef.current.clear();
+      newlyArrivedIdsRef.current.clear();
       const list = await chatApi.getMessages(50, null, targetChannel);
       list.forEach(m => processedMsgIdsRef.current.add(m.id));
       setMessages(list);
@@ -249,8 +262,16 @@ export const TeamChat = ({
     acceptCall(call || ongoingCall);
   };
 
+  // Mobile Back button smooth close handler
+  const handleMobileBack = () => {
+    setIsMobileClosing(true);
+    setTimeout(() => {
+      setIsMobileChatOpen(false);
+      setIsMobileClosing(false);
+    }, 200);
+  };
+
   useEffect(() => {
-    // Tell SW that the chat page is active
     notificationService.setForegroundState(true);
 
     const handleVisibilityChange = () => {
@@ -260,7 +281,7 @@ export const TeamChat = ({
 
     loadMessages(activeChannel);
 
-    // Supabase Realtime subscription for incoming messages, deletions, and typing
+    // Supabase Realtime subscription
     let rtChannel = null;
     if (supabase) {
       rtChannel = supabase
@@ -274,6 +295,7 @@ export const TeamChat = ({
               if ((newMsg.channel || 'general') !== activeChannel) return;
               if (processedMsgIdsRef.current.has(newMsg.id)) return;
               processedMsgIdsRef.current.add(newMsg.id);
+              newlyArrivedIdsRef.current.add(newMsg.id);
 
               setMessages(prev => {
                 const optIndex = prev.findIndex(m => m.isOptimistic && m.sender_id === newMsg.sender_id && m.content === newMsg.content);
@@ -284,7 +306,7 @@ export const TeamChat = ({
                 }
                 return [...prev, newMsg];
               });
-              setTimeout(() => scrollToBottom(true), 50);
+              setTimeout(() => scrollToBottom(true, false), 40);
 
               const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
               if (newMsg.sender_email && myEmail && newMsg.sender_email.toLowerCase() !== myEmail) {
@@ -329,12 +351,13 @@ export const TeamChat = ({
           if ((msg.channel || 'general') !== activeChannel) return;
           if (processedMsgIdsRef.current.has(msg.id)) return;
           processedMsgIdsRef.current.add(msg.id);
+          newlyArrivedIdsRef.current.add(msg.id);
 
           setMessages(prev => {
             if (prev.some(m => m.id === msg.id)) return prev;
             return [...prev, msg];
           });
-          setTimeout(() => scrollToBottom(true), 50);
+          setTimeout(() => scrollToBottom(true, false), 40);
         } else if (event.data?.type === 'DELETE_MESSAGE' && event.data.id) {
           processedMsgIdsRef.current.delete(event.data.id);
           setMessages(prev => prev.filter(m => m.id !== event.data.id));
@@ -361,7 +384,7 @@ export const TeamChat = ({
 
   useEffect(() => {
     if (!loading) {
-      scrollToBottom(false);
+      scrollToBottom(false, true);
     }
   }, [loading, activeChannel]);
 
@@ -461,8 +484,9 @@ export const TeamChat = ({
       isOptimistic: true
     };
 
+    newlyArrivedIdsRef.current.add(optId);
     setMessages(prev => [...prev, optimisticMsg]);
-    setTimeout(() => scrollToBottom(true), 20);
+    setTimeout(() => scrollToBottom(true, true), 20);
 
     setSending(true);
 
@@ -482,6 +506,7 @@ export const TeamChat = ({
         channel: activeChannel
       });
 
+      newlyArrivedIdsRef.current.add(newMsg.id);
       setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
       processedMsgIdsRef.current.add(newMsg.id);
 
@@ -496,7 +521,7 @@ export const TeamChat = ({
       setMessages(prev => prev.filter(m => m.id !== optId));
     } finally {
       setSending(false);
-      setTimeout(() => scrollToBottom(true), 50);
+      setTimeout(() => scrollToBottom(true, false), 40);
     }
   };
 
@@ -527,8 +552,9 @@ export const TeamChat = ({
       isOptimistic: true
     };
 
+    newlyArrivedIdsRef.current.add(optId);
     setMessages(prev => [...prev, optimisticMsg]);
-    setTimeout(() => scrollToBottom(true), 20);
+    setTimeout(() => scrollToBottom(true, true), 20);
 
     try {
       const audioFile = new File([audioBlob], `voice_note_${Date.now()}.webm`, { type: 'audio/webm' });
@@ -544,6 +570,7 @@ export const TeamChat = ({
         channel: activeChannel
       });
 
+      newlyArrivedIdsRef.current.add(newMsg.id);
       setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
       processedMsgIdsRef.current.add(newMsg.id);
 
@@ -601,7 +628,7 @@ export const TeamChat = ({
     : `Company HQ • All Members • ${onlineCount} online`;
 
   return (
-    <div className="h-[calc(100vh-6.5rem)] flex bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
+    <div className="h-[calc(100vh-6.5rem)] flex bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative transition-all duration-300">
       {/* Hidden File Inputs */}
       <input
         ref={fileInputRef}
@@ -745,9 +772,9 @@ export const TeamChat = ({
           RIGHT PANE: WhatsApp Conversation View
           ───────────────────────────────────────────────────────────────────────── */}
       <div
-        className={`flex-1 flex flex-col min-w-0 bg-neutral-950 transition-all duration-300 ease-out ${
+        className={`flex-1 flex flex-col min-w-0 bg-neutral-950 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           !isMobileChatOpen ? 'hidden md:flex' : 'flex'
-        }`}
+        } ${isMobileClosing ? 'animate-mobile-chat-exit' : 'animate-mobile-chat-enter md:animate-none'}`}
       >
         {/* 1. WhatsApp Group Header */}
         <div className="px-4 md:px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
@@ -769,7 +796,7 @@ export const TeamChat = ({
             {isLeadership && isChatListOpen && (
               <button
                 type="button"
-                onClick={() => setIsMobileChatOpen(false)}
+                onClick={handleMobileBack}
                 className="md:hidden p-1.5 -ml-1 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 transition cursor-pointer"
                 title="Back to all chats"
               >
@@ -779,7 +806,7 @@ export const TeamChat = ({
 
             {/* Avatar Icon */}
             <div className="relative shrink-0">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md overflow-hidden ${
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md overflow-hidden transition-colors duration-200 ${
                 isLeadershipActive
                   ? 'bg-amber-950/80 border border-amber-800 text-amber-300'
                   : 'bg-emerald-950/80 border border-emerald-800 text-emerald-300'
@@ -799,12 +826,12 @@ export const TeamChat = ({
                   {currentChatTitle}
                 </h2>
                 {isLeadershipActive ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 border border-amber-800 text-amber-200 flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 border border-amber-800 text-amber-200 flex items-center gap-1 animate-fadeIn">
                     <Shield className="w-2.5 h-2.5 text-amber-400" />
                     #leadership
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300 animate-fadeIn">
                     #general
                   </span>
                 )}
@@ -850,7 +877,7 @@ export const TeamChat = ({
 
         {/* 2. Active Call Banner */}
         {ongoingCall && !activeCallSession && ongoingCall.id !== dismissedCallId && (
-          <div className="p-3 bg-neutral-900/90 border-b border-neutral-800 shrink-0">
+          <div className="p-3 bg-neutral-900/90 border-b border-neutral-800 shrink-0 animate-fadeIn">
             <ActiveCallBanner
               call={ongoingCall}
               onJoin={handleJoinCall}
@@ -860,7 +887,10 @@ export const TeamChat = ({
         )}
 
         {/* 3. WhatsApp Message History Canvas */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 relative bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 relative bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]"
+        >
           {/* Infinite Scroll "Load Older Messages" Button */}
           {hasMoreOlder && (
             <div className="flex justify-center pb-2">
@@ -890,7 +920,7 @@ export const TeamChat = ({
               <LoadingSpinner text="Loading messages..." />
             </div>
           ) : messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 animate-fadeIn">
               <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-500 shadow-inner">
                 {isLeadershipActive ? <Shield className="w-7 h-7 text-amber-400/80" /> : <MessageSquare className="w-7 h-7 text-emerald-400/80" />}
               </div>
@@ -910,6 +940,7 @@ export const TeamChat = ({
               );
               const isOnline = isUserOnline(msg.sender_email);
               const canDelete = isFounder || isSelf;
+              const isNew = newlyArrivedIdsRef.current.has(msg.id) || Boolean(msg.isOptimistic);
 
               return (
                 <ChatMessageItem
@@ -919,6 +950,7 @@ export const TeamChat = ({
                   isOnline={isOnline}
                   canDelete={canDelete}
                   onDelete={handleDeleteMessage}
+                  isNew={isNew}
                 />
               );
             })
@@ -928,7 +960,7 @@ export const TeamChat = ({
 
         {/* Attachment Upload Progress/Preview */}
         {attachmentPreview && (
-          <div className="px-4 py-2 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between shrink-0">
+          <div className="px-4 py-2 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between shrink-0 animate-fadeIn">
             <div className="flex items-center gap-3 overflow-hidden">
               {attachmentPreview.type === 'image' && attachmentPreview.url && (
                 <img
@@ -960,7 +992,7 @@ export const TeamChat = ({
             <button
               type="button"
               onClick={removeAttachment}
-              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition cursor-pointer"
+              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition cursor-pointer"
               title="Remove attachment"
             >
               <X className="w-4 h-4" />
@@ -970,7 +1002,7 @@ export const TeamChat = ({
 
         {/* Quick Emoji Picker Drawer */}
         {isEmojiPickerOpen && (
-          <div ref={emojiPickerRef} className="p-3 bg-black border-t border-neutral-800 flex items-center gap-2 overflow-x-auto shrink-0 shadow-inner">
+          <div ref={emojiPickerRef} className="p-3 bg-black border-t border-neutral-800 flex items-center gap-2 overflow-x-auto shrink-0 shadow-inner animate-dropdown">
             <span className="text-[11px] text-neutral-400 mr-1 font-semibold">Emojis:</span>
             {QUICK_EMOJIS.map((emoji) => (
               <button
@@ -988,7 +1020,7 @@ export const TeamChat = ({
         {/* WhatsApp-Style Input Bar */}
         <div className="p-3 sm:p-4 bg-black border-t border-neutral-800 shrink-0 relative">
           {error && (
-            <div className="mb-2 text-xs text-red-400 px-3 flex items-center justify-between">
+            <div className="mb-2 text-xs text-red-400 px-3 flex items-center justify-between animate-fadeIn">
               <span>{error}</span>
               <button onClick={() => setError('')} className="underline cursor-pointer">
                 Dismiss
@@ -998,7 +1030,7 @@ export const TeamChat = ({
 
           {/* Attachment Floating Menu */}
           {isAttachMenuOpen && (
-            <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-52 text-xs text-neutral-200">
+            <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-52 text-xs text-neutral-200 animate-dropdown">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -1077,7 +1109,7 @@ export const TeamChat = ({
                   className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-full transition cursor-pointer shrink-0"
                   title="Attach documents or photos"
                 >
-                  <Plus className={`w-5 h-5 transition-transform ${isAttachMenuOpen ? 'rotate-45 text-white' : ''}`} />
+                  <Plus className={`w-5 h-5 transition-transform duration-200 ${isAttachMenuOpen ? 'rotate-45 text-white' : ''}`} />
                 </button>
 
                 {/* 2. Emoji Button */}
@@ -1111,7 +1143,7 @@ export const TeamChat = ({
                 <button
                   type="submit"
                   disabled={sending}
-                  className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition flex items-center justify-center shadow-lg cursor-pointer shrink-0"
+                  className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition-all duration-150 active:scale-95 flex items-center justify-center shadow-lg cursor-pointer shrink-0"
                   title="Send message"
                 >
                   <Send className="w-5 h-5" />
@@ -1124,7 +1156,7 @@ export const TeamChat = ({
                     setIsEmojiPickerOpen(false);
                     setIsRecordingVoice(true);
                   }}
-                  className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-emerald-500/60 hover:text-emerald-400 text-neutral-300 transition-all flex items-center justify-center cursor-pointer shrink-0 group shadow-md"
+                  className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-emerald-500/60 hover:text-emerald-400 text-neutral-300 transition-all duration-150 active:scale-95 flex items-center justify-center cursor-pointer shrink-0 group shadow-md"
                   title="Record voice message"
                 >
                   <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />

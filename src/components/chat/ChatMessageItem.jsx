@@ -60,10 +60,11 @@ const ChatMessageItemComponent = ({
   isSelf,
   isOnline,
   canDelete,
-  onDelete
+  onDelete,
+  isNew = false
 }) => {
   return (
-    <div className={`flex gap-2.5 group ${isSelf ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-2.5 group ${isSelf ? 'justify-end' : 'justify-start'} ${isNew ? 'animate-msg-enter' : ''}`}>
       {/* Avatar for incoming messages */}
       {!isSelf && (
         <div className="relative shrink-0 self-end mb-1">

@@ -347,3 +347,45 @@ CREATE POLICY "Founder or author can delete messages"
         public.is_founder() OR
         sender_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     );
+
+-- -----------------------------------------------------------------------------
+-- 7. GROUP CALL SESSIONS & CALL HISTORY
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.call_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id TEXT NOT NULL DEFAULT 'general',
+    room_title TEXT NOT NULL DEFAULT 'TeamSync HQ General Call',
+    call_type TEXT NOT NULL DEFAULT 'video',
+    caller_name TEXT NOT NULL,
+    caller_email TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ,
+    duration_seconds INTEGER DEFAULT 0,
+    participants JSONB DEFAULT '[]'::jsonb,
+    status TEXT NOT NULL DEFAULT 'ended',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_call_history_room_id ON public.call_history(room_id);
+CREATE INDEX IF NOT EXISTS idx_call_history_created_at ON public.call_history(created_at DESC);
+
+ALTER TABLE public.call_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone authenticated can view call_history" ON public.call_history;
+CREATE POLICY "Anyone authenticated can view call_history"
+    ON public.call_history FOR SELECT
+    TO authenticated
+    USING (true);
+
+DROP POLICY IF EXISTS "Anyone authenticated can insert call_history" ON public.call_history;
+CREATE POLICY "Anyone authenticated can insert call_history"
+    ON public.call_history FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anyone authenticated can update call_history" ON public.call_history;
+CREATE POLICY "Anyone authenticated can update call_history"
+    ON public.call_history FOR UPDATE
+    TO authenticated
+    USING (true);
+

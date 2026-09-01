@@ -137,6 +137,33 @@ export const TaskDetailsModal = ({ task, isOpen, onClose }) => {
               </div>
             </div>
           </div>
+
+          {/* Cloudflare R2 Task Attachments */}
+          {task.attachments && task.attachments.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <div className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
+                Task Attachments ({task.attachments.length})
+              </div>
+              <div className="space-y-1.5">
+                {task.attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-white shrink-0">
+                        📄
+                      </div>
+                      <span className="font-semibold text-white truncate max-w-[200px]">{att.file_name}</span>
+                    </div>
+                    <span className="text-[10px] text-neutral-400">
+                      {Math.round((att.file_size || 0) / 1024)} KB
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

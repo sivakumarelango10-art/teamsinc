@@ -97,7 +97,7 @@ const ChatMessageItemComponent = ({
 
           {canDelete && (
             <button
-              onClick={() => onDelete(msg.id)}
+              onClick={() => onDelete(msg.id, msg.storage_key, msg.channel)}
               className="opacity-0 group-hover:opacity-100 p-1 text-neutral-500 hover:text-red-400 transition cursor-pointer"
               title="Delete message"
             >
@@ -130,6 +130,33 @@ const ChatMessageItemComponent = ({
                     <Download className="w-3 h-3" />
                     Save
                   </a>
+                </div>
+              </div>
+            ) : msg.file_type === 'video' || /\.(mp4|webm|mov|avi|mkv)$/i.test(msg.file_name || '') ? (
+              /* Cloudflare R2 Video Player */
+              <div className="rounded-xl overflow-hidden border border-neutral-800 bg-black/80 max-w-md">
+                <video
+                  src={msg.file_url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="max-h-72 w-full object-contain bg-black"
+                />
+                <div className="p-2 bg-neutral-950 flex items-center justify-between text-[11px] text-neutral-400">
+                  <span className="truncate max-w-[200px]">{msg.file_name || 'Video'}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-neutral-500">{formatFileSize(msg.file_size)}</span>
+                    <a
+                      href={msg.file_url}
+                      download={msg.file_name || 'video.mp4'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-white hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <Download className="w-3 h-3" />
+                      Save
+                    </a>
+                  </div>
                 </div>
               </div>
             ) : msg.file_type === 'audio' || /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(msg.file_name || '') ? (

@@ -1,5 +1,6 @@
 import { supabase, isDemoMode } from './supabase';
 import { getStored, setStored, STORAGE_KEYS, INITIAL_TASKS, INITIAL_PROFILES, INITIAL_DEPARTMENTS } from './mockData';
+import { r2StorageService } from '../utils/r2StorageService';
 
 export const tasksApi = {
   async getTasks(filter = {}) {
@@ -10,7 +11,8 @@ export const tasksApi = {
           *,
           assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role),
           creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role),
-          department:departments(id, name)
+          department:departments(id, name),
+          attachments:task_attachments(id, storage_key, file_name, file_size, mime_type, attachment_type, created_at)
         `)
         .order('created_at', { ascending: false });
 
@@ -93,7 +95,8 @@ export const tasksApi = {
           *,
           assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role),
           creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role),
-          department:departments(id, name)
+          department:departments(id, name),
+          attachments:task_attachments(id, storage_key, file_name, file_size, mime_type, attachment_type, created_at)
         `)
         .eq('id', id)
         .single();
@@ -230,5 +233,36 @@ export const tasksApi = {
     const filtered = tasks.filter(t => t.id !== id);
     setStored(STORAGE_KEYS.TASKS, filtered);
     return true;
+  },
+
+  async addTaskAttachment(taskId, file, uploaderId = null) {
+    if (!file || !taskId) return null;
+
+    const uploadRes = await r2StorageService.uploadFile({
+      file,
+      destination: 'task',
+      taskId
+    });
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('task_attachments')
+        .insert([{
+          task_id: taskId,
+          uploaded_by: uploaderId,
+          storage_key: uploadRes.storageKey,
+          file_name: uploadRes.fileName,
+          file_size: uploadRes.fileSize,
+          mime_type: uploadRes.mimeType,
+          attachment_type: uploadRes.fileType
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { ...data, fileUrl: uploadRes.fileUrl };
+    }
+
+    return uploadRes;
   }
 };

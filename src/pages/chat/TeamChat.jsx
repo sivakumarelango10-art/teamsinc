@@ -39,6 +39,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { validateFileForUpload, formatBytes } from '../../config/r2Config';
 
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '🚀', '❤️', '✅', '👏', '💯', '🎯', '💡', '✨', '🙌'];
 
@@ -79,6 +80,7 @@ export const TeamChat = ({
   // Attachment state
   const [selectedFile, setSelectedFile] = useState(null);
   const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
 
@@ -86,6 +88,7 @@ export const TeamChat = ({
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  const videoInputRef = useRef(null);
   const attachMenuRef = useRef(null);
   const emojiPickerRef = useRef(null);
 
@@ -352,15 +355,23 @@ export const TeamChat = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      setError('File is larger than 15MB limit.');
+    // Validate using central R2 configuration
+    const validation = validateFileForUpload(file);
+    if (!validation.valid) {
+      setError(validation.error);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      if (videoInputRef.current) videoInputRef.current.value = '';
       return;
     }
 
     setSelectedFile(file);
     setIsAttachMenuOpen(false);
+    setError('');
 
-    if (file.type.startsWith('image/')) {
+    const category = validation.category;
+
+    if (category === 'image') {
       const reader = new FileReader();
       reader.onload = () => {
         setAttachmentPreview({
@@ -371,12 +382,19 @@ export const TeamChat = ({
         });
       };
       reader.readAsDataURL(file);
+    } else if (category === 'video') {
+      setAttachmentPreview({
+        url: URL.createObjectURL(file),
+        name: file.name,
+        size: file.size,
+        type: 'video'
+      });
     } else {
       setAttachmentPreview({
         url: null,
         name: file.name,
         size: file.size,
-        type: 'document'
+        type: category
       });
     }
 
@@ -386,8 +404,10 @@ export const TeamChat = ({
   const removeAttachment = () => {
     setSelectedFile(null);
     setAttachmentPreview(null);
+    setUploadProgress(0);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (imageInputRef.current) imageInputRef.current.value = '';
+    if (videoInputRef.current) videoInputRef.current.value = '';
   };
 
   // Instant Optimistic Message Delivery (<0.1ms client-side perceived latency)
@@ -437,7 +457,10 @@ export const TeamChat = ({
     try {
       let attachmentData = null;
       if (fileToSend) {
-        attachmentData = await chatApi.uploadAttachment(fileToSend);
+        attachmentData = await chatApi.uploadAttachment(fileToSend, {
+          channel,
+          onProgress: (pct) => setUploadProgress(pct)
+        });
       }
 
       const newMsg = await chatApi.sendMessage({
@@ -537,9 +560,9 @@ export const TeamChat = ({
     }
   };
 
-  const handleDeleteMessage = async (msgId) => {
+  const handleDeleteMessage = async (msgId, storageKey = null, msgChannel = 'general') => {
     try {
-      await chatApi.deleteMessage(msgId);
+      await chatApi.deleteMessage(msgId, storageKey, msgChannel || channel);
       setMessages(prev => prev.filter(m => m.id !== msgId));
       try {
         const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
@@ -606,21 +629,28 @@ export const TeamChat = ({
 
   return (
     <div className="h-[calc(100vh-6.5rem)] flex flex-col bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
-      {/* Hidden File Inputs */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={(e) => handleFileSelect(e, 'document')}
-        className="hidden"
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
-      />
-      <input
-        type="file"
-        ref={imageInputRef}
-        onChange={(e) => handleFileSelect(e, 'image')}
-        className="hidden"
-        accept="image/*"
-      />
+        {/* Hidden Inputs for Cloudflare R2 Uploads */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.zip"
+          onChange={(e) => handleFileSelect(e, 'document')}
+          className="hidden"
+        />
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          onChange={(e) => handleFileSelect(e, 'image')}
+          className="hidden"
+        />
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/mp4,video/webm,video/quicktime"
+          onChange={(e) => handleFileSelect(e, 'video')}
+          className="hidden"
+        />
 
       {/* 1. Optimized WhatsApp Group Header */}
       <div className="px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
@@ -877,7 +907,7 @@ export const TeamChat = ({
 
         {/* Attachment Floating Menu */}
         {isAttachMenuOpen && (
-          <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-48 text-xs text-neutral-200">
+          <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-52 text-xs text-neutral-200">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -888,7 +918,7 @@ export const TeamChat = ({
               </div>
               <div>
                 <span className="font-bold text-white block">Document</span>
-                <span className="text-[10px] text-neutral-400 block">PDF, DOCX, XLSX, TXT</span>
+                <span className="text-[10px] text-neutral-400 block">PDF, DOCX, XLSX, TXT (25MB)</span>
               </div>
             </button>
 
@@ -902,7 +932,21 @@ export const TeamChat = ({
               </div>
               <div>
                 <span className="font-bold text-white block">Photos & Media</span>
-                <span className="text-[10px] text-neutral-400 block">PNG, JPG, WebP</span>
+                <span className="text-[10px] text-neutral-400 block">PNG, JPG, WebP (10MB)</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                <Video className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <span className="font-bold text-white block">Video File</span>
+                <span className="text-[10px] text-neutral-400 block">MP4, WebM, MOV (250MB)</span>
               </div>
             </button>
           </div>

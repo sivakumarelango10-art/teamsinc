@@ -28,12 +28,16 @@ export const ParticipantTile = ({
   isPinned = false
 }) => {
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
     }
-  }, [stream]);
+    if (audioRef.current && stream && !isLocal) {
+      audioRef.current.srcObject = stream;
+    }
+  }, [stream, isLocal, isVideoOff]);
 
   const filterStyle = isLocal && activeFilter ? (FILTER_STYLES[activeFilter] || '') : '';
 
@@ -65,6 +69,16 @@ export const ParticipantTile = ({
           : 'border-neutral-800/80 hover:border-neutral-700'
       } ${isPinned ? 'ring-2 ring-amber-400' : ''}`}
     >
+      {/* Permanent Audio Element for Remote Peers (Guarantees voice never drops when camera is off) */}
+      {!isLocal && stream && (
+        <audio
+          ref={audioRef}
+          autoPlay
+          playsInline
+          className="hidden"
+        />
+      )}
+
       {/* Background Effect wrapper */}
       <div className={`w-full h-full flex items-center justify-center ${
         isLocal && backgroundEffect === 'blur' ? 'backdrop-blur-md bg-neutral-900/40' : ''
@@ -75,7 +89,7 @@ export const ParticipantTile = ({
             ref={videoRef}
             autoPlay
             playsInline
-            muted={isLocal} // Always mute local playback to prevent audio feedback loop
+            muted={true} // Audio is handled cleanly by audioRef for remote, or muted for local
             style={{ filter: filterStyle }}
             className={`w-full h-full object-cover ${
               isLocal && !isScreenSharing ? 'scale-x-[-1]' : ''

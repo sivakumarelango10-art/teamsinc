@@ -38,6 +38,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
   const isVideoOffRef = useRef(isAudioOnlyInitial);
   const isScreenSharingRef = useRef(false);
   const animFrameRef = useRef(null);
+  const iceCandidatesQueueRef = useRef({}); // { [peerId]: RTCIceCandidate[] }
 
   isAudioMutedRef.current = isAudioMuted;
   isVideoOffRef.current = isVideoOff;
@@ -162,6 +163,17 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
+        // Drain any buffered ICE candidates for this peer
+        const queuedOffer = iceCandidatesQueueRef.current[senderId] || [];
+        for (const cand of queuedOffer) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          } catch (e) {
+            console.warn('Drain ICE error:', e);
+          }
+        }
+        iceCandidatesQueueRef.current[senderId] = [];
+
         // Update peer media state from offer metadata
         if (data.mediaState) {
           setPeers(prev => ({
@@ -192,6 +204,17 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         const pc = peerConnectionsRef.current[senderId];
         if (pc && pc.signalingState !== 'stable') {
           await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+
+          // Drain buffered candidates
+          const queuedAnswer = iceCandidatesQueueRef.current[senderId] || [];
+          for (const cand of queuedAnswer) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (e) {
+              console.warn('Drain ICE error on answer:', e);
+            }
+          }
+          iceCandidatesQueueRef.current[senderId] = [];
         }
         if (data.mediaState) {
           setPeers(prev => ({
@@ -206,10 +229,18 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       } else if (type === 'ICE_CANDIDATE') {
         const pc = peerConnectionsRef.current[senderId];
         if (pc && data.candidate) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-          } catch (e) {
-            console.warn('Error adding ICE candidate:', e);
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            } catch (e) {
+              console.warn('Error adding ICE candidate:', e);
+            }
+          } else {
+            // Buffer candidate until remote description is set
+            if (!iceCandidatesQueueRef.current[senderId]) {
+              iceCandidatesQueueRef.current[senderId] = [];
+            }
+            iceCandidatesQueueRef.current[senderId].push(data.candidate);
           }
         }
 

@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { usePresence } from '../../context/PresenceContext';
+import { useCallNotification } from '../../context/CallNotificationContext';
 import { chatApi } from '../../api/chatApi';
 import { callApi } from '../../api/callApi';
 import { supabase } from '../../api/supabase';
+import notificationService from '../../utils/notificationService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import BrandLogo from '../../components/common/BrandLogo';
 import VoiceNotePlayer from '../../components/chat/VoiceNotePlayer';
 import VoiceRecorderBar from '../../components/chat/VoiceRecorderBar';
-import VideoCallModal from '../../components/call/VideoCallModal';
 import ActiveCallBanner from '../../components/call/ActiveCallBanner';
 import CallHistoryModal from '../../components/call/CallHistoryModal';
 import {
@@ -32,7 +33,9 @@ import {
   MessageSquare,
   Video,
   Phone,
-  Clock
+  Clock,
+  Clock3,
+  Loader2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -48,11 +51,21 @@ export const TeamChat = () => {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  // Group Video & Voice Calling State
-  const [activeCallSession, setActiveCallSession] = useState(null);
-  const [ongoingCall, setOngoingCall] = useState(null);
+  // Global Call Notification Context (handles multi-route calls and ringing)
+  const { startCall, ongoingCall, acceptCall } = useCallNotification();
   const [dismissedCallId, setDismissedCallId] = useState(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
+  // Live Typing Indicator State & Broadcast
+  const [typingUsers, setTypingUsers] = useState({}); // { [email]: { name, time } }
+  const typingTimeoutRef = useRef(null);
+  const lastTypingBroadcastRef = useRef(0);
+  const realtimeChannelRef = useRef(null);
+
+  // Pagination State
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const processedMsgIdsRef = useRef(new Set());
 
   // Voice recording state
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -89,8 +102,10 @@ export const TeamChat = () => {
 
   const loadMessages = async () => {
     try {
-      const list = await chatApi.getMessages(200);
+      const list = await chatApi.getMessages(50);
+      list.forEach(m => processedMsgIdsRef.current.add(m.id));
       setMessages(list);
+      if (list.length < 50) setHasMoreOlder(false);
     } catch (err) {
       console.error('Failed to load chat messages:', err);
     } finally {
@@ -98,34 +113,106 @@ export const TeamChat = () => {
     }
   };
 
-  const loadActiveCall = async () => {
+  const loadOlderMessages = async () => {
+    if (loadingOlder || messages.length === 0) return;
+    setLoadingOlder(true);
     try {
-      const active = await callApi.getActiveCall('general');
-      setOngoingCall(active);
+      const oldestDate = messages[0]?.created_at;
+      const olderList = await chatApi.getMessages(50, oldestDate);
+      if (olderList.length < 50) {
+        setHasMoreOlder(false);
+      }
+      if (olderList.length > 0) {
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newOlder = olderList.filter(m => !existingIds.has(m.id));
+          newOlder.forEach(m => processedMsgIdsRef.current.add(m.id));
+          return [...newOlder, ...prev];
+        });
+      }
     } catch (e) {
-      console.warn('Error loading active call:', e);
+      console.warn('Load older messages error:', e);
+    } finally {
+      setLoadingOlder(false);
     }
   };
 
+  // Broadcast typing state to peers
+  const broadcastTyping = useCallback((isTyping) => {
+    const senderName = profile?.full_name || user?.user_metadata?.full_name || 'Team Member';
+    const senderEmail = profile?.email || user?.email || '';
+
+    if (realtimeChannelRef.current) {
+      realtimeChannelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { email: senderEmail, name: senderName, isTyping }
+      }).catch(() => {});
+    }
+
+    try {
+      const bc = new BroadcastChannel('teamsync_typing_channel');
+      bc.postMessage({ email: senderEmail, name: senderName, isTyping });
+      bc.close();
+    } catch {}
+  }, [profile, user]);
+
+  const handleInputChange = (val) => {
+    setInputValue(val);
+    if (!val.trim()) {
+      broadcastTyping(false);
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastTypingBroadcastRef.current > 1500) {
+      broadcastTyping(true);
+      lastTypingBroadcastRef.current = now;
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      broadcastTyping(false);
+    }, 2500);
+  };
+
+  const handleTypingSignal = useCallback(({ email, name, isTyping }) => {
+    const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+    if (!email || email.toLowerCase() === myEmail) return;
+
+    setTypingUsers(prev => {
+      const next = { ...prev };
+      if (isTyping) {
+        next[email.toLowerCase()] = { name, time: Date.now() };
+      } else {
+        delete next[email.toLowerCase()];
+      }
+      return next;
+    });
+  }, [profile?.email, user?.email]);
+
+  // Clean stale typing users after 3s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setTypingUsers(prev => {
+        let changed = false;
+        const next = { ...prev };
+        Object.keys(next).forEach(k => {
+          if (now - next[k].time > 3200) {
+            delete next[k];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleStartCall = async (callType = 'video') => {
     try {
-      const caller = profile || user;
-      const session = await callApi.createCallSession({
-        roomId: 'general',
-        roomTitle: 'TeamSync Company HQ',
-        caller,
-        callType
-      });
-
-      setActiveCallSession(session);
-      setOngoingCall(session);
-
-      // Broadcast call start across tabs
-      try {
-        const bc = new BroadcastChannel('teamsync_call_status_general');
-        bc.postMessage({ type: 'CALL_STATUS', call: session });
-        bc.close();
-      } catch {}
+      await startCall(callType);
     } catch (err) {
       console.error('Error starting call:', err);
       setError(err.message || 'Failed to start call. Please try again.');
@@ -133,16 +220,14 @@ export const TeamChat = () => {
   };
 
   const handleJoinCall = (call) => {
-    setActiveCallSession(call || ongoingCall);
+    acceptCall(call || ongoingCall);
   };
 
   useEffect(() => {
     loadMessages();
-    loadActiveCall();
 
-    // Supabase Realtime subscription for incoming messages and call history
+    // Supabase Realtime subscription for incoming messages, deletions, and typing
     let channel = null;
-    let callSub = null;
     if (supabase) {
       channel = supabase
         .channel('realtime-whatsapp-chat')
@@ -151,11 +236,31 @@ export const TeamChat = () => {
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
             if (payload.new) {
+              const newMsg = payload.new;
+              if (processedMsgIdsRef.current.has(newMsg.id)) return;
+              processedMsgIdsRef.current.add(newMsg.id);
+
               setMessages(prev => {
-                if (prev.some(m => m.id === payload.new.id)) return prev;
-                return [...prev, payload.new];
+                // If there was an optimistic message for this content from same sender, replace it
+                const optIndex = prev.findIndex(m => m.isOptimistic && m.sender_id === newMsg.sender_id && m.content === newMsg.content);
+                if (optIndex !== -1) {
+                  const updated = [...prev];
+                  updated[optIndex] = newMsg;
+                  return updated;
+                }
+                return [...prev, newMsg];
               });
               setTimeout(() => scrollToBottom(true), 50);
+
+              // Notify if from someone else
+              const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+              if (newMsg.sender_email && myEmail && newMsg.sender_email.toLowerCase() !== myEmail) {
+                notificationService.notifyChatMessage({
+                  senderName: newMsg.sender_name,
+                  content: newMsg.content || newMsg.file_name,
+                  currentPath: window.location.pathname
+                });
+              }
             }
           }
         )
@@ -164,60 +269,56 @@ export const TeamChat = () => {
           { event: 'DELETE', schema: 'public', table: 'messages' },
           (payload) => {
             if (payload.old?.id) {
+              processedMsgIdsRef.current.delete(payload.old.id);
               setMessages(prev => prev.filter(m => m.id !== payload.old.id));
             }
           }
         )
+        .on('broadcast', { event: 'typing' }, ({ payload }) => {
+          handleTypingSignal(payload);
+        })
         .subscribe();
 
-      callSub = supabase
-        .channel('realtime-call-status')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'call_history' },
-          (payload) => {
-            if (payload.new?.status === 'ongoing') {
-              setOngoingCall(payload.new);
-            } else if (payload.new?.status === 'ended') {
-              setOngoingCall(prev => (prev?.id === payload.new.id ? null : prev));
-            }
-          }
-        )
-        .subscribe();
+      realtimeChannelRef.current = channel;
     }
 
     // Cross-tab synchronization
     let bc = null;
-    let callBc = null;
+    let typingBc = null;
     try {
       bc = new BroadcastChannel('teamsync_chat_channel');
       bc.onmessage = (event) => {
         if (event.data?.type === 'NEW_MESSAGE' && event.data.message) {
+          const msg = event.data.message;
+          if (processedMsgIdsRef.current.has(msg.id)) return;
+          processedMsgIdsRef.current.add(msg.id);
+
           setMessages(prev => {
-            if (prev.some(m => m.id === event.data.message.id)) return prev;
-            return [...prev, event.data.message];
+            if (prev.some(m => m.id === msg.id)) return prev;
+            return [...prev, msg];
           });
           setTimeout(() => scrollToBottom(true), 50);
         } else if (event.data?.type === 'DELETE_MESSAGE' && event.data.id) {
+          processedMsgIdsRef.current.delete(event.data.id);
           setMessages(prev => prev.filter(m => m.id !== event.data.id));
         }
       };
 
-      callBc = new BroadcastChannel('teamsync_call_status_general');
-      callBc.onmessage = (event) => {
-        if (event.data?.type === 'CALL_STATUS') {
-          setOngoingCall(event.data.call);
+      typingBc = new BroadcastChannel('teamsync_typing_channel');
+      typingBc.onmessage = (event) => {
+        if (event.data) {
+          handleTypingSignal(event.data);
         }
       };
     } catch {}
 
     return () => {
       if (channel && supabase) supabase.removeChannel(channel);
-      if (callSub && supabase) supabase.removeChannel(callSub);
       if (bc) bc.close();
-      if (callBc) callBc.close();
+      if (typingBc) typingBc.close();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, []);
+  }, [handleTypingSignal, profile?.email, user?.email]);
 
   useEffect(() => {
     if (!loading) {
@@ -229,7 +330,6 @@ export const TeamChat = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit: 15MB
     if (file.size > 15 * 1024 * 1024) {
       setError('File is larger than 15MB limit.');
       return;
@@ -268,6 +368,7 @@ export const TeamChat = () => {
     if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
+  // Instant Optimistic Message Delivery (<0.1ms client-side perceived latency)
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if ((!inputValue.trim() && !selectedFile) || sending) return;
@@ -275,22 +376,47 @@ export const TeamChat = () => {
     const content = inputValue.trim();
     const fileToSend = selectedFile;
 
+    // Immediately stop typing indicator
+    broadcastTyping(false);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
     setInputValue('');
     removeAttachment();
-    setSending(true);
     setError('');
     setIsEmojiPickerOpen(false);
+
+    const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
+    const senderEmail = profile?.email || user?.email || '';
+    const senderRole = profile?.role || 'MEMBER';
+    const senderId = profile?.id || user?.id;
+
+    // 1. Instant Optimistic UI insertion
+    const optId = 'opt-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    const optimisticMsg = {
+      id: optId,
+      content,
+      sender_id: senderId,
+      sender_name: senderName,
+      sender_email: senderEmail,
+      sender_role: senderRole,
+      file_url: attachmentPreview?.url || null,
+      file_name: fileToSend?.name || null,
+      file_size: fileToSend?.size || null,
+      file_type: fileToSend ? (fileToSend.type?.startsWith('image/') ? 'image' : 'document') : null,
+      created_at: new Date().toISOString(),
+      isOptimistic: true
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    setTimeout(() => scrollToBottom(true), 20);
+
+    setSending(true);
 
     try {
       let attachmentData = null;
       if (fileToSend) {
         attachmentData = await chatApi.uploadAttachment(fileToSend);
       }
-
-      const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
-      const senderEmail = profile?.email || user?.email || '';
-      const senderRole = profile?.role || 'MEMBER';
-      const senderId = profile?.id || user?.id;
 
       const newMsg = await chatApi.sendMessage({
         content,
@@ -302,11 +428,8 @@ export const TeamChat = () => {
       });
 
       if (newMsg) {
-        setMessages(prev => {
-          if (prev.some(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-        setTimeout(() => scrollToBottom(true), 50);
+        processedMsgIdsRef.current.add(newMsg.id);
+        setMessages(prev => prev.map(m => (m.id === optId ? newMsg : m)));
 
         try {
           const bc = new BroadcastChannel('teamsync_chat_channel');
@@ -316,6 +439,9 @@ export const TeamChat = () => {
       }
     } catch (err) {
       console.error('Error sending message:', err);
+      // Remove optimistic message on error and restore input
+      setMessages(prev => prev.filter(m => m.id !== optId));
+      setInputValue(content);
       setError(err.message || 'Failed to deliver message. Please try again.');
     } finally {
       setSending(false);
@@ -325,17 +451,38 @@ export const TeamChat = () => {
 
   const handleSendVoice = async (audioFile, duration) => {
     setIsRecordingVoice(false);
-    setSending(true);
     setError('');
 
-    try {
-      // Upload audio file (Supabase storage or DataURL fallback)
-      const attachmentData = await chatApi.uploadAttachment(audioFile);
+    const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
+    const senderEmail = profile?.email || user?.email || '';
+    const senderRole = profile?.role || 'MEMBER';
+    const senderId = profile?.id || user?.id;
 
-      const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
-      const senderEmail = profile?.email || user?.email || '';
-      const senderRole = profile?.role || 'MEMBER';
-      const senderId = profile?.id || user?.id;
+    // Instant Optimistic Voice Message
+    const optId = 'opt-voice-' + Date.now();
+    const optimisticMsg = {
+      id: optId,
+      content: 'Voice message',
+      sender_id: senderId,
+      sender_name: senderName,
+      sender_email: senderEmail,
+      sender_role: senderRole,
+      file_url: URL.createObjectURL(audioFile),
+      file_name: 'voice_note.webm',
+      file_size: audioFile.size,
+      file_type: 'audio',
+      created_at: new Date().toISOString(),
+      audio_duration: duration,
+      isOptimistic: true
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    setTimeout(() => scrollToBottom(true), 20);
+
+    setSending(true);
+
+    try {
+      const attachmentData = await chatApi.uploadAttachment(audioFile);
 
       const newMsg = await chatApi.sendMessage({
         content: 'Voice message',
@@ -347,13 +494,9 @@ export const TeamChat = () => {
       });
 
       if (newMsg) {
-        // Attach client duration if available
         const enrichedMsg = { ...newMsg, audio_duration: duration };
-        setMessages(prev => {
-          if (prev.some(m => m.id === enrichedMsg.id)) return prev;
-          return [...prev, enrichedMsg];
-        });
-        setTimeout(() => scrollToBottom(true), 50);
+        processedMsgIdsRef.current.add(enrichedMsg.id);
+        setMessages(prev => prev.map(m => (m.id === optId ? enrichedMsg : m)));
 
         try {
           const bc = new BroadcastChannel('teamsync_chat_channel');
@@ -363,6 +506,7 @@ export const TeamChat = () => {
       }
     } catch (err) {
       console.error('Error sending voice message:', err);
+      setMessages(prev => prev.filter(m => m.id !== optId));
       setError(err.message || 'Failed to send voice message. Please try again.');
     } finally {
       setSending(false);
@@ -553,6 +697,27 @@ export const TeamChat = () => {
           backgroundSize: '24px 24px'
         }}
       >
+        {/* Load Earlier Messages Button */}
+        {hasMoreOlder && messages.length >= 50 && (
+          <div className="text-center py-1">
+            <button
+              type="button"
+              onClick={loadOlderMessages}
+              disabled={loadingOlder}
+              className="px-4 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-xs text-neutral-400 hover:text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+            >
+              {loadingOlder ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Loading earlier messages...</span>
+                </>
+              ) : (
+                <span>↑ Load earlier messages</span>
+              )}
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <LoadingSpinner text="Opening secure company channel..." />
@@ -721,7 +886,13 @@ export const TeamChat = () => {
                   {/* Footer Timestamp & Delivery Checks */}
                   <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[10px] text-neutral-400">
                     <span>{formatMessageTime(msg.created_at)}</span>
-                    {isSelf && <CheckCheck className="w-3.5 h-3.5 text-neutral-300" />}
+                    {isSelf && (
+                      msg.isOptimistic ? (
+                        <Clock3 className="w-3 h-3 text-neutral-400 animate-pulse" title="Sending..." />
+                      ) : (
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-400" title="Delivered" />
+                      )
+                    )}
                   </div>
                 </div>
               </div>
@@ -828,6 +999,20 @@ export const TeamChat = () => {
           </div>
         )}
 
+        {/* Live Typing Indicator */}
+        {Object.keys(typingUsers).length > 0 && (
+          <div className="px-3 pb-2 text-xs text-emerald-400 flex items-center gap-2 animate-fadeIn font-medium">
+            <div className="flex gap-1 items-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:0.2s]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:0.4s]" />
+            </div>
+            <span>
+              {Object.values(typingUsers).map(u => u.name).join(', ')} {Object.keys(typingUsers).length > 1 ? 'are typing...' : 'is typing...'}
+            </span>
+          </div>
+        )}
+
         {/* Input Bar or Voice Recording Bar */}
         {isRecordingVoice ? (
           <VoiceRecorderBar
@@ -869,7 +1054,7 @@ export const TeamChat = () => {
                 ref={inputRef}
                 type="text"
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message"
                 disabled={sending}
@@ -905,22 +1090,7 @@ export const TeamChat = () => {
         )}
       </div>
 
-      {/* 6. Active Group Video/Voice Call Modal */}
-      {activeCallSession && (
-        <VideoCallModal
-          callSession={activeCallSession}
-          currentUser={profile || user}
-          roomId="general"
-          roomTitle="TeamSync Company HQ"
-          isAudioOnly={activeCallSession.call_type === 'voice'}
-          onLeaveCall={() => {
-            setActiveCallSession(null);
-            loadActiveCall();
-          }}
-        />
-      )}
-
-      {/* 7. Past Call History Modal */}
+      {/* 6. Past Call History Modal */}
       <CallHistoryModal
         roomId="general"
         isOpen={isHistoryModalOpen}

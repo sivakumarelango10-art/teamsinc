@@ -389,3 +389,12 @@ CREATE POLICY "Anyone authenticated can update call_history"
     TO authenticated
     USING (true);
 
+-- -----------------------------------------------------------------------------
+-- 8. COMPOSITE PERFORMANCE INDEXES
+-- -----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_messages_created_at_desc ON public.messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_call_history_room_status ON public.call_history(room_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_status ON public.tasks(assigned_to, status);
+CREATE INDEX IF NOT EXISTS idx_profiles_active_email ON public.profiles(email, is_active);
+
+

@@ -12,17 +12,23 @@ const fileToDataUrl = (file) => {
 };
 
 export const chatApi = {
-  async getMessages(limit = 200) {
+  async getMessages(limit = 100, before = null) {
     if (supabase) {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('messages')
-          .select('*')
-          .order('created_at', { ascending: true })
+          .select('id, content, sender_id, sender_name, sender_email, sender_role, file_url, file_name, file_size, file_type, created_at')
+          .order('created_at', { ascending: false })
           .limit(limit);
 
+        if (before) {
+          query = query.lt('created_at', before);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
-        return data || [];
+        // Reverse so stream renders ascending chronologically
+        return (data || []).reverse();
       } catch (err) {
         console.error('Error fetching chat messages:', err);
       }
@@ -30,7 +36,12 @@ export const chatApi = {
 
     try {
       const stored = localStorage.getItem(STORAGE_CHAT_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const all = stored ? JSON.parse(stored) : [];
+      if (before) {
+        const beforeTime = new Date(before).getTime();
+        return all.filter(m => new Date(m.created_at).getTime() < beforeTime).slice(-limit);
+      }
+      return all.slice(-limit);
     } catch {
       return [];
     }

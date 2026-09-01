@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PresenceProvider } from './context/PresenceContext';
+import { CallNotificationProvider } from './context/CallNotificationContext';
 import AppRoutes from './routes/AppRoutes';
 
 function App() {
@@ -9,7 +10,9 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <PresenceProvider>
-          <AppRoutes />
+          <CallNotificationProvider>
+            <AppRoutes />
+          </CallNotificationProvider>
         </PresenceProvider>
       </AuthProvider>
     </BrowserRouter>

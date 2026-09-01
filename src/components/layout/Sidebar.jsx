@@ -81,9 +81,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
         <div>
           <div className="h-16 px-6 flex items-center justify-between border-b border-neutral-800">
             <BrandLogo size="default" />
-            <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-neutral-300">
-              PROD
-            </span>
           </div>
 
           {/* User Profile Summary */}

@@ -30,8 +30,14 @@ export const Navbar = ({ onToggleSidebar, title = 'Dashboard' }) => {
 
         {/* User Info & Avatar */}
         <div className="flex items-center gap-2.5 pl-2 border-l border-neutral-800">
-          <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center font-bold text-xs text-white">
-            {profile?.full_name?.charAt(0) || 'U'}
+          <div className="relative">
+            <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center font-bold text-xs text-white">
+              {profile?.full_name?.charAt(0) || 'U'}
+            </div>
+            <span
+              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black"
+              title="Active now"
+            />
           </div>
           <div className="hidden md:block text-left">
             <p className="text-xs font-semibold text-neutral-200 line-clamp-1">

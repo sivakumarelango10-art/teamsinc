@@ -18,6 +18,7 @@ import { tasksApi } from '../../api/tasksApi';
 import { planningApi } from '../../api/planningApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
+import { usePresence } from '../../context/PresenceContext';
 import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UserForm from '../../components/users/UserForm';
@@ -26,6 +27,7 @@ import DepartmentAllocation from '../../components/planning/DepartmentAllocation
 
 export const FounderDashboard = () => {
   const { user } = useAuth();
+  const { onlineCount } = usePresence();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -101,9 +103,13 @@ export const FounderDashboard = () => {
       {/* Top Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-white">
               Founder Control Center
+            </span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-emerald-900/60 bg-neutral-900 text-emerald-400 flex items-center gap-1.5 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {onlineCount} Active Online
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mt-1.5">

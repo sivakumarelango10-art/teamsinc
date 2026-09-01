@@ -6,9 +6,11 @@ import UserForm from '../../components/users/UserForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { Users as UsersIcon, UserPlus, Search, Filter } from 'lucide-react';
+import { usePresence } from '../../context/PresenceContext';
 
 export const Users = () => {
   const { user: currentUser } = useAuth();
+  const { isUserOnline, onlineCount } = usePresence();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,10 +88,13 @@ export const Users = () => {
       u.email.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+
+    const isOnline = isUserOnline(u.email);
     const matchesStatus =
       statusFilter === 'ALL' ||
-      (statusFilter === 'ACTIVE' && u.is_active) ||
-      (statusFilter === 'INACTIVE' && !u.is_active);
+      (statusFilter === 'ACTIVE' && isOnline && u.is_active) ||
+      (statusFilter === 'OFFLINE' && !isOnline && u.is_active) ||
+      (statusFilter === 'DEACTIVATED' && !u.is_active);
 
     return matchesSearch && matchesRole && matchesStatus;
   });
@@ -99,12 +104,18 @@ export const Users = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-            <UsersIcon className="w-7 h-7 text-white" />
-            User Management
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+              <UsersIcon className="w-7 h-7 text-white" />
+              User Management
+            </h1>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-900/60 bg-neutral-900 text-emerald-400 flex items-center gap-1.5 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              {onlineCount} Online Now
+            </span>
+          </div>
           <p className="text-xs md:text-sm text-neutral-400 mt-1">
-            Provision team members, assign administrative capabilities, and regulate account statuses.
+            Provision team members, assign administrative capabilities, and monitor real-time user presence.
           </p>
         </div>
 
@@ -163,8 +174,9 @@ export const Users = () => {
             className="px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
           >
             <option value="ALL">All Statuses</option>
-            <option value="ACTIVE">Active Only</option>
-            <option value="INACTIVE">Inactive Only</option>
+            <option value="ACTIVE">Active (Online Now)</option>
+            <option value="OFFLINE">Offline</option>
+            <option value="DEACTIVATED">Deactivated</option>
           </select>
         </div>
       </div>

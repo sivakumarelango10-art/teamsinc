@@ -1,5 +1,6 @@
 import React from 'react';
-import { Shield, ShieldAlert, User, Edit, Power, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { Shield, ShieldAlert, User, Edit, Power, Trash2 } from 'lucide-react';
+import { usePresence } from '../../context/PresenceContext';
 
 export const UserRoleBadge = ({ role }) => {
   const configs = {
@@ -38,6 +39,7 @@ export const UserTable = ({
   onDelete,
   currentUserId
 }) => {
+  const { isUserOnline } = usePresence();
   const isFounderAccount = (email) => email.toLowerCase() === 'sivakumarelango10@gmail.com';
 
   return (
@@ -56,13 +58,23 @@ export const UserTable = ({
           {users.map((u) => {
             const isTargetFounder = isFounderAccount(u.email);
             const isSelf = u.id === currentUserId;
+            const isOnline = isUserOnline(u.email);
 
             return (
               <tr key={u.id} className="hover:bg-neutral-900/40 transition duration-150">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center font-bold text-white shadow-sm">
-                      {u.full_name?.charAt(0) || 'U'}
+                    <div className="relative">
+                      <div className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center font-bold text-white shadow-sm">
+                        {u.full_name?.charAt(0) || 'U'}
+                      </div>
+                      {/* Live presence avatar indicator */}
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-black ${
+                          isOnline ? 'bg-emerald-400' : 'bg-neutral-600'
+                        }`}
+                        title={isOnline ? 'Online now' : 'Offline'}
+                      />
                     </div>
                     <div>
                       <div className="font-medium text-white flex items-center gap-2">
@@ -83,15 +95,20 @@ export const UserTable = ({
                 </td>
 
                 <td className="px-6 py-4 whitespace-nowrap">
-                  {u.is_active ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-neutral-200 bg-neutral-900 px-2.5 py-0.5 rounded border border-neutral-700">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                  {!u.is_active ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 bg-neutral-950 px-2.5 py-1 rounded-full border border-neutral-850">
+                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+                      Deactivated
+                    </span>
+                  ) : isOnline ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-neutral-900 px-3 py-1 rounded-full border border-emerald-900/60 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       Active
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-neutral-500 bg-neutral-950 px-2.5 py-0.5 rounded border border-neutral-800">
-                      <XCircle className="w-3.5 h-3.5" />
-                      Inactive
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-400 bg-neutral-950 px-3 py-1 rounded-full border border-neutral-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+                      Offline
                     </span>
                   )}
                 </td>

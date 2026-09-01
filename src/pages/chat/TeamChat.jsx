@@ -52,7 +52,7 @@ export const TeamChat = () => {
   const [error, setError] = useState('');
 
   // Global Call Notification Context (handles multi-route calls and ringing)
-  const { startCall, ongoingCall, acceptCall } = useCallNotification();
+  const { startCall, ongoingCall, acceptCall, activeCallSession } = useCallNotification();
   const [dismissedCallId, setDismissedCallId] = useState(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 

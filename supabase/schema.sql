@@ -494,8 +494,70 @@ CREATE POLICY "Users manage own push subscriptions"
         user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
     )
     WITH CHECK (
-        user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+-- -----------------------------------------------------------------------------
+-- 10. BUG REPORTS & RESOLUTION ENGINE
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.bug_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    steps_to_reproduce TEXT,
+    severity TEXT NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')) DEFAULT 'MEDIUM',
+    status TEXT NOT NULL CHECK (status IN ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')) DEFAULT 'OPEN',
+    reported_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    reporter_name TEXT NOT NULL DEFAULT 'Team Member',
+    reporter_email TEXT NOT NULL DEFAULT '',
+    screenshot_url TEXT,
+    converted_task_id UUID REFERENCES public.tasks(id) ON DELETE SET NULL,
+    assigned_to UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON public.bug_reports(status);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_severity ON public.bug_reports(severity);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_reported_by ON public.bug_reports(reported_by);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_assigned_to ON public.bug_reports(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_created_at_desc ON public.bug_reports(created_at DESC);
+
+ALTER TABLE public.bug_reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Bug reports select policy" ON public.bug_reports;
+CREATE POLICY "Bug reports select policy"
+    ON public.bug_reports FOR SELECT
+    TO authenticated
+    USING (
+        public.is_admin_or_founder()
+        OR public.is_founding_advisor()
+        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        OR assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
     );
+
+DROP POLICY IF EXISTS "Bug reports insert policy" ON public.bug_reports;
+CREATE POLICY "Bug reports insert policy"
+    ON public.bug_reports FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Bug reports update policy" ON public.bug_reports;
+CREATE POLICY "Bug reports update policy"
+    ON public.bug_reports FOR UPDATE
+    TO authenticated
+    USING (
+        public.is_admin_or_founder()
+        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+    )
+    WITH CHECK (
+        public.is_admin_or_founder()
+        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+    );
+
+DROP POLICY IF EXISTS "Bug reports delete policy" ON public.bug_reports;
+CREATE POLICY "Bug reports delete policy"
+    ON public.bug_reports FOR DELETE
+    TO authenticated
+    USING (public.is_admin_or_founder());
+
 
 
 

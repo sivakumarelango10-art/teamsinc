@@ -27,6 +27,9 @@ import LeadershipChat from '../pages/chat/LeadershipChat';
 import AdvisorDashboard from '../pages/advisor/AdvisorDashboard';
 import AdvisorTasks from '../pages/advisor/AdvisorTasks';
 
+import BugManagement from '../pages/bugs/BugManagement';
+import MyReportedBugs from '../pages/bugs/MyReportedBugs';
+
 export const AppRoutes = () => {
   const { user, profile, loading } = useAuth();
 
@@ -64,6 +67,7 @@ export const AppRoutes = () => {
         }
       >
         <Route path="dashboard" element={<FounderDashboard />} />
+        <Route path="bugs" element={<BugManagement />} />
         <Route path="users" element={<Users />} />
         <Route path="departments" element={<Departments />} />
         <Route path="reports" element={<Reports />} />
@@ -80,6 +84,7 @@ export const AppRoutes = () => {
         }
       >
         <Route path="dashboard" element={<AdminDashboard />} />
+        <Route path="bugs" element={<BugManagement />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="assign-task" element={<AssignTask />} />
         <Route path="daily-planning" element={<DailyPlanning />} />
@@ -112,6 +117,7 @@ export const AppRoutes = () => {
         <Route path="dashboard" element={<MemberDashboard />} />
         <Route path="tasks" element={<MyTasks />} />
         <Route path="daily-plan" element={<MyDailyPlan />} />
+        <Route path="bugs" element={<MyReportedBugs />} />
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
@@ -139,9 +145,8 @@ export const AppRoutes = () => {
         }
       />
 
-      {/* Root and Fallback */}
-      <Route path="/" element={getDefaultRedirect()} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Fallback Catch-all Route */}
+      <Route path="*" element={getDefaultRedirect()} />
     </Routes>
   );
 };

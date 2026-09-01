@@ -25,7 +25,7 @@ const formatSeconds = (sec) => {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 };
 
-export const VoiceNotePlayer = ({ audioUrl, duration = 0, isSelf = false, fileName = 'Voice message' }) => {
+const VoiceNotePlayerComponent = ({ audioUrl, duration = 0, isSelf = false, fileName = 'Voice message' }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [totalDuration, setTotalDuration] = useState(duration || 0);
@@ -242,4 +242,5 @@ export const VoiceNotePlayer = ({ audioUrl, duration = 0, isSelf = false, fileNa
   );
 };
 
+export const VoiceNotePlayer = React.memo(VoiceNotePlayerComponent);
 export default VoiceNotePlayer;

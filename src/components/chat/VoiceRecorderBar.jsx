@@ -105,9 +105,16 @@ export const VoiceRecorderBar = ({ onSend, onCancel }) => {
 
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
+            let lastVisualizerUpdate = 0;
 
-            const updateVisualizer = () => {
+            const updateVisualizer = (timestamp) => {
               if (!analyserRef.current || isCancelled) return;
+              animFrameRef.current = requestAnimationFrame(updateVisualizer);
+
+              // Throttle state update to every 80ms (~12fps) to reduce CPU overhead while keeping smooth animation
+              if (timestamp - lastVisualizerUpdate < 80) return;
+              lastVisualizerUpdate = timestamp;
+
               analyserRef.current.getByteFrequencyData(dataArray);
 
               // Extract 16 frequency bands
@@ -120,7 +127,6 @@ export const VoiceRecorderBar = ({ onSend, onCancel }) => {
                 bands.push(heightPct);
               }
               setAudioLevels(bands);
-              animFrameRef.current = requestAnimationFrame(updateVisualizer);
             };
 
             animFrameRef.current = requestAnimationFrame(updateVisualizer);

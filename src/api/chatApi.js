@@ -130,26 +130,11 @@ export const chatApi = {
     }
 
     if (supabase) {
-      // Resolve valid profile ID
-      let resolvedSenderId = senderId;
-      if (resolvedSenderId) {
-        try {
-          const { data: p } = await supabase
-            .from('profiles')
-            .select('id')
-            .or(`id.eq.${resolvedSenderId},auth_user_id.eq.${resolvedSenderId}`)
-            .maybeSingle();
-          resolvedSenderId = p?.id || null;
-        } catch {
-          resolvedSenderId = null;
-        }
-      }
-
       const { data, error } = await supabase
         .from('messages')
         .insert([{
           content: cleanContent,
-          sender_id: resolvedSenderId,
+          sender_id: senderId || null,
           sender_name: senderName || 'Team Member',
           sender_email: senderEmail || '',
           sender_role: senderRole || 'MEMBER',

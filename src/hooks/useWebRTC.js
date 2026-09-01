@@ -38,6 +38,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
   const isVideoOffRef = useRef(isAudioOnlyInitial);
   const isScreenSharingRef = useRef(false);
   const animFrameRef = useRef(null);
+  const speakingIntervalRef = useRef(null);
   const iceCandidatesQueueRef = useRef({}); // { [peerId]: RTCIceCandidate[] }
 
   isAudioMutedRef.current = isAudioMuted;
@@ -83,11 +84,31 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnectionsRef.current[remotePeerId] = pc;
 
-    // Add local tracks to peer connection
+    // Add local tracks to peer connection with optimized bitrate limits
     const streamToSend = screenStreamRef.current || localStreamRef.current;
     if (streamToSend) {
       streamToSend.getTracks().forEach(track => {
-        pc.addTrack(track, streamToSend);
+        const sender = pc.addTrack(track, streamToSend);
+        if (track.kind === 'audio' && sender) {
+          try {
+            const params = sender.getParameters();
+            if (params && params.encodings && params.encodings.length > 0) {
+              params.encodings[0].maxBitrate = 40000; // 40kbps crystal clear mono Opus
+              params.encodings[0].priority = 'high';
+              params.encodings[0].networkPriority = 'high';
+              sender.setParameters(params).catch(() => {});
+            }
+          } catch {}
+        } else if (track.kind === 'video' && sender) {
+          try {
+            const params = sender.getParameters();
+            if (params && params.encodings && params.encodings.length > 0) {
+              params.encodings[0].maxBitrate = 750000; // 750kbps prevents video packet queuing
+              params.encodings[0].maxFramerate = 24;
+              sender.setParameters(params).catch(() => {});
+            }
+          } catch {}
+        }
       });
     }
 
@@ -300,16 +321,20 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       setErrorMessage('');
 
       try {
-        // Request camera & microphone
+        // Request camera & microphone with optimized constraints
         const constraints = {
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true },
+            channelCount: 1, // Mono audio saves 50% network bandwidth and removes audio packet lag
+            sampleRate: 48000,
+            latency: 0.01
           },
           video: isAudioOnlyInitial ? false : {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1280, max: 1280 },
+            height: { ideal: 720, max: 720 },
+            frameRate: { ideal: 24, max: 30 },
             facingMode: 'user'
           }
         };
@@ -320,7 +345,15 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         } catch (mediaErr) {
           console.warn('Full media request failed, attempting audio-only:', mediaErr);
           // Fallback to audio-only if video failed (e.g. no camera attached)
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1
+            },
+            video: false
+          });
           setIsVideoOff(true);
         }
 
@@ -332,7 +365,8 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         localStreamRef.current = stream;
         setLocalStream(stream);
 
-        // Setup local audio analyser for speaking detection
+        // Setup local audio analyser for speaking detection (throttled to 120ms to prevent React re-render lag)
+        let speakingInterval = null;
         try {
           const AudioContextClass = window.AudioContext || window.webkitAudioContext;
           if (AudioContextClass) {
@@ -345,17 +379,19 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
             localAnalyserRef.current = analyser;
 
             const buffer = new Uint8Array(analyser.frequencyBinCount);
-            const checkSpeaking = () => {
+            let prevSpeaking = false;
+            speakingIntervalRef.current = setInterval(() => {
               if (!localAnalyserRef.current || isCancelled) return;
               localAnalyserRef.current.getByteFrequencyData(buffer);
               let sum = 0;
               for (let i = 0; i < buffer.length; i++) sum += buffer[i];
               const avg = sum / buffer.length;
               const isSpeaking = avg > 25 && !isAudioMutedRef.current;
-              setIsSpeakingLocal(isSpeaking);
-              animFrameRef.current = requestAnimationFrame(checkSpeaking);
-            };
-            animFrameRef.current = requestAnimationFrame(checkSpeaking);
+              if (isSpeaking !== prevSpeaking) {
+                prevSpeaking = isSpeaking;
+                setIsSpeakingLocal(isSpeaking);
+              }
+            }, 120);
           }
         } catch (err) {
           console.warn('Local speaking detection notice:', err);
@@ -415,6 +451,10 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
     return () => {
       isCancelled = true;
 
+      if (speakingIntervalRef.current) {
+        clearInterval(speakingIntervalRef.current);
+        speakingIntervalRef.current = null;
+      }
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
       }

@@ -12,7 +12,7 @@ const FILTER_STYLES = {
   neon: 'hue-rotate(90deg) contrast(1.3) saturate(1.5)'
 };
 
-export const ParticipantTile = ({
+const ParticipantTileComponent = ({
   stream,
   name = 'Participant',
   email = '',
@@ -165,4 +165,5 @@ export const ParticipantTile = ({
   );
 };
 
+export const ParticipantTile = React.memo(ParticipantTileComponent);
 export default ParticipantTile;

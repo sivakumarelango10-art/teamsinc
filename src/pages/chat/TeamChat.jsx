@@ -628,114 +628,118 @@ export const TeamChat = ({
       {/* ─────────────────────────────────────────────────────────────────────────
           LEFT PANE: WhatsApp Conversation & Channel Selector (Admin & Founder Only)
           ───────────────────────────────────────────────────────────────────────── */}
-      {isLeadership && isChatListOpen && (
+      {isLeadership && (
         <div
-          className={`w-full md:w-80 border-r border-neutral-800 bg-black flex flex-col shrink-0 animate-fadeIn transition-all duration-300 ease-out ${
-            isMobileChatOpen ? 'hidden md:flex' : 'flex'
-          }`}
+          className={`bg-black flex flex-col shrink-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            isChatListOpen
+              ? 'w-full md:w-80 opacity-100 translate-x-0 border-r border-neutral-800'
+              : 'w-0 opacity-0 -translate-x-4 pointer-events-none border-r-0'
+          } ${isMobileChatOpen ? 'hidden md:flex' : 'flex'}`}
         >
-        {/* Top Header with Close / Hide Toggle Button */}
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-neutral-900 border border-neutral-750 flex items-center justify-center font-bold text-xs text-white">
-              {profile?.full_name?.charAt(0) || 'U'}
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight">Chats</h2>
-              <p className="text-[11px] text-neutral-400">Team & Leadership</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400">
-              {onlineCount} Online
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsChatListOpen(false)}
-              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition cursor-pointer"
-              title="Close / Hide Chats Panel"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Search Bar */}
-        <div className="p-3 border-b border-neutral-800/80">
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={chatSearchQuery}
-              onChange={(e) => setChatSearchQuery(e.target.value)}
-              placeholder="Search chats..."
-              className="w-full pl-8 pr-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder:text-neutral-500 outline-none focus:border-neutral-700 transition"
-            />
-          </div>
-        </div>
-
-        {/* Channel / Conversation Items List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-          {/* 1. Team Chat (General) */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveChannel('general');
-              setIsMobileChatOpen(true);
-            }}
-            className={`w-full p-3 rounded-2xl flex items-center gap-3 transition text-left cursor-pointer ${
-              activeChannel === 'general'
-                ? 'bg-neutral-900 border border-neutral-700 text-white shadow-md'
-                : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
-            }`}
-          >
-            <div className="w-11 h-11 rounded-2xl bg-emerald-950/60 border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
-              <Users className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white truncate">Team Chat</span>
-                <span className="text-[10px] text-emerald-400 font-medium">All Team</span>
+          <div className="w-full md:w-80 flex flex-col h-full shrink-0">
+            {/* Top Header with Close / Hide Toggle Button */}
+            <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-2xl bg-neutral-900 border border-neutral-750 flex items-center justify-center font-bold text-xs text-white shadow-sm">
+                  {profile?.full_name?.charAt(0) || 'U'}
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white tracking-tight">Chats</h2>
+                  <p className="text-[11px] text-neutral-400">Team & Leadership</p>
+                </div>
               </div>
-              <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                Company HQ • All Members
-              </p>
-            </div>
-          </button>
-
-          {/* 2. Leadership Chat (Restricted - Founder, Admin, Founding Advisor) */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveChannel('leadership');
-              setIsMobileChatOpen(true);
-            }}
-            className={`w-full p-3 rounded-2xl flex items-center gap-3 transition text-left cursor-pointer ${
-              activeChannel === 'leadership'
-                ? 'bg-neutral-900 border border-amber-800/80 text-white shadow-md'
-                : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
-            }`}
-          >
-            <div className="w-11 h-11 rounded-2xl bg-amber-950/60 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                  <span>Leadership Chat</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400">
+                  {onlineCount} Online
                 </span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/80 font-bold">
-                  🔒 Executive
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsChatListOpen(false)}
+                  className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition cursor-pointer"
+                  title="Close / Hide Chats Panel"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
               </div>
-              <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                Founder, Admin & Advisor
-              </p>
             </div>
-          </button>
+
+            {/* Search Bar */}
+            <div className="p-3 border-b border-neutral-800/80">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={chatSearchQuery}
+                  onChange={(e) => setChatSearchQuery(e.target.value)}
+                  placeholder="Search chats..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder:text-neutral-500 outline-none focus:border-neutral-700 transition"
+                />
+              </div>
+            </div>
+
+            {/* Channel / Conversation Items List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+              {/* 1. Team Chat (General) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChannel('general');
+                  setIsMobileChatOpen(true);
+                }}
+                className={`w-full p-3 rounded-2xl flex items-center gap-3 transition-all duration-200 text-left cursor-pointer ${
+                  activeChannel === 'general'
+                    ? 'bg-neutral-900 border border-neutral-700 text-white shadow-md'
+                    : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
+                }`}
+              >
+                <div className="w-11 h-11 rounded-2xl bg-emerald-950/60 border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white truncate">Team Chat</span>
+                    <span className="text-[10px] text-emerald-400 font-medium">All Team</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                    Company HQ • All Members
+                  </p>
+                </div>
+              </button>
+
+              {/* 2. Leadership Chat (Restricted - Founder, Admin, Founding Advisor) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChannel('leadership');
+                  setIsMobileChatOpen(true);
+                }}
+                className={`w-full p-3 rounded-2xl flex items-center gap-3 transition-all duration-200 text-left cursor-pointer ${
+                  activeChannel === 'leadership'
+                    ? 'bg-neutral-900 border border-amber-800/80 text-white shadow-md'
+                    : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
+                }`}
+              >
+                <div className="w-11 h-11 rounded-2xl bg-amber-950/60 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                      <span>Leadership Chat</span>
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/80 font-bold">
+                      🔒 Executive
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                    Founder, Admin & Advisor
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-    )}
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
           RIGHT PANE: WhatsApp Conversation View

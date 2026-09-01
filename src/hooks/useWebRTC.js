@@ -9,7 +9,7 @@ const RTC_CONFIG = {
   ]
 };
 
-export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial = false }) => {
+export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial = false, onCallEndedByHost }) => {
   const [localStream, setLocalStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
   const [peers, setPeers] = useState({}); // { [peerId]: { id, name, email, role, stream, isAudioMuted, isVideoOff, isScreenSharing, isSpeaking } }
@@ -280,11 +280,16 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
 
       } else if (type === 'IN_CALL_FILE') {
         setInCallFiles(prev => [...prev, data.file]);
+
+      } else if (type === 'CALL_ENDED_BY_HOST') {
+        if (onCallEndedByHost) {
+          onCallEndedByHost();
+        }
       }
     } catch (err) {
       console.error('Signal handling error:', type, err);
     }
-  }, [createPeerConnection, sendSignal]);
+  }, [createPeerConnection, sendSignal, onCallEndedByHost]);
 
   // Initialize media devices and signaling channel
   useEffect(() => {
@@ -634,6 +639,13 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
     });
   }, [currentUser, sendSignal]);
 
+  // Broadcast call ended by host to all peers
+  const sendCallEnded = useCallback(() => {
+    sendSignal({
+      type: 'CALL_ENDED_BY_HOST'
+    });
+  }, [sendSignal]);
+
   return {
     localStream,
     screenStream,
@@ -656,7 +668,8 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
     setBackgroundEffect,
     sendReaction,
     sendInCallMessage,
-    sendInCallFile
+    sendInCallFile,
+    sendCallEnded
   };
 };
 

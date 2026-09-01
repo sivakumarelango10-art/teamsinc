@@ -45,7 +45,8 @@ export const VideoCallModal = ({
   roomId = 'general',
   roomTitle = 'TeamSync Company HQ',
   isAudioOnly = false,
-  onLeaveCall
+  onLeaveCall,
+  onEndCall
 }) => {
   const [activeDrawer, setActiveDrawer] = useState(null); // 'chat' | 'files' | 'participants' | 'effects' | null
   const [isEffectsMenuOpen, setIsEffectsMenuOpen] = useState(false);
@@ -86,12 +87,23 @@ export const VideoCallModal = ({
     setBackgroundEffect,
     sendReaction,
     sendInCallMessage,
-    sendInCallFile
+    sendInCallFile,
+    sendCallEnded
   } = useWebRTC({
     roomId,
     currentUser,
-    isAudioOnlyInitial: isAudioOnly
+    isAudioOnlyInitial: isAudioOnly,
+    onCallEndedByHost: () => {
+      if (onLeaveCall) onLeaveCall();
+    }
   });
+
+  // Check if current user is the host/caller who started the call session
+  const isHost = Boolean(
+    callSession?.caller_email &&
+    currentUser?.email &&
+    callSession.caller_email.toLowerCase() === currentUser.email.toLowerCase()
+  );
 
   // Call Duration Timer
   useEffect(() => {
@@ -182,11 +194,15 @@ export const VideoCallModal = ({
     setIsRecording(false);
   };
 
-  // Clean Leave & Update Call Session
-  const handleLeave = async () => {
+  // Host ends the call for all participants
+  const handleEndCallForEveryone = async () => {
     if (isRecording) {
       handleStopRecording();
     }
+
+    try {
+      sendCallEnded();
+    } catch {}
 
     const allParticipants = [
       {
@@ -203,15 +219,29 @@ export const VideoCallModal = ({
       }))
     ];
 
-    try {
-      await callApi.endCallSession(callSession?.id, {
+    if (onEndCall) {
+      await onEndCall(callSession?.id, {
         duration: callDuration,
         participants: allParticipants
       });
-    } catch (e) {
-      console.warn('Error ending call session record:', e);
+    } else {
+      try {
+        await callApi.endCallSession(callSession?.id, {
+          duration: callDuration,
+          participants: allParticipants
+        });
+      } catch (e) {
+        console.warn('Error ending call session record:', e);
+      }
+      if (onLeaveCall) onLeaveCall();
     }
+  };
 
+  // Regular participant leaves only their own session
+  const handleLeaveOnly = () => {
+    if (isRecording) {
+      handleStopRecording();
+    }
     if (onLeaveCall) onLeaveCall();
   };
 
@@ -651,15 +681,27 @@ export const VideoCallModal = ({
           </button>
 
           {/* 7. Leave / End Call Button */}
-          <button
-            type="button"
-            onClick={handleLeave}
-            className="px-5 h-11 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-2 transition-transform active:scale-95 shadow-xl shadow-red-950/60 cursor-pointer ml-2"
-            title="Leave call"
-          >
-            <PhoneOff className="w-5 h-5" />
-            <span className="text-xs">Leave</span>
-          </button>
+          {isHost ? (
+            <button
+              type="button"
+              onClick={handleEndCallForEveryone}
+              className="px-5 h-11 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-2 transition-transform active:scale-95 shadow-xl shadow-red-950/60 cursor-pointer ml-2"
+              title="End call for everyone"
+            >
+              <PhoneOff className="w-5 h-5" />
+              <span className="text-xs font-bold">End Call</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleLeaveOnly}
+              className="px-5 h-11 rounded-full bg-neutral-800 hover:bg-neutral-750 text-neutral-200 hover:text-white font-medium flex items-center gap-2 transition-transform active:scale-95 shadow-lg border border-neutral-700 cursor-pointer ml-2"
+              title="Leave call"
+            >
+              <PhoneOff className="w-5 h-5 text-red-400" />
+              <span className="text-xs font-semibold">Leave</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -52,6 +52,13 @@ export const CallNotificationProvider = ({ children }) => {
       callBc.onmessage = (event) => {
         if (event.data?.type === 'CALL_STATUS') {
           handleIncomingCallSignal(event.data.call);
+        } else if (event.data?.type === 'CALL_ENDED') {
+          const endedCallId = event.data?.callId;
+          setOngoingCall(prev => (prev?.id === endedCallId ? null : prev));
+          setActiveCallSession(prev => (prev?.id === endedCallId ? null : prev));
+          if (incomingCall?.id === endedCallId) {
+            clearIncomingRing();
+          }
         }
       };
     } catch {}
@@ -72,6 +79,8 @@ export const CallNotificationProvider = ({ children }) => {
               if (incomingCall?.id === payload.new.id) {
                 clearIncomingRing();
               }
+              // If call ended by host, terminate call modal for all active participants
+              setActiveCallSession(prev => (prev?.id === payload.new.id ? null : prev));
             }
           }
         )
@@ -162,11 +171,31 @@ export const CallNotificationProvider = ({ children }) => {
   };
 
   const leaveCall = () => {
-    if (activeCallSession?.id) {
-      // Dismiss any lingering call push notifications
-      notificationService.notifyCallCancelled(activeCallSession.id);
+    // Participant leaving only their local view
+    setActiveCallSession(null);
+    clearIncomingRing();
+  };
+
+  // Host ends the call for everyone
+  const endCall = async (callId, { duration = 0, participants = [] } = {}) => {
+    const targetCallId = callId || activeCallSession?.id || ongoingCall?.id;
+    if (targetCallId) {
+      try {
+        await callApi.endCallSession(targetCallId, { duration, participants });
+      } catch (err) {
+        console.warn('Error ending call session:', err);
+      }
+
+      try {
+        const bc = new BroadcastChannel('teamsync_call_status_general');
+        bc.postMessage({ type: 'CALL_ENDED', callId: targetCallId });
+        bc.close();
+      } catch {}
+
+      notificationService.notifyCallCancelled(targetCallId);
     }
     setActiveCallSession(null);
+    setOngoingCall(null);
     clearIncomingRing();
   };
 
@@ -179,7 +208,8 @@ export const CallNotificationProvider = ({ children }) => {
         startCall,
         acceptCall,
         declineCall,
-        leaveCall
+        leaveCall,
+        endCall
       }}
     >
       {children}
@@ -243,6 +273,7 @@ export const CallNotificationProvider = ({ children }) => {
           roomTitle={activeCallSession.room_title || 'TeamSync Company HQ'}
           isAudioOnly={activeCallSession.call_type === 'voice'}
           onLeaveCall={leaveCall}
+          onEndCall={endCall}
         />
       )}
     </CallNotificationContext.Provider>

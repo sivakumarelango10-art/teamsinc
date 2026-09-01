@@ -4,15 +4,32 @@
 // Triggered by Supabase Database Webhooks on:
 //   - public.messages INSERT → sends chat push notification
 //   - public.call_history INSERT/UPDATE → sends call push notification
-//
-// Security:
-//   - VAPID_PRIVATE_KEY stored only in Supabase Edge Function Secrets (never in frontend)
-//   - SUPABASE_SERVICE_ROLE_KEY stored in Edge Function Secrets
-//   - Validates payload structure; never trusts userId from payload for auth decisions
-//   - Uses service role to bypass RLS only for reading push_subscriptions
-//   - Invalid/expired subscriptions (HTTP 410) are deleted immediately
 
+// Ambient Deno declaration for IDE TypeScript language servers
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response> | Response): void;
+};
+
+interface ProfileRecord {
+  id: string;
+  email?: string;
+  role?: string;
+}
+
+interface PushSubscriptionRecord {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_id: string;
+}
+
+// @ts-ignore npm specifier is resolved by Deno runtime
 import { createClient } from 'npm:@supabase/supabase-js@2';
+// @ts-ignore npm specifier is resolved by Deno runtime
 import webpush from 'npm:web-push@3.6.7';
 
 // ─── Environment variables (set via: supabase secrets set KEY=value) ──────────
@@ -120,13 +137,14 @@ async function handleChatMessage(record: Record<string, unknown>) {
     .select('id, email, role')
     .in('role', allowedRoles);
 
-  const allowedUserIds = new Set((allowedProfiles || []).map((p) => p.id));
+  const profilesList = (allowedProfiles as ProfileRecord[]) || [];
+  const allowedUserIds = new Set(profilesList.map((p: ProfileRecord) => p.id));
 
   // Find sender profile id to exclude
   let senderProfileId: string | null = null;
   if (senderEmail) {
-    const sender = (allowedProfiles || []).find(
-      (p) => p.email?.toLowerCase() === senderEmail
+    const sender = profilesList.find(
+      (p: ProfileRecord) => p.email?.toLowerCase() === senderEmail
     );
     senderProfileId = sender?.id ?? null;
   }
@@ -143,8 +161,9 @@ async function handleChatMessage(record: Record<string, unknown>) {
     return;
   }
 
-  const targetSubscriptions = subscriptions.filter(
-    (sub) => allowedUserIds.has(sub.user_id) && sub.user_id !== senderProfileId
+  const subList = (subscriptions as PushSubscriptionRecord[]) || [];
+  const targetSubscriptions = subList.filter(
+    (sub: PushSubscriptionRecord) => allowedUserIds.has(sub.user_id) && sub.user_id !== senderProfileId
   );
 
   const payload = JSON.stringify({
@@ -181,11 +200,12 @@ async function handleIncomingCall(record: Record<string, unknown>) {
       .select('id')
       .ilike('email', callerEmail)
       .maybeSingle();
-    callerProfileId = callerProfile?.id ?? null;
+    callerProfileId = (callerProfile as ProfileRecord | null)?.id ?? null;
   }
 
-  const targetSubscriptions = subscriptions.filter(
-    (sub) => sub.user_id !== callerProfileId
+  const subList = (subscriptions as PushSubscriptionRecord[]) || [];
+  const targetSubscriptions = subList.filter(
+    (sub: PushSubscriptionRecord) => sub.user_id !== callerProfileId
   );
 
   const payload = JSON.stringify({

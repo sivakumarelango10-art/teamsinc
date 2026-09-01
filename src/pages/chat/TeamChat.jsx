@@ -39,7 +39,6 @@ import {
   Loader2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { validateFileForUpload, formatBytes } from '../../config/r2Config';
 
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '🚀', '❤️', '✅', '👏', '💯', '🎯', '💡', '✨', '🙌'];
 
@@ -80,7 +79,6 @@ export const TeamChat = ({
   // Attachment state
   const [selectedFile, setSelectedFile] = useState(null);
   const [attachmentPreview, setAttachmentPreview] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
 
@@ -355,10 +353,13 @@ export const TeamChat = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate using central R2 configuration
-    const validation = validateFileForUpload(file);
-    if (!validation.valid) {
-      setError(validation.error);
+    // File validation limits: 50MB for video, 25MB for document/audio, 10MB for images
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(file.name);
+    const isImage = file.type.startsWith('image/');
+    const maxLimit = isVideo ? 50 * 1024 * 1024 : (isImage ? 10 * 1024 * 1024 : 25 * 1024 * 1024);
+
+    if (file.size > maxLimit) {
+      setError(`File is too large (Limit: ${Math.round(maxLimit / (1024 * 1024))}MB).`);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (imageInputRef.current) imageInputRef.current.value = '';
       if (videoInputRef.current) videoInputRef.current.value = '';
@@ -369,9 +370,7 @@ export const TeamChat = ({
     setIsAttachMenuOpen(false);
     setError('');
 
-    const category = validation.category;
-
-    if (category === 'image') {
+    if (isImage) {
       const reader = new FileReader();
       reader.onload = () => {
         setAttachmentPreview({
@@ -382,7 +381,7 @@ export const TeamChat = ({
         });
       };
       reader.readAsDataURL(file);
-    } else if (category === 'video') {
+    } else if (isVideo) {
       setAttachmentPreview({
         url: URL.createObjectURL(file),
         name: file.name,
@@ -394,7 +393,7 @@ export const TeamChat = ({
         url: null,
         name: file.name,
         size: file.size,
-        type: category
+        type: 'document'
       });
     }
 
@@ -404,7 +403,6 @@ export const TeamChat = ({
   const removeAttachment = () => {
     setSelectedFile(null);
     setAttachmentPreview(null);
-    setUploadProgress(0);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (imageInputRef.current) imageInputRef.current.value = '';
     if (videoInputRef.current) videoInputRef.current.value = '';
@@ -457,10 +455,7 @@ export const TeamChat = ({
     try {
       let attachmentData = null;
       if (fileToSend) {
-        attachmentData = await chatApi.uploadAttachment(fileToSend, {
-          channel,
-          onProgress: (pct) => setUploadProgress(pct)
-        });
+        attachmentData = await chatApi.uploadAttachment(fileToSend);
       }
 
       const newMsg = await chatApi.sendMessage({
@@ -560,9 +555,9 @@ export const TeamChat = ({
     }
   };
 
-  const handleDeleteMessage = async (msgId, storageKey = null, msgChannel = 'general') => {
+  const handleDeleteMessage = async (msgId) => {
     try {
-      await chatApi.deleteMessage(msgId, storageKey, msgChannel || channel);
+      await chatApi.deleteMessage(msgId);
       setMessages(prev => prev.filter(m => m.id !== msgId));
       try {
         const bc = new BroadcastChannel(`teamsync_chat_channel_${channel}`);
@@ -629,7 +624,7 @@ export const TeamChat = ({
 
   return (
     <div className="h-[calc(100vh-6.5rem)] flex flex-col bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative">
-        {/* Hidden Inputs for Cloudflare R2 Uploads */}
+        {/* Hidden Inputs for File Uploads */}
         <input
           ref={fileInputRef}
           type="file"

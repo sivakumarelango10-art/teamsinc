@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { r2StorageService } from '../utils/r2StorageService';
 
 const STORAGE_CHAT_KEY = 'teamsync_chat_messages';
 
@@ -51,29 +50,60 @@ export const chatApi = {
     }
   },
 
-  async uploadAttachment(file, options = {}) {
+  async uploadAttachment(file) {
     if (!file) return null;
 
-    try {
-      const result = await r2StorageService.uploadFile({
-        file,
-        destination: 'chat',
-        channel: options.channel || 'general',
-        onProgress: options.onProgress
-      });
+    const resolveType = (f) => {
+      if (f.type?.startsWith('image/')) return 'image';
+      if (f.type?.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(f.name || '')) return 'video';
+      if (f.type?.startsWith('audio/') || /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(f.name || '')) return 'audio';
+      return 'document';
+    };
 
+    const detectedType = resolveType(file);
+
+    if (supabase) {
+      try {
+        const safeName = (file.name || `audio_${Date.now()}.webm`).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `uploads/${Date.now()}_${safeName}`;
+
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('chat-attachments')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type || (detectedType === 'audio' ? 'audio/webm' : undefined)
+          });
+
+        if (!uploadErr && uploadData) {
+          const { data: pubData } = supabase.storage
+            .from('chat-attachments')
+            .getPublicUrl(filePath);
+
+          return {
+            url: pubData?.publicUrl,
+            name: file.name || 'Voice Message',
+            size: file.size || 0,
+            type: detectedType
+          };
+        }
+      } catch (err) {
+        console.warn('Supabase storage upload notice, using DataURL fallback:', err);
+      }
+    }
+
+    // High-res DataURL fallback
+    try {
+      const dataUrl = await fileToDataUrl(file);
       return {
-        url: result.fileUrl,
-        storageKey: result.storageKey,
-        name: result.fileName,
-        size: result.fileSize,
-        type: result.fileType,
-        mimeType: result.mimeType,
-        isR2: result.isR2
+        url: dataUrl,
+        name: file.name || 'Voice Message',
+        size: file.size || 0,
+        type: detectedType
       };
     } catch (err) {
-      console.error('Error uploading attachment to R2/Storage:', err);
-      throw err;
+      console.error('Failed to encode attachment:', err);
+      return null;
     }
   },
 
@@ -83,16 +113,11 @@ export const chatApi = {
     let fileSize = null;
     let fileType = null;
 
-    let storageKey = null;
-    let isR2 = true;
-
     if (attachment) {
       fileUrl = attachment.url;
       fileName = attachment.name;
       fileSize = attachment.size;
       fileType = attachment.type;
-      storageKey = attachment.storageKey || null;
-      isR2 = attachment.isR2 ?? true;
     }
 
     // Ensure non-null content for schema constraints if text was empty
@@ -118,8 +143,6 @@ export const chatApi = {
           file_name: fileName,
           file_size: fileSize,
           file_type: fileType,
-          storage_key: storageKey,
-          is_r2: isR2,
           channel: channel || 'general'
         }])
         .select()
@@ -158,15 +181,7 @@ export const chatApi = {
     return newMessage;
   },
 
-  async deleteMessage(messageId, storageKey = null, channel = 'general') {
-    if (storageKey) {
-      try {
-        await r2StorageService.deleteFile(storageKey, { channel });
-      } catch (e) {
-        console.warn('Error deleting R2 object:', e);
-      }
-    }
-
+  async deleteMessage(messageId) {
     if (supabase) {
       const { error } = await supabase
         .from('messages')
@@ -184,3 +199,5 @@ export const chatApi = {
     return true;
   }
 };
+
+export default chatApi;

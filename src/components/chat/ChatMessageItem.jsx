@@ -97,7 +97,7 @@ const ChatMessageItemComponent = ({
 
           {canDelete && (
             <button
-              onClick={() => onDelete(msg.id, msg.storage_key, msg.channel)}
+              onClick={() => onDelete(msg.id)}
               className="opacity-0 group-hover:opacity-100 p-1 text-neutral-500 hover:text-red-400 transition cursor-pointer"
               title="Delete message"
             >
@@ -106,7 +106,7 @@ const ChatMessageItemComponent = ({
           )}
         </div>
 
-        {/* Attachment Preview (Image, Audio Voice Note, or Document) */}
+        {/* Attachment Preview (Image, Audio Voice Note, Video, or Document) */}
         {msg.file_url && (
           <div className="mb-2">
             {msg.file_type === 'image' ? (
@@ -133,7 +133,7 @@ const ChatMessageItemComponent = ({
                 </div>
               </div>
             ) : msg.file_type === 'video' || /\.(mp4|webm|mov|avi|mkv)$/i.test(msg.file_name || '') ? (
-              /* Cloudflare R2 Video Player */
+              /* Inline Video Player */
               <div className="rounded-xl overflow-hidden border border-neutral-800 bg-black/80 max-w-md">
                 <video
                   src={msg.file_url}

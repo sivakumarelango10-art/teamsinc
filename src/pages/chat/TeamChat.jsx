@@ -38,7 +38,9 @@ import {
   Clock3,
   Loader2,
   Search,
-  ChevronLeft
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -56,7 +58,8 @@ export const TeamChat = ({
   const defaultChannel = profile?.role === 'FOUNDING_ADVISOR' ? 'leadership' : (initialChannel || 'general');
   const [activeChannel, setActiveChannel] = useState(defaultChannel);
 
-  // Mobile conversation list view toggle
+  // Chat sidebar collapse/hide state
+  const [isChatListOpen, setIsChatListOpen] = useState(true);
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(true);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
 
@@ -625,13 +628,13 @@ export const TeamChat = ({
       {/* ─────────────────────────────────────────────────────────────────────────
           LEFT PANE: WhatsApp Conversation & Channel Selector (Admin & Founder Only)
           ───────────────────────────────────────────────────────────────────────── */}
-      {isLeadership && (
+      {isLeadership && isChatListOpen && (
         <div
           className={`w-full md:w-80 border-r border-neutral-800 bg-black flex flex-col shrink-0 transition-all ${
             isMobileChatOpen ? 'hidden md:flex' : 'flex'
           }`}
         >
-        {/* Top Header */}
+        {/* Top Header with Close / Hide Toggle Button */}
         <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-2xl bg-neutral-900 border border-neutral-750 flex items-center justify-center font-bold text-xs text-white">
@@ -639,12 +642,22 @@ export const TeamChat = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight">Chats</h2>
-              <p className="text-[11px] text-neutral-400">Team Channels</p>
+              <p className="text-[11px] text-neutral-400">Team & Leadership</p>
             </div>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400">
-            {onlineCount} Online
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400">
+              {onlineCount} Online
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsChatListOpen(false)}
+              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition cursor-pointer"
+              title="Close / Hide Chats Panel"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -735,8 +748,21 @@ export const TeamChat = ({
         {/* 1. WhatsApp Group Header */}
         <div className="px-4 md:px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {/* Show / Open Chats List Button (When Hidden) */}
+            {isLeadership && !isChatListOpen && (
+              <button
+                type="button"
+                onClick={() => setIsChatListOpen(true)}
+                className="p-1.5 -ml-1 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 border border-neutral-800 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+                title="Show Chats List"
+              >
+                <PanelLeftOpen className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline text-[11px]">Chats</span>
+              </button>
+            )}
+
             {/* Mobile Back Button (Only for Admin & Founder who have conversation switcher) */}
-            {isLeadership && (
+            {isLeadership && isChatListOpen && (
               <button
                 type="button"
                 onClick={() => setIsMobileChatOpen(false)}

@@ -14,6 +14,7 @@ export const INITIAL_DEPARTMENTS = [
 
 export const AUTHORIZED_EMAILS = [
   'sivakumarelango10@gmail.com',
+  'aaditya.rm@kalvium.com',
   'alinasyedali786@gmail.com',
   'yashas1325143@gmail.com',
   'kavyaramesh293@gmail.com',
@@ -27,6 +28,14 @@ export const INITIAL_PROFILES = [
     full_name: 'Sivakumar Elango',
     email: 'sivakumarelango10@gmail.com',
     role: 'FOUNDER',
+    is_active: true,
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'usr-advisor-1',
+    full_name: 'Aaditya RM',
+    email: 'aaditya.rm@kalvium.com',
+    role: 'FOUNDING_ADVISOR',
     is_active: true,
     created_at: new Date().toISOString()
   },

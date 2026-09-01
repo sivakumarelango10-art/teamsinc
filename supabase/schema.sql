@@ -307,10 +307,11 @@ INSERT INTO public.departments (name, description) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
--- SEED REGISTERED PROFILES (Founder + 5 Authorized Team Members)
+-- SEED REGISTERED PROFILES (Founder + Founding Advisor + Authorized Team Members)
 -- -----------------------------------------------------------------------------
 INSERT INTO public.profiles (full_name, email, role, is_active) VALUES
     ('Sivakumar Elango', 'sivakumarelango10@gmail.com', 'FOUNDER', true),
+    ('Aaditya RM', 'aaditya.rm@kalvium.com', 'FOUNDING_ADVISOR', true),
     ('Alina Syed Ali', 'alinasyedali786@gmail.com', 'MEMBER', true),
     ('Yashas', 'yashas1325143@gmail.com', 'MEMBER', true),
     ('Kavya Ramesh', 'kavyaramesh293@gmail.com', 'MEMBER', true),

@@ -141,16 +141,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Bottom Section: Quick Report Bug Button & Sign Out */}
+        {/* Bottom Section: Quick Report Bug Button (Members Only) & Sign Out */}
         <div className="p-4 border-t border-neutral-800 space-y-2">
-          <button
-            type="button"
-            onClick={() => setIsReportBugModalOpen(true)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-400 bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 rounded-xl transition cursor-pointer shadow-sm"
-          >
-            <Bug className="w-3.5 h-3.5" />
-            <span>Report a Bug</span>
-          </button>
+          {!isFounder && !isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsReportBugModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-400 bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 rounded-xl transition cursor-pointer shadow-sm"
+            >
+              <Bug className="w-3.5 h-3.5" />
+              <span>Report a Bug</span>
+            </button>
+          )}
 
           <button
             onClick={logout}
@@ -162,11 +164,13 @@ export const Sidebar = ({ isOpen, onClose }) => {
         </div>
       </aside>
 
-      {/* Global Report Bug Modal */}
-      <ReportBugModal
-        isOpen={isReportBugModalOpen}
-        onClose={() => setIsReportBugModalOpen(false)}
-      />
+      {/* Report Bug Modal (Members Only) */}
+      {!isFounder && !isAdmin && (
+        <ReportBugModal
+          isOpen={isReportBugModalOpen}
+          onClose={() => setIsReportBugModalOpen(false)}
+        />
+      )}
     </>
   );
 };

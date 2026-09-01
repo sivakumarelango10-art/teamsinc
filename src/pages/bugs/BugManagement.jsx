@@ -21,7 +21,6 @@ import { bugsApi } from '../../api/bugsApi';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../api/supabase';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import ReportBugModal from '../../components/bugs/ReportBugModal';
 import ConvertBugToTaskModal from '../../components/bugs/ConvertBugToTaskModal';
 
 export const BugManagement = () => {
@@ -34,7 +33,6 @@ export const BugManagement = () => {
   const [severityFilter, setSeverityFilter] = useState('ALL');
 
   // Modals state
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [convertingBug, setConvertingBug] = useState(null);
   const [selectedBugDetails, setSelectedBugDetails] = useState(null);
 
@@ -156,18 +154,11 @@ export const BugManagement = () => {
           <button
             type="button"
             onClick={fetchBugs}
-            className="p-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 transition cursor-pointer"
+            className="px-3.5 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 font-semibold text-xs flex items-center gap-2 transition cursor-pointer"
             title="Refresh bugs"
           >
             <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsReportModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow-md"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Report New Bug
+            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -372,13 +363,6 @@ export const BugManagement = () => {
           ))}
         </div>
       )}
-
-      {/* Report Bug Modal */}
-      <ReportBugModal
-        isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
-        onSuccess={fetchBugs}
-      />
 
       {/* Convert Bug to Task Modal */}
       <ConvertBugToTaskModal

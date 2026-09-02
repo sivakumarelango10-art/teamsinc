@@ -214,6 +214,13 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       remoteStreamsRef.current[remotePeerId] = new MediaStream();
     }
 
+    // Immediately register peer in state so participant tile and count appear immediately
+    updatePeerState(remotePeerId, {
+      name: remoteUser?.name || 'Participant',
+      email: remoteUser?.email || '',
+      role: remoteUser?.role || 'MEMBER'
+    });
+
     // Add local tracks (camera/mic or screen share) to peer connection
     const streamToSend = screenStreamRef.current || localStreamRef.current;
     if (streamToSend) {
@@ -578,15 +585,18 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         setLocalStream(stream);
 
         // Ensure any existing peer connections created during async media acquisition receive tracks
-        Object.values(peerConnectionsRef.current).forEach(pc => {
+        Object.entries(peerConnectionsRef.current).forEach(([peerId, pc]) => {
           if (pc.signalingState !== 'closed') {
             stream.getTracks().forEach(t => {
-              const senders = pc.getSenders();
-              const hasTrack = senders.some(s => s.track && s.track.kind === t.kind);
-              if (!hasTrack) {
+              const sender = pc.getSenders().find(s => s.track && s.track.kind === t.kind);
+              if (sender) {
+                sender.replaceTrack(t).catch(() => {});
+              } else {
                 try {
                   pc.addTrack(t, stream);
-                } catch {}
+                } catch (e) {
+                  console.warn('[WebRTC] Track add notice:', e);
+                }
               }
             });
           }

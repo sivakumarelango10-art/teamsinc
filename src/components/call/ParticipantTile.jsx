@@ -34,6 +34,10 @@ const ParticipantTileComponent = ({
   const handleVideoRef = (element) => {
     videoRef.current = element;
     if (element && stream) {
+      element.muted = isLocal;
+      element.defaultMuted = isLocal;
+      element.playsInline = true;
+      element.autoplay = true;
       if (element.srcObject !== stream) {
         element.srcObject = stream;
       }
@@ -42,17 +46,23 @@ const ParticipantTileComponent = ({
   };
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      if (videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
+    const videoEl = videoRef.current;
+    if (videoEl && stream) {
+      videoEl.muted = isLocal;
+      videoEl.defaultMuted = isLocal;
+      videoEl.playsInline = true;
+      videoEl.autoplay = true;
+      if (videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
       }
-      videoRef.current.play().catch(() => {});
+      videoEl.play().catch(() => {});
     }
-    if (audioRef.current && stream && !isLocal) {
-      if (audioRef.current.srcObject !== stream) {
-        audioRef.current.srcObject = stream;
+    const audioEl = audioRef.current;
+    if (audioEl && stream && !isLocal) {
+      if (audioEl.srcObject !== stream) {
+        audioEl.srcObject = stream;
       }
-      audioRef.current.play().catch(() => {});
+      audioEl.play().catch(() => {});
     }
   }, [stream, isLocal, isVideoOff]);
 
@@ -106,7 +116,13 @@ const ParticipantTileComponent = ({
             ref={handleVideoRef}
             autoPlay
             playsInline
-            muted={true} // Audio is handled cleanly by audioRef for remote, or muted for local
+            muted={isLocal}
+            onLoadedMetadata={(e) => {
+              e.target.play().catch(() => {});
+            }}
+            onCanPlay={(e) => {
+              e.target.play().catch(() => {});
+            }}
             style={{ filter: filterStyle }}
             className={`w-full h-full object-cover ${
               isLocal && !isScreenSharing ? 'scale-x-[-1]' : ''

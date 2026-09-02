@@ -86,9 +86,10 @@ export const INITIAL_ASSIGNMENTS = [];
 export const INITIAL_TASKS = [];
 
 // Local storage management helpers
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   PROFILES: 'teamsync_profiles',
   DEPARTMENTS: 'teamsync_departments',
+  DEPARTMENT_MEMBERS: 'teamsync_department_members',
   TASKS: 'teamsync_tasks',
   PLANS: 'teamsync_plans',
   ASSIGNMENTS: 'teamsync_assignments',
@@ -155,5 +156,3 @@ export const resetStoreToDefaults = () => {
   localStorage.setItem(STORAGE_KEYS.PLANS, JSON.stringify(INITIAL_PLANS));
   localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(INITIAL_ASSIGNMENTS));
 };
-
-export { STORAGE_KEYS };

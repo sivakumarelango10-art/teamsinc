@@ -6,7 +6,7 @@ import {
   Shield,
   Award
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday, isYesterday, isThisYear } from 'date-fns';
 import VoiceNotePlayer from './VoiceNotePlayer';
 import WhatsAppCheck from './WhatsAppCheck';
 
@@ -22,6 +22,19 @@ const formatMessageTime = (isoString) => {
     } catch {
       return '';
     }
+  }
+};
+
+const formatMessageFullDate = (isoString) => {
+  if (!isoString) return '';
+  try {
+    const d = typeof isoString === 'string' ? parseISO(isoString) : new Date(isoString);
+    if (isToday(d)) return `Today, ${format(d, 'h:mm a')}`;
+    if (isYesterday(d)) return `Yesterday, ${format(d, 'h:mm a')}`;
+    if (isThisYear(d)) return `${format(d, 'd MMMM')}, ${format(d, 'h:mm a')}`;
+    return `${format(d, 'dd/MM/yyyy')}, ${format(d, 'h:mm a')}`;
+  } catch {
+    return '';
   }
 };
 
@@ -272,7 +285,10 @@ const ChatMessageItemComponent = ({
           {msg.content && msg.content !== 'Voice message' ? (
             <div className="text-[13px] text-neutral-100 leading-snug break-words">
               <span>{msg.content}</span>
-              <span className="inline-flex items-center gap-1 ml-2 float-right mt-0.5 text-[10px] text-neutral-400 select-none">
+              <span
+                title={formatMessageFullDate(msg.created_at)}
+                className="inline-flex items-center gap-1 ml-2 float-right mt-0.5 text-[10px] text-neutral-400 select-none cursor-default"
+              >
                 <span>{formatMessageTime(msg.created_at)}</span>
                 {isSelf && (
                   <WhatsAppCheck isOptimistic={msg.isOptimistic} status="read" />
@@ -280,7 +296,10 @@ const ChatMessageItemComponent = ({
               </span>
             </div>
           ) : (
-            <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px] text-neutral-400 select-none">
+            <div
+              title={formatMessageFullDate(msg.created_at)}
+              className="flex items-center justify-end gap-1 mt-0.5 text-[10px] text-neutral-400 select-none cursor-default"
+            >
               <span>{formatMessageTime(msg.created_at)}</span>
               {isSelf && (
                 <WhatsAppCheck isOptimistic={msg.isOptimistic} status="read" />

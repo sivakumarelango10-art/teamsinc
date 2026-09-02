@@ -34,9 +34,43 @@ import {
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday, isYesterday, isThisYear, isSameDay } from 'date-fns';
 
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '🚀', '❤️', '✅', '👏', '💯', '🎯', '💡', '✨', '🙌'];
+
+// WhatsApp-style Date Divider Label (TODAY, YESTERDAY, 2 September, 14/08/2025)
+const formatDayDividerLabel = (isoString) => {
+  if (!isoString) return '';
+  try {
+    const d = typeof isoString === 'string' ? parseISO(isoString) : new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+
+    if (isToday(d)) {
+      return 'TODAY';
+    }
+    if (isYesterday(d)) {
+      return 'YESTERDAY';
+    }
+    if (isThisYear(d)) {
+      return format(d, 'd MMMM');
+    }
+    return format(d, 'dd/MM/yyyy');
+  } catch {
+    return '';
+  }
+};
+
+const isDifferentDay = (d1, d2) => {
+  if (!d1 || !d2) return true;
+  try {
+    const date1 = typeof d1 === 'string' ? parseISO(d1) : new Date(d1);
+    const date2 = typeof d2 === 'string' ? parseISO(d2) : new Date(d2);
+    if (isNaN(date1.getTime()) || isNaN(date2.getTime())) return true;
+    return !isSameDay(date1, date2);
+  } catch {
+    return true;
+  }
+};
 
 export const TeamChat = ({
   channel: initialChannel = 'general',
@@ -946,7 +980,7 @@ export const TeamChat = ({
               </p>
             </div>
           ) : (
-            messages.map((msg) => {
+            messages.map((msg, index) => {
               const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
               const isSelf = Boolean(
                 (msg.sender_id && user && msg.sender_id === user.id) ||
@@ -956,16 +990,28 @@ export const TeamChat = ({
               const canDelete = isFounder || isSelf;
               const isNew = newlyArrivedIdsRef.current.has(msg.id) || Boolean(msg.isOptimistic);
 
+              const prevMsg = index > 0 ? messages[index - 1] : null;
+              const showDateDivider = index === 0 || isDifferentDay(prevMsg?.created_at, msg.created_at);
+              const dayLabel = showDateDivider ? formatDayDividerLabel(msg.created_at) : null;
+
               return (
-                <ChatMessageItem
-                  key={msg.id}
-                  msg={msg}
-                  isSelf={isSelf}
-                  isOnline={isOnline}
-                  canDelete={canDelete}
-                  onDelete={handleDeleteMessage}
-                  isNew={isNew}
-                />
+                <React.Fragment key={msg.id || `msg-${index}`}>
+                  {showDateDivider && dayLabel && (
+                    <div className="flex justify-center my-3.5 sticky top-2 z-10 select-none pointer-events-none">
+                      <span className="px-3.5 py-1 rounded-lg bg-neutral-900/90 backdrop-blur-md border border-neutral-800 text-[11px] font-bold tracking-wider uppercase text-neutral-300 shadow-md">
+                        {dayLabel}
+                      </span>
+                    </div>
+                  )}
+                  <ChatMessageItem
+                    msg={msg}
+                    isSelf={isSelf}
+                    isOnline={isOnline}
+                    canDelete={canDelete}
+                    onDelete={handleDeleteMessage}
+                    isNew={isNew}
+                  />
+                </React.Fragment>
               );
             })
           )}

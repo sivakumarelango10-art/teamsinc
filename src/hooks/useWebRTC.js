@@ -60,6 +60,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
   const remoteStreamsRef = useRef({}); // { [peerId]: MediaStream }
   const remoteAnalysersRef = useRef({}); // { [peerId]: { analyser, interval } }
   const iceCandidatesQueueRef = useRef({}); // { [peerId]: RTCIceCandidate[] }
+  const processedSignalsRef = useRef(new Set()); // Deduplicate signals between Realtime and BroadcastChannel
 
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
@@ -79,8 +80,10 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
 
   // Broadcast signaling message via Supabase Realtime and BroadcastChannel
   const sendSignal = useCallback((payload) => {
+    const signalId = `sig_${myPeerIdRef.current}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const fullPayload = {
       ...payload,
+      signalId,
       senderId: myPeerIdRef.current,
       senderUser: {
         id: currentUser?.id,
@@ -90,7 +93,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       }
     };
 
-    // 1. Supabase Realtime channel
+    // 1. Supabase Realtime channel (authoritative cross-network transport)
     if (channelRef.current) {
       channelRef.current.send({
         type: 'broadcast',
@@ -301,7 +304,17 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
   // Handle incoming signaling messages with Perfect Negotiation glare resolution
   const handleSignal = useCallback(async (data) => {
     if (!data || data.senderId === myPeerIdRef.current) return;
-    const { type, senderId, targetId, senderUser, description, candidate, state } = data;
+    const { signalId, type, senderId, targetId, senderUser, description, candidate, state } = data;
+
+    // Deduplicate signals that arrive via both Supabase Realtime and BroadcastChannel
+    if (signalId) {
+      if (processedSignalsRef.current.has(signalId)) return;
+      processedSignalsRef.current.add(signalId);
+      if (processedSignalsRef.current.size > 400) {
+        const first = processedSignalsRef.current.values().next().value;
+        processedSignalsRef.current.delete(first);
+      }
+    }
 
     // Ignore if targeted to another peer specifically
     if (targetId && targetId !== myPeerIdRef.current) return;

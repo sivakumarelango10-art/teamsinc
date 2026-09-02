@@ -289,12 +289,27 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       const state = pc.connectionState;
       if (state === 'connected') {
         setConnectionStatus('connected');
+      } else if (state === 'disconnected') {
+        setConnectionStatus('reconnecting');
       } else if (state === 'failed') {
         console.warn('[WebRTC] PeerConnection failed for', remotePeerId);
+        setConnectionStatus('failed');
         const isPolite = myPeerIdRef.current > remotePeerId;
         if (isPolite && pc.restartIce) {
           pc.restartIce();
         }
+      }
+    };
+
+    // Handle ICE connection state
+    pc.oniceconnectionstatechange = () => {
+      const iceState = pc.iceConnectionState;
+      if (iceState === 'connected' || iceState === 'completed') {
+        setConnectionStatus('connected');
+      } else if (iceState === 'disconnected') {
+        setConnectionStatus('reconnecting');
+      } else if (iceState === 'failed') {
+        setConnectionStatus('failed');
       }
     };
 
@@ -642,7 +657,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
             })
             .subscribe((status) => {
               if (status === 'SUBSCRIBED') {
-                setConnectionStatus('connected');
+                setConnectionStatus('ready');
                 // Track own presence in call room
                 channel.track({
                   peerId: myPeerIdRef.current,
@@ -667,7 +682,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
               }
             });
         } else {
-          setConnectionStatus('connected');
+          setConnectionStatus('ready');
         }
 
       } catch (err) {

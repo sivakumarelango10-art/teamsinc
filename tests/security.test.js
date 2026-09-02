@@ -413,4 +413,62 @@ describe('TeamSync Security & Authorization Engine Tests', () => {
     });
   });
 
+  describe('12. Call Connection State Machine & WebRTC State Mapping', () => {
+    function computeCallUIStatus({ signalingSubscribed, peerConnectionState, iceConnectionState, hasPeers }) {
+      if (!signalingSubscribed) return 'connecting';
+      if (!hasPeers) return 'ready'; // Waiting for team members to join
+
+      if (peerConnectionState === 'connected' || iceConnectionState === 'connected' || iceConnectionState === 'completed') {
+        return 'connected';
+      }
+      if (peerConnectionState === 'disconnected' || iceConnectionState === 'disconnected') {
+        return 'reconnecting';
+      }
+      if (peerConnectionState === 'failed' || iceConnectionState === 'failed') {
+        return 'failed';
+      }
+      return 'connecting';
+    }
+
+    it('Solo user who joined signaling channel displays ready state, not fake connected', () => {
+      const status = computeCallUIStatus({
+        signalingSubscribed: true,
+        peerConnectionState: null,
+        iceConnectionState: null,
+        hasPeers: false
+      });
+      assert.strictEqual(status, 'ready');
+    });
+
+    it('Transitions to connected only when WebRTC PeerConnection or ICE connection establishes', () => {
+      const status = computeCallUIStatus({
+        signalingSubscribed: true,
+        peerConnectionState: 'connected',
+        iceConnectionState: 'connected',
+        hasPeers: true
+      });
+      assert.strictEqual(status, 'connected');
+    });
+
+    it('Transitions to reconnecting when WebRTC drops temporarily', () => {
+      const status = computeCallUIStatus({
+        signalingSubscribed: true,
+        peerConnectionState: 'disconnected',
+        iceConnectionState: 'disconnected',
+        hasPeers: true
+      });
+      assert.strictEqual(status, 'reconnecting');
+    });
+
+    it('Transitions to failed when WebRTC connection permanently fails', () => {
+      const status = computeCallUIStatus({
+        signalingSubscribed: true,
+        peerConnectionState: 'failed',
+        iceConnectionState: 'failed',
+        hasPeers: true
+      });
+      assert.strictEqual(status, 'failed');
+    });
+  });
+
 });

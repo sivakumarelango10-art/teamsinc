@@ -24,7 +24,7 @@ import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UserForm from '../../components/users/UserForm';
 import TaskForm from '../../components/tasks/TaskForm';
-import DepartmentAllocation from '../../components/planning/DepartmentAllocation';
+import DailyTaskAllocation from '../../components/planning/DailyTaskAllocation';
 
 export const FounderDashboard = () => {
   const { user } = useAuth();
@@ -35,33 +35,30 @@ export const FounderDashboard = () => {
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [todayAllocations, setTodayAllocations] = useState([]);
-  const [tomorrowAllocations, setTomorrowAllocations] = useState([]);
+  const [memberships, setMemberships] = useState({});
 
   // Modals
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [userModalPresetRole, setUserModalPresetRole] = useState('MEMBER');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskModalInitialData, setTaskModalInitialData] = useState(null);
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [allUsers, allTasks, allDepts, todayPlan, tomorrowPlan] = await Promise.all([
+      const [allUsers, allTasks, allDepts, memberMap] = await Promise.all([
         usersApi.getUsers(),
         tasksApi.getTasks(),
         departmentsApi.getDepartments(),
-        planningApi.getDailyAllocations(todayStr),
-        planningApi.getDailyAllocations(tomorrowStr)
+        departmentsApi.getAllDepartmentMemberships().catch(() => ({}))
       ]);
 
       setUsers(allUsers);
       setTasks(allTasks);
       setDepartments(allDepts);
-      setTodayAllocations(todayPlan.assignments || []);
-      setTomorrowAllocations(tomorrowPlan.assignments || []);
+      setMemberships(memberMap || {});
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -228,73 +225,22 @@ export const FounderDashboard = () => {
         />
       </div>
 
-      {/* Workforce Planning Sections: Today & Tomorrow */}
-      <div className="space-y-6">
-        {/* Today's Allocation */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  Today's Team Allocation
-                </h3>
-                <p className="text-xs text-neutral-400">
-                  {format(new Date(), 'EEEE, MMMM d, yyyy')} — {todayAllocations.length} total assignments
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => navigate('/admin/daily-planning')}
-              className="text-xs text-white hover:text-neutral-300 flex items-center gap-1 font-semibold transition"
-            >
-              <span>Manage Today</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          <DepartmentAllocation
-            departments={departments}
-            assignments={todayAllocations}
-            canManage={false}
-          />
-        </div>
-
-        {/* Tomorrow's Allocation */}
-        <div className="space-y-3 pt-4 border-t border-neutral-850">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  Tomorrow's Team Allocation
-                </h3>
-                <p className="text-xs text-neutral-400">
-                  {format(addDays(new Date(), 1), 'EEEE, MMMM d, yyyy')} — {tomorrowAllocations.length} planned assignments
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => navigate('/admin/daily-planning')}
-              className="text-xs text-white hover:text-neutral-300 flex items-center gap-1 font-semibold transition"
-            >
-              <span>Plan Tomorrow</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          <DepartmentAllocation
-            departments={departments}
-            assignments={tomorrowAllocations}
-            canManage={false}
-          />
-        </div>
+      {/* Daily Task Allocation Section */}
+      <div className="pt-2">
+        <DailyTaskAllocation
+          tasks={tasks}
+          users={users}
+          departments={departments}
+          memberships={memberships}
+          selectedDate={todayStr}
+          title="Today's Task Allocation"
+          canManage={true}
+          onOpenTaskModal={(initial) => {
+            setTaskModalInitialData(initial || null);
+            setIsTaskModalOpen(true);
+          }}
+          onManageLink="/admin/daily-planning"
+        />
       </div>
 
       {/* Modals */}
@@ -307,11 +253,15 @@ export const FounderDashboard = () => {
 
       <TaskForm
         isOpen={isTaskModalOpen}
-        onClose={() => setIsTaskModalOpen(false)}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setTaskModalInitialData(null);
+        }}
         onSubmit={handleCreateTask}
         members={users.filter(u => u.is_active)}
         departments={departments}
         currentUserId={user?.id}
+        initialData={taskModalInitialData}
       />
     </div>
   );

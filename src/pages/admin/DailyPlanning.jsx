@@ -1,64 +1,66 @@
 import React, { useState, useEffect } from 'react';
-import { planningApi } from '../../api/planningApi';
+import { tasksApi } from '../../api/tasksApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { usersApi } from '../../api/usersApi';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../api/supabase';
-import DailyPlanner from '../../components/planning/DailyPlanner';
-import DepartmentAllocation from '../../components/planning/DepartmentAllocation';
+import DailyTaskAllocation from '../../components/planning/DailyTaskAllocation';
+import TaskForm from '../../components/tasks/TaskForm';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { Calendar, Layers } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Calendar, PlusCircle, CheckSquare, Clock } from 'lucide-react';
+import { format, parseISO, addDays } from 'date-fns';
 
 export const DailyPlanning = () => {
   const { user } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [tasks, setTasks] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [members, setMembers] = useState([]);
-  const [currentAssignments, setCurrentAssignments] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [memberships, setMemberships] = useState({});
   const [loading, setLoading] = useState(true);
 
-  const loadData = async (dateStr) => {
+  // Modals
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskModalInitialData, setTaskModalInitialData] = useState(null);
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+
+  const loadData = async () => {
     try {
       setLoading(true);
-      const targetDate = dateStr || selectedDate;
-      const [allDepts, allUsers, planData] = await Promise.all([
+      const [allTasks, allDepts, allUsers, memberMap] = await Promise.all([
+        tasksApi.getTasks(),
         departmentsApi.getDepartments(),
         usersApi.getUsers(),
-        planningApi.getDailyAllocations(targetDate)
+        departmentsApi.getAllDepartmentMemberships().catch(() => ({}))
       ]);
 
+      setTasks(allTasks);
       setDepartments(allDepts);
-      setMembers(allUsers.filter(u => u.role === 'MEMBER' && u.is_active));
-      setCurrentAssignments(planData.assignments || []);
+      setUsers(allUsers);
+      setMemberships(memberMap || {});
     } catch (err) {
-      console.error('Error loading planning data:', err);
+      console.error('Error loading daily task allocation data:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData(selectedDate);
+    loadData();
 
     // Realtime synchronization across all tabs and devices
     let channel = null;
     if (supabase) {
       channel = supabase
-        .channel(`realtime-planning-${selectedDate}`)
+        .channel('realtime-tasks-allocation')
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_assignments' },
+          { event: '*', schema: 'public', table: 'tasks' },
           () => {
-            loadData(selectedDate);
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_plans' },
-          () => {
-            loadData(selectedDate);
+            loadData();
           }
         )
         .subscribe();
@@ -66,11 +68,9 @@ export const DailyPlanning = () => {
 
     let bc = null;
     try {
-      bc = new BroadcastChannel('teamsync_planning_updates');
-      bc.onmessage = (event) => {
-        if (event.data?.dateStr === selectedDate) {
-          loadData(selectedDate);
-        }
+      bc = new BroadcastChannel('teamsync_task_updates');
+      bc.onmessage = () => {
+        loadData();
       };
     } catch {}
 
@@ -78,90 +78,121 @@ export const DailyPlanning = () => {
       if (channel && supabase) supabase.removeChannel(channel);
       if (bc) bc.close();
     };
-  }, [selectedDate]);
+  }, []);
 
-  const handleSaveAllocation = async ({ dateStr, departmentId, userIds }) => {
-    await planningApi.saveDepartmentAllocation({
-      dateStr,
-      departmentId,
-      userIds,
-      createdBy: user?.id
+  const handleCreateTask = async (taskData) => {
+    await tasksApi.createTask({
+      ...taskData,
+      created_by: user?.id,
+      deadline: taskData.deadline || selectedDate
     });
 
     try {
-      const bc = new BroadcastChannel('teamsync_planning_updates');
-      bc.postMessage({ type: 'ALLOCATION_SAVED', dateStr });
+      const bc = new BroadcastChannel('teamsync_task_updates');
+      bc.postMessage({ type: 'TASK_CREATED' });
       bc.close();
     } catch {}
 
-    await loadData(dateStr);
-  };
-
-  const handleRemoveAssignment = async (assignmentId) => {
-    await planningApi.removeAssignment(assignmentId);
-    try {
-      const bc = new BroadcastChannel('teamsync_planning_updates');
-      bc.postMessage({ type: 'ALLOCATION_SAVED', dateStr: selectedDate });
-      bc.close();
-    } catch {}
-    await loadData(selectedDate);
+    await loadData();
+    setIsTaskModalOpen(false);
+    setTaskModalInitialData(null);
   };
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-          <Calendar className="w-7 h-7 text-white" />
-          Daily Workforce Planner
-        </h1>
-        <p className="text-xs md:text-sm text-neutral-400 mt-1">
-          Dynamically schedule team members across departments for any target date. Members see their specific allocation when they sign in.
-        </p>
-      </div>
+      {/* Header with Date Selector */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+            <Calendar className="w-7 h-7 text-white" />
+            <span>Daily Task Allocation</span>
+          </h1>
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
+            Allocate and schedule daily deliverables across team members. Track real-time progress and completion for any date.
+          </p>
+        </div>
 
-      {loading && departments.length === 0 ? (
-        <LoadingSpinner text="Loading workforce planner..." size="large" />
-      ) : (
-        <div className="space-y-8">
-          {/* Main Interactive Daily Planner */}
-          <DailyPlanner
-            selectedDate={selectedDate}
-            onDateChange={(newDate) => setSelectedDate(newDate)}
-            departments={departments}
-            members={members}
-            currentAssignments={currentAssignments}
-            onSaveAllocation={handleSaveAllocation}
-            loading={loading}
+        {/* Date Filter Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setSelectedDate(todayStr)}
+            className={`px-3 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
+              selectedDate === todayStr
+                ? 'bg-white text-black shadow-md'
+                : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedDate(tomorrowStr)}
+            className={`px-3 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
+              selectedDate === tomorrowStr
+                ? 'bg-white text-black shadow-md'
+                : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+            }`}
+          >
+            Tomorrow
+          </button>
+
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+            className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-white font-mono outline-none focus:border-white transition cursor-pointer"
           />
 
-          {/* Allocation Grid for Selected Date */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-neutral-900 text-white border border-neutral-800">
-                  <Layers className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">
-                    Allocations for {format(parseISO(selectedDate), 'EEEE, MMMM d, yyyy')}
-                  </h3>
-                  <p className="text-xs text-neutral-400">
-                    {currentAssignments.length} total team members deployed across {departments.length} departments
-                  </p>
-                </div>
-              </div>
-            </div>
+          <button
+            type="button"
+            onClick={() => {
+              setTaskModalInitialData({ deadline: selectedDate });
+              setIsTaskModalOpen(true);
+            }}
+            className="px-4 py-2 rounded-xl bg-white text-black hover:bg-neutral-200 text-xs font-bold flex items-center gap-1.5 shadow-md transition cursor-pointer"
+          >
+            <PlusCircle className="w-4 h-4 text-black" />
+            <span>Allocate Task</span>
+          </button>
+        </div>
+      </div>
 
-            <DepartmentAllocation
-              departments={departments}
-              assignments={currentAssignments}
-              onRemoveAssignment={handleRemoveAssignment}
-              canManage={true}
-            />
-          </div>
+      {loading && users.length === 0 ? (
+        <LoadingSpinner text="Loading daily task allocations..." size="large" />
+      ) : (
+        <div className="space-y-6">
+          <DailyTaskAllocation
+            tasks={tasks}
+            users={users}
+            departments={departments}
+            memberships={memberships}
+            selectedDate={selectedDate}
+            title={`Task Allocations (${format(parseISO(selectedDate), 'MMMM d, yyyy')})`}
+            subtitle={`Deliverables and action items scheduled for ${format(parseISO(selectedDate), 'EEEE, MMMM d, yyyy')}`}
+            canManage={true}
+            onOpenTaskModal={(initial) => {
+              setTaskModalInitialData({ ...initial, deadline: selectedDate });
+              setIsTaskModalOpen(true);
+            }}
+            onManageLink={null}
+          />
         </div>
       )}
+
+      {/* Task Creation Modal */}
+      <TaskForm
+        isOpen={isTaskModalOpen}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setTaskModalInitialData(null);
+        }}
+        onSubmit={handleCreateTask}
+        members={users.filter(u => u.is_active)}
+        departments={departments}
+        currentUserId={user?.id}
+        initialData={taskModalInitialData}
+      />
     </div>
   );
 };

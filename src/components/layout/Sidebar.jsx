@@ -32,7 +32,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         { to: '/founder/users', label: 'User Management', icon: Users },
         { to: '/founder/departments', label: 'Departments', icon: Building2 },
         { to: '/admin/tasks', label: 'All Tasks', icon: CheckSquare },
-        { to: '/admin/daily-planning', label: 'Daily Team Planner', icon: Calendar },
+        { to: '/admin/daily-planning', label: 'Daily Task Allocation', icon: Calendar },
         { to: '/founder/reports', label: 'Reports & Analytics', icon: BarChart3 },
         { to: '/profile', label: 'My Profile', icon: User }
       ];
@@ -43,7 +43,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         { to: '/admin/bugs', label: 'Bug Reports', icon: Bug },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
         { to: '/admin/assign-task', label: 'Assign New Task', icon: PlusCircle },
-        { to: '/admin/daily-planning', label: 'Daily Team Planner', icon: Calendar },
+        { to: '/admin/daily-planning', label: 'Daily Task Allocation', icon: Calendar },
         { to: '/profile', label: 'My Profile', icon: User }
       ];
     } else if (isFoundingAdvisor) {

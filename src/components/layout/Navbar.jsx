@@ -43,10 +43,12 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
           <button
             type="button"
             onClick={onToggleCopilot}
-            className="px-2.5 py-1.5 rounded-xl text-purple-300 hover:text-white bg-purple-950/40 hover:bg-purple-900/60 border border-purple-800/60 hover:border-purple-600 transition flex items-center gap-1.5 text-xs font-bold cursor-pointer shadow-sm"
+            className="px-2.5 py-1.5 rounded-xl text-neutral-200 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition flex items-center gap-2 text-xs font-bold cursor-pointer shadow-sm group"
             title="Open TeamSync AI Copilot"
           >
-            <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+            <div className="w-4 h-4 rounded-full overflow-hidden shrink-0 border border-neutral-700 group-hover:border-purple-500 transition-colors">
+              <img src="/ai-logo.png" alt="AI" className="w-full h-full object-cover" />
+            </div>
             <span className="hidden md:inline">AI Copilot</span>
           </button>
         )}

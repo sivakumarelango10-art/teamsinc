@@ -103,10 +103,8 @@ export const AIDepartmentModal = ({ isOpen, onClose, currentDepartments = [], on
         {/* Header */}
         <div className="p-6 border-b border-neutral-850 flex items-center justify-between bg-black/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-md">
-              <div className="w-full h-full bg-black rounded-[14px] flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-              </div>
+            <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-md shrink-0 border border-neutral-750 bg-black">
+              <img src="/ai-logo.png" alt="AI" className="w-full h-full object-cover" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">

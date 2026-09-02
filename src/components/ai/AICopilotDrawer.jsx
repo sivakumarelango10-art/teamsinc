@@ -257,10 +257,8 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="p-4 border-b border-neutral-850 flex items-center justify-between bg-black/60 backdrop-blur-md">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-emerald-500 p-0.5 shadow-md flex items-center justify-center">
-              <div className="w-full h-full bg-black rounded-[10px] flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white animate-pulse" />
-              </div>
+            <div className="w-9 h-9 rounded-xl overflow-hidden shadow-md shrink-0 border border-neutral-750 bg-black">
+              <img src="/ai-logo.png" alt="TeamSync AI" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
@@ -329,8 +327,8 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
               className={`flex gap-2.5 ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {m.sender === 'copilot' && (
-                <div className="w-6 h-6 rounded-lg bg-neutral-900 border border-neutral-750 flex items-center justify-center text-purple-400 shrink-0 mt-0.5">
-                  <Bot className="w-3.5 h-3.5" />
+                <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-neutral-750 mt-0.5 shadow-xs">
+                  <img src="/ai-logo.png" alt="AI" className="w-full h-full object-cover" />
                 </div>
               )}
 
@@ -382,8 +380,8 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
 
           {loading && (
             <div className="flex gap-2.5 items-start">
-              <div className="w-6 h-6 rounded-lg bg-neutral-900 border border-neutral-750 flex items-center justify-center text-purple-400 shrink-0 animate-spin">
-                <Loader2 className="w-3.5 h-3.5" />
+              <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-purple-500/80 shadow-sm animate-pulse mt-0.5">
+                <img src="/ai-logo.png" alt="AI" className="w-full h-full object-cover" />
               </div>
               <div className="px-3.5 py-2.5 rounded-2xl bg-neutral-900/60 border border-neutral-800 text-xs text-neutral-400 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />

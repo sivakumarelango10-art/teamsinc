@@ -46,14 +46,16 @@ export const DashboardLayout = ({ title, children }) => {
       <button
         type="button"
         onClick={() => setCopilotOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-emerald-400 p-[1.5px] shadow-[0_4px_25px_rgba(147,51,234,0.35)] hover:shadow-[0_4px_30px_rgba(147,51,234,0.6)] hover:scale-110 active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center cursor-pointer group animate-fadeIn"
+        className="fixed bottom-6 right-6 z-40 w-13 h-13 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 p-[2px] shadow-[0_4px_25px_rgba(147,51,234,0.4)] hover:shadow-[0_4px_35px_rgba(99,102,241,0.65)] hover:scale-110 active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center cursor-pointer group animate-fadeIn"
         title="AI Copilot (Ctrl + K)"
         aria-label="Open AI Copilot"
       >
-        <div className="w-full h-full bg-neutral-950 rounded-full flex items-center justify-center group-hover:bg-neutral-900 transition-colors duration-200">
-          <span className="text-lg leading-none transform group-hover:rotate-12 transition-transform duration-300 select-none">
-            ✨
-          </span>
+        <div className="w-full h-full bg-black rounded-full overflow-hidden flex items-center justify-center">
+          <img
+            src="/ai-logo.png"
+            alt="AI Copilot"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none pointer-events-none"
+          />
         </div>
       </button>
 

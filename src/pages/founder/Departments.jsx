@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { departmentsApi } from '../../api/departmentsApi';
-import { Building2, Plus, Edit2, Trash2, X, AlertCircle, Sparkles, UserPlus, Users, UserMinus } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, X, AlertCircle, UserPlus, Users, UserMinus, Bot } from 'lucide-react';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import AIDepartmentModal from '../../components/departments/AIDepartmentModal';
@@ -122,7 +122,7 @@ export const Departments = () => {
             className="px-3.5 py-2.5 text-xs font-bold text-purple-300 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-800/80 rounded-xl transition shadow-md flex items-center gap-2 cursor-pointer"
             title="Use AI to architect and generate department structures"
           >
-            <Sparkles className="w-4 h-4 text-purple-400" />
+            <Bot className="w-4 h-4 text-purple-400" />
             <span>AI Architect</span>
           </button>
 
@@ -150,7 +150,7 @@ export const Departments = () => {
               onClick={() => setIsAiModalOpen(true)}
               className="px-4 py-2 text-xs font-bold text-purple-300 bg-purple-950 border border-purple-800 rounded-xl hover:bg-purple-900 transition flex items-center gap-2"
             >
-              <Sparkles className="w-4 h-4 text-purple-400" />
+              <Bot className="w-4 h-4 text-purple-400" />
               <span>Use AI Architect</span>
             </button>
             <button

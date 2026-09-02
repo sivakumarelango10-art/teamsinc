@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Sparkles,
+  FileText,
   X,
   Send,
   Loader2,
@@ -312,7 +312,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
               </>
             ) : (
               <>
-                <Sparkles className="w-3 h-3" />
+                <FileText className="w-3 h-3 text-black" />
                 <span>Generate Daily Briefing</span>
               </>
             )}

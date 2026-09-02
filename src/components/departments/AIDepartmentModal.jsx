@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Sparkles,
+  Bot,
   X,
   Loader2,
   Building2,
@@ -183,7 +183,7 @@ export const AIDepartmentModal = ({ isOpen, onClose, currentDepartments = [], on
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  <Bot className="w-4 h-4 text-purple-600" />
                   <span>Generate Structure</span>
                 </>
               )}

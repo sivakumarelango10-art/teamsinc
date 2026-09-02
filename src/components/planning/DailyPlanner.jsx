@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Building2, Check, CheckSquare, Square, Search, AlertCircle, Sparkles } from 'lucide-react';
+import { Calendar, Building2, Check, CheckSquare, Square, Search, AlertCircle, Save } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 export const DailyPlanner = ({
@@ -287,7 +287,7 @@ export const DailyPlanner = ({
           onClick={handleSave}
           className="px-6 py-2.5 text-sm font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
         >
-          <Sparkles className="w-4 h-4 text-black fill-black" />
+          <Save className="w-4 h-4 text-black" />
           {isSaving ? 'Saving Plan...' : 'SAVE PLAN'}
         </button>
       </div>

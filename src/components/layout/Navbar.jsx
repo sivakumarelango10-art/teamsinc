@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Calendar, MessageSquare, Sparkles } from 'lucide-react';
+import { Menu, Calendar, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../../hooks/useAuth';
 

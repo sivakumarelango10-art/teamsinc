@@ -6,7 +6,7 @@ import { supabase } from '../../api/supabase';
 import TaskCard from '../../components/tasks/TaskCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
-import { Building2, Calendar, CheckSquare, Sparkles } from 'lucide-react';
+import { Building2, Calendar, CheckSquare } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 
 export const MemberDashboard = () => {
@@ -106,7 +106,7 @@ export const MemberDashboard = () => {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-neutral-900 text-white border border-neutral-700 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" />
+                <Building2 className="w-3.5 h-3.5 text-neutral-300" />
                 Team Workspace
               </span>
             </div>

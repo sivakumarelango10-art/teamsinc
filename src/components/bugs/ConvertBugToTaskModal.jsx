@@ -8,7 +8,7 @@ import {
   AlertTriangle,
   Loader2,
   CheckCircle2,
-  Sparkles,
+  Bot,
   Zap,
   Check
 } from 'lucide-react';
@@ -218,7 +218,7 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
               <div className="p-3.5 rounded-2xl bg-gradient-to-tr from-purple-950/40 via-neutral-900/60 to-neutral-900 border border-purple-800/60 space-y-2 animate-fadeIn">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-purple-300">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    <Bot className="w-3.5 h-3.5 text-purple-400" />
                     <span>AI Route: {aiTriage.suggestedDepartmentName || 'General Engineering'}</span>
                   </div>
                   {aiTriage.confidenceScore && (
@@ -245,11 +245,11 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
               <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => runAiTriage(bug, departments)}
+                  onClick={() => runAiTriage(bug, departments, memberships)}
                   disabled={aiLoading || departments.length === 0}
                   className="px-2.5 py-1 rounded-lg bg-purple-950/80 hover:bg-purple-900 border border-purple-800 text-purple-300 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <Sparkles className="w-3 h-3" />
+                  <Bot className="w-3 h-3" />
                   <span>AI Triage & Route</span>
                 </button>
               </div>

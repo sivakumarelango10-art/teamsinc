@@ -10,7 +10,7 @@ import {
   Paperclip,
   Users,
   Smile,
-  Sparkles,
+  Wand2,
   Circle,
   Square,
   Maximize,
@@ -541,7 +541,7 @@ export const VideoCallModal = ({
           <div className="absolute bottom-20 z-50 bg-neutral-900 border border-neutral-700 rounded-2xl p-4 shadow-2xl w-72 text-xs space-y-3 animate-fadeIn">
             <div>
               <h4 className="font-bold text-white mb-2 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <Wand2 className="w-3.5 h-3.5 text-emerald-400" />
                 Background Effects
               </h4>
               <div className="grid grid-cols-2 gap-2">
@@ -677,7 +677,7 @@ export const VideoCallModal = ({
             }`}
             title="Visual filters and background"
           >
-            <Sparkles className="w-5 h-5" />
+            <Wand2 className="w-5 h-5" />
           </button>
 
           {/* 7. Leave / End Call Button */}

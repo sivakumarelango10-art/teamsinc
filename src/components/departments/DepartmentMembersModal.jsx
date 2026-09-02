@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { departmentsApi } from '../../api/departmentsApi';
 import { usersApi } from '../../api/usersApi';
-import { X, Search, Check, Users, Shield, Building2, Loader2, Sparkles } from 'lucide-react';
+import { X, Search, Check, Users, Shield, Building2, Loader2, Info } from 'lucide-react';
 
 export const DepartmentMembersModal = ({ department, onClose, onUpdated }) => {
   const [allUsers, setAllUsers] = useState([]);
@@ -112,7 +112,7 @@ export const DepartmentMembersModal = ({ department, onClose, onUpdated }) => {
         {/* Info Notification */}
         <div className="px-6 py-2.5 bg-neutral-900/50 border-b border-neutral-850 flex items-center justify-between gap-2 text-xs text-neutral-400">
           <span className="flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <Info className="w-3.5 h-3.5 text-neutral-400" />
             <span>Members can belong to multiple departments simultaneously without restriction.</span>
           </span>
           <div className="flex items-center gap-2">

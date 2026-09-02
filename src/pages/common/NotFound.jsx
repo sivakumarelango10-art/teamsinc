@@ -9,7 +9,6 @@ import {
   User, 
   Bug, 
   FileQuestion,
-  Sparkles,
   Search
 } from 'lucide-react';
 import BrandLogo from '../../components/common/BrandLogo';

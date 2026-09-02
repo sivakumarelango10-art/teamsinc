@@ -15,7 +15,7 @@ import {
   Eye,
   RefreshCw,
   Image as ImageIcon,
-  Sparkles
+  Bot
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { bugsApi } from '../../api/bugsApi';
@@ -323,7 +323,7 @@ export const BugManagement = () => {
                       className="px-3 py-1.5 rounded-xl bg-purple-950/70 hover:bg-purple-900 border border-purple-800/80 text-purple-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm"
                       title="Use Gemini AI to triage and route bug to department"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <Bot className="w-3.5 h-3.5 text-purple-400" />
                       <span>AI Route & Convert</span>
                     </button>
                   )}

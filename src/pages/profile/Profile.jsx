@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   Camera,
@@ -9,9 +9,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Award
+  Award,
+  Building2
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { departmentsApi } from '../../api/departmentsApi';
 import { format, parseISO } from 'date-fns';
 
 export const Profile = () => {
@@ -21,11 +23,21 @@ export const Profile = () => {
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
   const [selectedFile, setSelectedFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatar_url || null);
+  const [userDepartments, setUserDepartments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const userId = profile?.id || user?.id;
+    if (userId) {
+      departmentsApi.getUserDepartments(userId)
+        .then(depts => setUserDepartments(depts || []))
+        .catch(() => setUserDepartments([]));
+    }
+  }, [profile?.id, user?.id]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -255,6 +267,41 @@ export const Profile = () => {
                 className="w-full pl-10 pr-4 py-2.5 bg-neutral-900/40 border border-neutral-850 rounded-2xl text-sm text-neutral-400 cursor-not-allowed font-mono"
               />
             </div>
+          </div>
+
+          {/* Responsible Departments */}
+          <div className="space-y-2 pt-1">
+            <label className="text-xs font-bold text-neutral-300 block flex items-center justify-between">
+              <span>My Responsible Departments</span>
+              <span className="text-[10px] text-neutral-500 font-mono">
+                {userDepartments.length} assigned
+              </span>
+            </label>
+            {userDepartments.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {userDepartments.map(dept => (
+                  <div
+                    key={dept.id}
+                    className="p-3 rounded-xl bg-neutral-900/80 border border-neutral-800 flex items-start gap-2.5"
+                  >
+                    <div className="p-1.5 rounded-lg bg-purple-950/60 border border-purple-800 text-purple-400 shrink-0 mt-0.5">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-white">{dept.name}</h5>
+                      <p className="text-[11px] text-neutral-400 line-clamp-2 mt-0.5">
+                        {dept.description || 'Core department assignment.'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-850 text-xs text-neutral-400 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-neutral-500 shrink-0" />
+                <span>No departments assigned yet. Contact your Founder or Admin.</span>
+              </div>
+            )}
           </div>
 
           {/* Account Created Date */}

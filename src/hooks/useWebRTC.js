@@ -896,10 +896,11 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
 
   // Send emoji reaction
   const sendReaction = useCallback((emoji) => {
+    const user = currentUserRef.current;
     const newReaction = {
       id: 'rx-' + Date.now() + '-' + Math.random(),
       emoji,
-      senderName: currentUser?.full_name || 'You',
+      senderName: user?.full_name || 'You',
       createdAt: Date.now()
     };
     setReactions(prev => [...prev.slice(-15), newReaction]);
@@ -907,17 +908,18 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       type: 'REACTION',
       emoji
     });
-  }, [currentUser, sendSignal]);
+  }, [sendSignal]);
 
   // Send in-call chat message
   const sendInCallMessage = useCallback((text) => {
     if (!text || !text.trim()) return;
+    const user = currentUserRef.current;
     const msg = {
       id: 'icm-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       text: text.trim(),
       senderId: myPeerIdRef.current,
-      senderName: currentUser?.full_name || currentUser?.email?.split('@')[0] || 'Team Member',
-      senderRole: currentUser?.role || 'MEMBER',
+      senderName: user?.full_name || user?.email?.split('@')[0] || 'Team Member',
+      senderRole: user?.role || 'MEMBER',
       createdAt: new Date().toISOString()
     };
 
@@ -926,18 +928,19 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       type: 'IN_CALL_CHAT',
       message: msg
     });
-  }, [currentUser, sendSignal]);
+  }, [sendSignal]);
 
   // Share in-call file
   const sendInCallFile = useCallback((fileData) => {
     if (!fileData) return;
+    const user = currentUserRef.current;
     const fileEntry = {
       id: 'icf-' + Date.now(),
       name: fileData.name,
       url: fileData.url,
       size: fileData.size,
       type: fileData.type,
-      senderName: currentUser?.full_name || currentUser?.email?.split('@')[0] || 'Team Member',
+      senderName: user?.full_name || user?.email?.split('@')[0] || 'Team Member',
       createdAt: new Date().toISOString()
     };
 
@@ -946,7 +949,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       type: 'IN_CALL_FILE',
       file: fileEntry
     });
-  }, [currentUser, sendSignal]);
+  }, [sendSignal]);
 
   // Broadcast call ended by host to all peers
   const sendCallEnded = useCallback(() => {

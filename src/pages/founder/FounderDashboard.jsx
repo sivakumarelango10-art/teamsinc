@@ -24,7 +24,6 @@ import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UserForm from '../../components/users/UserForm';
 import TaskForm from '../../components/tasks/TaskForm';
-import DailyTaskAllocation from '../../components/planning/DailyTaskAllocation';
 
 export const FounderDashboard = () => {
   const { user } = useAuth();
@@ -222,24 +221,6 @@ export const FounderDashboard = () => {
           value={pendingTasks}
           subtitle="In queue"
           icon={CircleDot}
-        />
-      </div>
-
-      {/* Daily Task Allocation Section */}
-      <div className="pt-2">
-        <DailyTaskAllocation
-          tasks={tasks}
-          users={users}
-          departments={departments}
-          memberships={memberships}
-          selectedDate={todayStr}
-          title="Today's Task Allocation"
-          canManage={true}
-          onOpenTaskModal={(initial) => {
-            setTaskModalInitialData(initial || null);
-            setIsTaskModalOpen(true);
-          }}
-          onManageLink="/admin/daily-planning"
         />
       </div>
 

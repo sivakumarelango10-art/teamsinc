@@ -203,8 +203,6 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
     ]);
   };
 
-  if (!isOpen) return null;
-
   // Role Quick Prompt Suggestions
   const getPromptSuggestions = () => {
     if (isFounder) {
@@ -237,15 +235,25 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
   const suggestions = getPromptSuggestions();
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end animate-fadeIn">
+    <div
+      className={`fixed inset-0 z-50 flex justify-end transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
+    >
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
+        className={`fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity duration-300 ease-out ${
+          isOpen ? 'opacity-100' : 'opacity-0'
+        }`}
       />
 
       {/* Drawer Container */}
-      <div className="relative w-full max-w-lg bg-neutral-950 border-l border-neutral-800 text-neutral-100 flex flex-col h-full shadow-2xl z-10 animate-slideLeft">
+      <div
+        className={`relative w-full max-w-lg bg-neutral-950 border-l border-neutral-800 text-neutral-100 flex flex-col h-full shadow-2xl z-10 transform transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
         {/* Header */}
         <div className="p-4 border-b border-neutral-850 flex items-center justify-between bg-black/60 backdrop-blur-md">
           <div className="flex items-center gap-2.5">

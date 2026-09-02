@@ -42,18 +42,19 @@ export const DashboardLayout = ({ title, children }) => {
         </main>
       </div>
 
-      {/* Floating AI Copilot Trigger Button (Bottom Right) */}
+      {/* Floating AI Copilot Trigger Symbol Button (Bottom Right) */}
       <button
         type="button"
         onClick={() => setCopilotOpen(true)}
-        className="fixed bottom-6 right-6 z-40 px-3.5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-emerald-500 text-white font-bold text-xs shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 cursor-pointer border border-white/20 group animate-fadeIn"
-        title="Open TeamSync AI Copilot (Ctrl + K)"
+        className="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-emerald-400 p-[1.5px] shadow-[0_4px_25px_rgba(147,51,234,0.35)] hover:shadow-[0_4px_30px_rgba(147,51,234,0.6)] hover:scale-110 active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center cursor-pointer group animate-fadeIn"
+        title="AI Copilot (Ctrl + K)"
+        aria-label="Open AI Copilot"
       >
-        <Sparkles className="w-4 h-4 text-white animate-spin [animation-duration:4s]" />
-        <span className="hidden sm:inline">AI Copilot</span>
-        <span className="text-[10px] bg-black/40 px-1.5 py-0.5 rounded font-mono hidden md:inline">
-          Ctrl+K
-        </span>
+        <div className="w-full h-full bg-neutral-950 rounded-full flex items-center justify-center group-hover:bg-neutral-900 transition-colors duration-200">
+          <span className="text-lg leading-none transform group-hover:rotate-12 transition-transform duration-300 select-none">
+            ✨
+          </span>
+        </div>
       </button>
 
       {/* AI Copilot Drawer */}

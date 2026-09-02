@@ -27,8 +27,10 @@ import {
   Video,
   Phone,
   Clock,
+  Clock3,
   Loader2,
   Search,
+  ChevronLeft,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';

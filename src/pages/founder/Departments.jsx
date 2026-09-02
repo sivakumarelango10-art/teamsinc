@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { departmentsApi } from '../../api/departmentsApi';
 import { planningApi } from '../../api/planningApi';
-import { Building2, Plus, Edit2, Trash2, Calendar, X, AlertCircle } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, Calendar, X, AlertCircle, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import AIDepartmentModal from '../../components/departments/AIDepartmentModal';
 
 export const Departments = () => {
   const [departments, setDepartments] = useState([]);
@@ -14,6 +15,7 @@ export const Departments = () => {
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState(null);
   const [deleteConfirmDept, setDeleteConfirmDept] = useState(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
@@ -106,7 +108,7 @@ export const Departments = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {/* Date Picker Filter */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-300">
             <Calendar className="w-4 h-4 text-neutral-400" />
@@ -118,6 +120,15 @@ export const Departments = () => {
               className="bg-transparent border-0 text-white font-medium focus:outline-none cursor-pointer"
             />
           </div>
+
+          <button
+            onClick={() => setIsAiModalOpen(true)}
+            className="px-3.5 py-2.5 text-xs font-bold text-purple-300 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-800/80 rounded-xl transition shadow-md flex items-center gap-2 cursor-pointer"
+            title="Use Gemini AI to architect and generate department structures"
+          >
+            <Sparkles className="w-4 h-4 text-purple-400" />
+            <span>AI Architect</span>
+          </button>
 
           <button
             onClick={handleOpenCreate}
@@ -285,6 +296,14 @@ export const Departments = () => {
         loading={saving}
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmDept(null)}
+      />
+
+      {/* AI Department Architect Modal */}
+      <AIDepartmentModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        currentDepartments={departments}
+        onCreated={loadData}
       />
     </div>
   );

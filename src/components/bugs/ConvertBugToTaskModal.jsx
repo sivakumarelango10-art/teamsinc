@@ -7,12 +7,16 @@ import {
   Building2,
   AlertTriangle,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles,
+  Zap,
+  Check
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { bugsApi } from '../../api/bugsApi';
+import { geminiApi } from '../../api/geminiApi';
 import { useAuth } from '../../hooks/useAuth';
 
 export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
@@ -29,6 +33,10 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
   const [priority, setPriority] = useState('HIGH');
   const [deadline, setDeadline] = useState(format(addDays(new Date(), 2), 'yyyy-MM-dd'));
 
+  // AI Triage State
+  const [aiTriage, setAiTriage] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
@@ -44,6 +52,7 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
       ].filter(Boolean).join('');
       setDescription(descParts);
       setPriority(bug.severity === 'CRITICAL' ? 'URGENT' : (bug.severity === 'HIGH' ? 'HIGH' : 'MEDIUM'));
+      setAiTriage(null);
     }
   }, [bug]);
 
@@ -61,16 +70,13 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
         setMembers(activeMembers);
         setDepartments(deptsList);
 
-        // Auto-select Development department if exists
-        const devDept = deptsList.find(d => d.name.toLowerCase().includes('dev') || d.name.toLowerCase().includes('test'));
-        if (devDept) {
-          setDepartmentId(devDept.id);
-        } else if (deptsList.length > 0) {
-          setDepartmentId(deptsList[0].id);
-        }
-
         if (activeMembers.length > 0) {
           setAssignedTo(activeMembers[0].id);
+        }
+
+        // Run AI Bug Triage and Department Routing
+        if (bug && deptsList.length > 0) {
+          runAiTriage(bug, deptsList);
         }
       } catch (err) {
         console.error('Failed to load members or departments:', err);
@@ -81,6 +87,36 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
 
     loadData();
   }, [isOpen]);
+
+  const runAiTriage = async (targetBug, deptsList) => {
+    try {
+      setAiLoading(true);
+      const triage = await geminiApi.classifyAndRouteBug({
+        bugTitle: targetBug.title,
+        bugDescription: targetBug.description,
+        stepsToReproduce: targetBug.steps_to_reproduce,
+        departments: deptsList,
+        severity: targetBug.severity
+      });
+
+      if (triage) {
+        setAiTriage(triage);
+        if (triage.suggestedDepartmentId) {
+          setDepartmentId(triage.suggestedDepartmentId);
+        } else if (triage.suggestedDepartmentName) {
+          const match = deptsList.find(d => d.name.toLowerCase() === triage.suggestedDepartmentName.toLowerCase());
+          if (match) setDepartmentId(match.id);
+        }
+        if (triage.recommendedSeverity) {
+          setPriority(triage.recommendedSeverity === 'CRITICAL' ? 'URGENT' : triage.recommendedSeverity);
+        }
+      }
+    } catch (err) {
+      console.warn('AI Triage notice:', err);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   if (!isOpen || !bug) return null;
 
@@ -160,6 +196,53 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 py-4 overflow-y-auto pr-1 flex-1">
+            {/* AI Auto-Triage Department Routing Banner */}
+            {aiLoading ? (
+              <div className="p-3 rounded-2xl bg-purple-950/30 border border-purple-800/50 flex items-center gap-2.5 text-xs text-purple-300">
+                <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                <span>Gemini AI is analyzing bug details & routing to target department...</span>
+              </div>
+            ) : aiTriage ? (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-tr from-purple-950/40 via-neutral-900/60 to-neutral-900 border border-purple-800/60 space-y-2 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-purple-300">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    <span>AI Route: {aiTriage.suggestedDepartmentName || 'General Engineering'}</span>
+                  </div>
+                  {aiTriage.confidenceScore && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-200 border border-purple-700 font-bold">
+                      {Math.round(aiTriage.confidenceScore * 100)}% Match
+                    </span>
+                  )}
+                </div>
+                {aiTriage.rootCauseSummary && (
+                  <p className="text-[11px] text-neutral-300 leading-snug">
+                    <strong className="text-white">Analysis:</strong> {aiTriage.rootCauseSummary}
+                  </p>
+                )}
+                {aiTriage.errorDomain && (
+                  <div className="flex items-center gap-2 text-[10px] text-neutral-400">
+                    <span>Domain: <strong className="text-neutral-200">{aiTriage.errorDomain}</strong></span>
+                    {aiTriage.routingReason && (
+                      <span>&bull; {aiTriage.routingReason}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => runAiTriage(bug, departments)}
+                  disabled={aiLoading || departments.length === 0}
+                  className="px-2.5 py-1 rounded-lg bg-purple-950/80 hover:bg-purple-900 border border-purple-800 text-purple-300 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>AI Triage & Route</span>
+                </button>
+              </div>
+            )}
+
             {error && (
               <div className="p-3 rounded-xl bg-red-950/60 border border-red-800 text-xs text-red-300 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />

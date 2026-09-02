@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Calendar, MessageSquare } from 'lucide-react';
+import { Menu, Calendar, MessageSquare, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../../hooks/useAuth';
 
-export const Navbar = ({ onToggleSidebar, title = 'Dashboard' }) => {
+export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }) => {
   const { profile, role } = useAuth();
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
@@ -37,6 +37,19 @@ export const Navbar = ({ onToggleSidebar, title = 'Dashboard' }) => {
           <span className="text-neutral-600">•</span>
           <span className="text-white font-bold">{format(currentDateTime, 'hh:mm:ss a')}</span>
         </div>
+
+        {/* AI Copilot Trigger */}
+        {onToggleCopilot && (
+          <button
+            type="button"
+            onClick={onToggleCopilot}
+            className="px-2.5 py-1.5 rounded-xl text-purple-300 hover:text-white bg-purple-950/40 hover:bg-purple-900/60 border border-purple-800/60 hover:border-purple-600 transition flex items-center gap-1.5 text-xs font-bold cursor-pointer shadow-sm"
+            title="Open TeamSync AI Copilot"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+            <span className="hidden md:inline">AI Copilot</span>
+          </button>
+        )}
 
         {/* Quick Team Chat Link */}
         <Link

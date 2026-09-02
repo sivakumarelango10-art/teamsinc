@@ -14,7 +14,8 @@ import {
   Shield,
   Eye,
   RefreshCw,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Sparkles
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { bugsApi } from '../../api/bugsApi';
@@ -314,15 +315,16 @@ export const BugManagement = () => {
 
                 {/* Quick Action Buttons */}
                 <div className="flex items-center gap-2">
-                  {/* Convert to Task Button */}
+                  {/* Convert to Task with AI Triage Route */}
                   {bug.status === 'OPEN' && (
                     <button
                       type="button"
                       onClick={() => setConvertingBug(bug)}
-                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-purple-950/70 hover:bg-purple-900 border border-purple-800/80 text-purple-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                      title="Use Gemini AI to triage and route bug to department"
                     >
-                      <CheckSquare className="w-3.5 h-3.5" />
-                      Convert to Task
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <span>AI Route & Convert</span>
                     </button>
                   )}
 

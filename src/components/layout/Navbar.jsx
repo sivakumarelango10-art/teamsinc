@@ -5,8 +5,10 @@ import { format } from 'date-fns';
 import { useAuth } from '../../hooks/useAuth';
 
 export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }) => {
-  const { profile, role } = useAuth();
+  const { profile, role, isFounder, isAdmin, isFoundingAdvisor } = useAuth();
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
+
+  const canAccessAI = Boolean(isFounder || isAdmin || isFoundingAdvisor);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -38,8 +40,8 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
           <span className="text-white font-bold">{format(currentDateTime, 'hh:mm:ss a')}</span>
         </div>
 
-        {/* AI Copilot Trigger */}
-        {onToggleCopilot && (
+        {/* AI Copilot Trigger (Leadership Only) */}
+        {canAccessAI && onToggleCopilot && (
           <button
             type="button"
             onClick={onToggleCopilot}

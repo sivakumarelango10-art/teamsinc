@@ -3,17 +3,21 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import AICopilotDrawer from '../ai/AICopilotDrawer';
-import { Sparkles } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 
 export const DashboardLayout = ({ title, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const { isFounder, isAdmin, isFoundingAdvisor } = useAuth();
   const location = useLocation();
 
+  // AI Copilot is exclusively for Founder, Admin, and Founding Advisor (hidden for normal Members)
+  const canAccessAI = Boolean(isFounder || isAdmin || isFoundingAdvisor);
   const isChatPage = location.pathname.startsWith('/chat');
 
-  // Global hotkey Ctrl+K / Alt+A to toggle Copilot
+  // Global hotkey Ctrl+K / Alt+A to toggle Copilot (Leadership only)
   useEffect(() => {
+    if (!canAccessAI) return;
     const handleKeyDown = (e) => {
       if ((e.ctrlKey && e.key.toLowerCase() === 'k') || (e.altKey && e.key.toLowerCase() === 'a')) {
         e.preventDefault();
@@ -22,7 +26,7 @@ export const DashboardLayout = ({ title, children }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [canAccessAI]);
 
   return (
     <div className="min-h-screen bg-black flex text-neutral-100 relative">
@@ -36,7 +40,7 @@ export const DashboardLayout = ({ title, children }) => {
       <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
         <Navbar
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          onToggleCopilot={() => setCopilotOpen(true)}
+          onToggleCopilot={canAccessAI ? () => setCopilotOpen(true) : null}
           title={title}
         />
 
@@ -45,8 +49,8 @@ export const DashboardLayout = ({ title, children }) => {
         </main>
       </div>
 
-      {/* WhatsApp Meta-AI Style Floating Action Button (Hidden on /chat to avoid overlapping chat send/mic controls) */}
-      {!isChatPage && (
+      {/* WhatsApp Meta-AI Style Floating Action Button (Only for Founder, Admin, Advisor; hidden on /chat) */}
+      {canAccessAI && !isChatPage && (
         <button
           type="button"
           onClick={() => setCopilotOpen(true)}
@@ -64,11 +68,13 @@ export const DashboardLayout = ({ title, children }) => {
         </button>
       )}
 
-      {/* AI Copilot Drawer */}
-      <AICopilotDrawer
-        isOpen={copilotOpen}
-        onClose={() => setCopilotOpen(false)}
-      />
+      {/* AI Copilot Drawer (Leadership only) */}
+      {canAccessAI && (
+        <AICopilotDrawer
+          isOpen={copilotOpen}
+          onClose={() => setCopilotOpen(false)}
+        />
+      )}
     </div>
   );
 };

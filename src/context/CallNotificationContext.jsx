@@ -14,10 +14,12 @@ export const CallNotificationProvider = ({ children }) => {
   const [incomingCall, setIncomingCall] = useState(null); // When someone else is calling
   const [ongoingCall, setOngoingCall] = useState(null); // General active call in room
   const dismissedCallIdsRef = useRef(new Set());
+  const incomingCallRef = useRef(null);
   const ringTimeoutRef = useRef(null);
   const globalChannelRef = useRef(null);
 
   const currentUser = profile || user;
+  incomingCallRef.current = incomingCall;
 
   // Clear incoming ring
   const clearIncomingRing = () => {
@@ -57,7 +59,7 @@ export const CallNotificationProvider = ({ children }) => {
           const endedCallId = event.data?.callId;
           setOngoingCall(prev => (prev?.id === endedCallId ? null : prev));
           setActiveCallSession(prev => (prev?.id === endedCallId ? null : prev));
-          if (incomingCall?.id === endedCallId) {
+          if (incomingCallRef.current?.id === endedCallId) {
             clearIncomingRing();
           }
         }
@@ -79,7 +81,7 @@ export const CallNotificationProvider = ({ children }) => {
           if (endedCallId) {
             setOngoingCall(prev => (prev?.id === endedCallId ? null : prev));
             setActiveCallSession(prev => (prev?.id === endedCallId ? null : prev));
-            if (incomingCall?.id === endedCallId) {
+            if (incomingCallRef.current?.id === endedCallId) {
               clearIncomingRing();
             }
           }
@@ -92,7 +94,7 @@ export const CallNotificationProvider = ({ children }) => {
               handleIncomingCallSignal(payload.new);
             } else if (payload.new?.status === 'ended') {
               setOngoingCall(prev => (prev?.id === payload.new.id ? null : prev));
-              if (incomingCall?.id === payload.new.id) {
+              if (incomingCallRef.current?.id === payload.new.id) {
                 clearIncomingRing();
               }
               // If call ended by host, terminate call modal for all active participants
@@ -128,7 +130,7 @@ export const CallNotificationProvider = ({ children }) => {
     setOngoingCall(call);
 
     // If current user is already in this call, do nothing
-    if (activeCallSession?.id === call.id) return;
+    if (activeCallSession?.id === call.id || activeCallSession?.room_id === call.room_id) return;
 
     // If current user was the caller, do not ring themselves
     const myEmail = currentUser?.email?.toLowerCase();
@@ -138,6 +140,12 @@ export const CallNotificationProvider = ({ children }) => {
 
     // If already dismissed, skip ring
     if (dismissedCallIdsRef.current.has(call.id)) return;
+
+    // If already ringing for this call/room, seamlessly merge metadata without restarting ringtone/flicker
+    if (incomingCallRef.current && (incomingCallRef.current.id === call.id || incomingCallRef.current.room_id === call.room_id)) {
+      setIncomingCall(prev => ({ ...prev, ...call }));
+      return;
+    }
 
     // Trigger incoming ringing notification
     setIncomingCall(call);
@@ -174,9 +182,9 @@ export const CallNotificationProvider = ({ children }) => {
   };
 
   const startCall = async (callType = 'video', roomId = 'general', roomTitle = 'TeamSync Company HQ') => {
-    // 1. Instant 0ms optimistic call session creation
-    const optimisticSession = {
-      id: 'call-' + Date.now(),
+    const callId = `call_${roomId}_${Date.now()}`;
+    const sessionData = {
+      id: callId,
       room_id: roomId,
       room_title: roomTitle,
       call_type: callType,
@@ -193,50 +201,37 @@ export const CallNotificationProvider = ({ children }) => {
       }]
     };
 
-    setActiveCallSession(optimisticSession);
-    setOngoingCall(optimisticSession);
+    setActiveCallSession(sessionData);
+    setOngoingCall(sessionData);
 
     // Cross-tab broadcast
     try {
       const bc = new BroadcastChannel('teamsync_global_call_status');
-      bc.postMessage({ type: 'CALL_STATUS', call: optimisticSession });
+      bc.postMessage({ type: 'CALL_STATUS', call: sessionData });
       bc.close();
     } catch {}
 
-    // Supabase Realtime broadcast to all online team members
+    // Supabase Realtime broadcast to all online team members (single canonical dispatch)
     if (globalChannelRef.current) {
       globalChannelRef.current.send({
         type: 'broadcast',
         event: 'incoming_call',
-        payload: optimisticSession
+        payload: sessionData
       }).catch(err => console.warn('[Call] Realtime broadcast error:', err));
     }
 
-    // 2. Background DB synchronization
+    // Background DB synchronization with the same canonical callId
     callApi.createCallSession({
+      id: callId,
       roomId,
       roomTitle,
       caller: currentUser,
       callType
-    }).then(session => {
-      if (session && session.id) {
-        setActiveCallSession(prev => (prev?.id === optimisticSession.id ? session : prev));
-        setOngoingCall(prev => (prev?.id === optimisticSession.id ? session : prev));
-        
-        // Broadcast official DB session
-        if (globalChannelRef.current) {
-          globalChannelRef.current.send({
-            type: 'broadcast',
-            event: 'incoming_call',
-            payload: session
-          }).catch(() => {});
-        }
-      }
     }).catch(err => {
       console.warn('Call background sync notice:', err);
     });
 
-    return optimisticSession;
+    return sessionData;
   };
 
   const leaveCall = () => {

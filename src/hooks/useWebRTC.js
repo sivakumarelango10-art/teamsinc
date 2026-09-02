@@ -62,6 +62,11 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
   const iceCandidatesQueueRef = useRef({}); // { [peerId]: RTCIceCandidate[] }
   const processedSignalsRef = useRef(new Set()); // Deduplicate signals between Realtime and BroadcastChannel
 
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+  const onCallEndedByHostRef = useRef(onCallEndedByHost);
+  onCallEndedByHostRef.current = onCallEndedByHost;
+
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
   const myPeerIdRef = useRef(`peer_${currentUser?.id || 'usr'}_${Math.random().toString(36).substring(2, 7)}`);
@@ -80,16 +85,17 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
 
   // Broadcast signaling message via Supabase Realtime and BroadcastChannel
   const sendSignal = useCallback((payload) => {
+    const user = currentUserRef.current;
     const signalId = `sig_${myPeerIdRef.current}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const fullPayload = {
       ...payload,
       signalId,
       senderId: myPeerIdRef.current,
       senderUser: {
-        id: currentUser?.id,
-        name: currentUser?.full_name || currentUser?.email?.split('@')[0] || 'Team Member',
-        email: currentUser?.email || '',
-        role: currentUser?.role || 'MEMBER'
+        id: user?.id,
+        name: user?.full_name || user?.email?.split('@')[0] || 'Team Member',
+        email: user?.email || '',
+        role: user?.role || 'MEMBER'
       }
     };
 
@@ -108,7 +114,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         broadcastChannelRef.current.postMessage(fullPayload);
       } catch {}
     }
-  }, [currentUser]);
+  }, []);
 
   // Synchronize remote peer state with active MediaStream tracks
   const updatePeerState = useCallback((remotePeerId, extra = {}) => {
@@ -499,14 +505,14 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         setInCallFiles(prev => [...prev, data.file]);
 
       } else if (type === 'CALL_ENDED_BY_HOST') {
-        if (onCallEndedByHost) {
-          onCallEndedByHost();
+        if (onCallEndedByHostRef.current) {
+          onCallEndedByHostRef.current();
         }
       }
     } catch (err) {
       console.error('[WebRTC] Signal handling error:', type, err);
     }
-  }, [createPeerConnection, sendSignal, updatePeerState, onCallEndedByHost]);
+  }, [createPeerConnection, sendSignal, updatePeerState]);
 
   // Initialize media devices and signaling channel
   useEffect(() => {
@@ -760,7 +766,7 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         channelRef.current = null;
       }
     };
-  }, [roomId, isAudioOnlyInitial, handleSignal, sendSignal, createPeerConnection, currentUser]);
+  }, [roomId, isAudioOnlyInitial, handleSignal, sendSignal, createPeerConnection]);
 
   // Toggle Microphone (Mute/Unmute)
   const toggleAudio = useCallback(() => {

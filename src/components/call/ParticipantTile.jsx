@@ -30,15 +30,29 @@ const ParticipantTileComponent = ({
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
+  // Callback ref ensures video starts immediately upon DOM attachment
+  const handleVideoRef = (element) => {
+    videoRef.current = element;
+    if (element && stream) {
+      if (element.srcObject !== stream) {
+        element.srcObject = stream;
+      }
+      element.play().catch(() => {});
+    }
+  };
+
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
+      videoRef.current.play().catch(() => {});
     }
     if (audioRef.current && stream && !isLocal) {
-      audioRef.current.srcObject = stream;
-      audioRef.current.play().catch(() => {
-        // Autoplay policy fallback: audio element plays upon user interaction
-      });
+      if (audioRef.current.srcObject !== stream) {
+        audioRef.current.srcObject = stream;
+      }
+      audioRef.current.play().catch(() => {});
     }
   }, [stream, isLocal, isVideoOff]);
 
@@ -72,7 +86,7 @@ const ParticipantTileComponent = ({
           : 'border-neutral-800/80 hover:border-neutral-700'
       } ${isPinned ? 'ring-2 ring-amber-400' : ''}`}
     >
-      {/* Permanent Audio Element for Remote Peers (Guarantees voice never drops when camera is off) */}
+      {/* Permanent Audio Element for Remote Peers */}
       {!isLocal && stream && (
         <audio
           ref={audioRef}
@@ -89,7 +103,7 @@ const ParticipantTileComponent = ({
         {/* Video stream rendering */}
         {stream && !isVideoOff ? (
           <video
-            ref={videoRef}
+            ref={handleVideoRef}
             autoPlay
             playsInline
             muted={true} // Audio is handled cleanly by audioRef for remote, or muted for local

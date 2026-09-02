@@ -418,51 +418,56 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
       setErrorMessage('');
 
       try {
-        // Request camera & microphone with ultra-low latency audio/video constraints
-        const constraints = {
-          audio: {
-            echoCancellation: { ideal: true },
-            noiseSuppression: { ideal: true },
-            autoGainControl: { ideal: true },
-            channelCount: 1, // Mono audio saves 50% network packetization overhead
-            sampleRate: 48000,
-            latency: 0.005, // 5ms audio latency
-            googEchoCancellation: true,
-            googAutoGainControl: true,
-            googNoiseSuppression: true,
-            googHighpassFilter: true
-          },
-          video: isAudioOnlyInitial ? false : {
-            width: { ideal: 1280, max: 1280 },
-            height: { ideal: 720, max: 720 },
-            frameRate: { ideal: 30, max: 30 },
-            facingMode: 'user'
-          }
-        };
-
+        // Request camera & microphone with resilient progressive fallback
         let stream;
         try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (mediaErr) {
-          console.warn('Full media request failed, attempting audio-only:', mediaErr);
-          // Fallback to audio-only if video failed (e.g. no camera attached)
+          // 1. Try standard HD video & high-quality audio
           stream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
               noiseSuppression: true,
-              autoGainControl: true,
-              channelCount: 1,
-              sampleRate: 48000
+              autoGainControl: true
             },
-            video: false
+            video: isAudioOnlyInitial ? false : {
+              facingMode: 'user',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
           });
-          setIsVideoOff(true);
+        } catch (mediaErr) {
+          console.warn('[WebRTC] Ideal media request failed, attempting basic video+audio:', mediaErr);
+          if (!isAudioOnlyInitial) {
+            try {
+              // 2. Fallback to basic unconstrained video + audio
+              stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: true
+              });
+            } catch (fallbackVideoErr) {
+              console.warn('[WebRTC] Video fallback failed, falling back to audio-only:', fallbackVideoErr);
+              // 3. Fallback to audio-only if camera is unavailable/denied
+              stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false
+              });
+              setIsVideoOff(true);
+            }
+          } else {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false
+            });
+            setIsVideoOff(true);
+          }
         }
 
         if (isCancelled) {
           stream.getTracks().forEach(t => t.stop());
           return;
         }
+
+        const hasVideoTrack = stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled;
+        setIsVideoOff(!hasVideoTrack || isAudioOnlyInitial);
 
         localStreamRef.current = stream;
         setLocalStream(stream);

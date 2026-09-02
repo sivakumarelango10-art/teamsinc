@@ -40,6 +40,7 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [memberships, setMemberships] = useState({});
 
   useEffect(() => {
     if (bug) {
@@ -62,13 +63,15 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
     const loadData = async () => {
       try {
         setLoadingOptions(true);
-        const [usersList, deptsList] = await Promise.all([
+        const [usersList, deptsList, memberMap] = await Promise.all([
           usersApi.getUsers(),
-          departmentsApi.getDepartments()
+          departmentsApi.getDepartments(),
+          departmentsApi.getAllDepartmentMemberships()
         ]);
         const activeMembers = usersList.filter(u => u.is_active);
         setMembers(activeMembers);
         setDepartments(deptsList);
+        setMemberships(memberMap || {});
 
         if (activeMembers.length > 0) {
           setAssignedTo(activeMembers[0].id);
@@ -76,7 +79,7 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
 
         // Run AI Bug Triage and Department Routing
         if (bug && deptsList.length > 0) {
-          runAiTriage(bug, deptsList);
+          runAiTriage(bug, deptsList, memberMap || {});
         }
       } catch (err) {
         console.error('Failed to load members or departments:', err);
@@ -88,7 +91,7 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
     loadData();
   }, [isOpen]);
 
-  const runAiTriage = async (targetBug, deptsList) => {
+  const runAiTriage = async (targetBug, deptsList, memberMap) => {
     try {
       setAiLoading(true);
       const triage = await geminiApi.classifyAndRouteBug({
@@ -101,12 +104,21 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
 
       if (triage) {
         setAiTriage(triage);
-        if (triage.suggestedDepartmentId) {
-          setDepartmentId(triage.suggestedDepartmentId);
-        } else if (triage.suggestedDepartmentName) {
+        let matchedDeptId = triage.suggestedDepartmentId;
+        if (!matchedDeptId && triage.suggestedDepartmentName) {
           const match = deptsList.find(d => d.name.toLowerCase() === triage.suggestedDepartmentName.toLowerCase());
-          if (match) setDepartmentId(match.id);
+          if (match) matchedDeptId = match.id;
         }
+
+        if (matchedDeptId) {
+          setDepartmentId(matchedDeptId);
+          // Auto-select a member belonging to that department if available!
+          const deptMembers = (memberMap[matchedDeptId] || []).filter(m => m.is_active);
+          if (deptMembers.length > 0) {
+            setAssignedTo(deptMembers[0].id);
+          }
+        }
+
         if (triage.recommendedSeverity) {
           setPriority(triage.recommendedSeverity === 'CRITICAL' ? 'URGENT' : triage.recommendedSeverity);
         }
@@ -278,11 +290,30 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 focus:border-white text-xs text-white appearance-none outline-none cursor-pointer"
                     required
                   >
-                    {members.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.full_name} ({m.role})
-                      </option>
-                    ))}
+                    {departmentId && (memberships[departmentId] || []).length > 0 ? (
+                      <>
+                        <optgroup label="⭐ Department Members (Recommended)">
+                          {(memberships[departmentId] || []).map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name} ({m.role}) — Dept Specialist
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Other Available Members">
+                          {members.filter(m => !(memberships[departmentId] || []).some(dm => dm.id === m.id)).map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name} ({m.role})
+                            </option>
+                          ))}
+                        </optgroup>
+                      </>
+                    ) : (
+                      members.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.full_name} ({m.role})
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>
@@ -293,7 +324,13 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
                 </label>
                 <select
                   value={departmentId}
-                  onChange={(e) => setDepartmentId(e.target.value)}
+                  onChange={(e) => {
+                    const newDeptId = e.target.value;
+                    setDepartmentId(newDeptId);
+                    if (newDeptId && (memberships[newDeptId] || []).length > 0) {
+                      setAssignedTo(memberships[newDeptId][0].id);
+                    }
+                  }}
                   disabled={loadingOptions}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 focus:border-white text-xs text-white appearance-none outline-none cursor-pointer"
                 >

@@ -202,21 +202,38 @@ export const bugsApi = {
         if (foundDept) targetDeptId = foundDept.id;
       }
 
-      // If severity is CRITICAL, automatically convert to high-priority task assigned to the department!
+      // If severity is CRITICAL, automatically convert to high-priority task assigned to the target department & its members!
       if (bug.severity === 'CRITICAL' || triage.recommendedSeverity === 'CRITICAL') {
-        const activeUsers = users.filter(u => u.is_active);
-        const assignee =
-          activeUsers.find(u => u.role === 'ADMIN' || u.role === 'FOUNDER') ||
-          activeUsers[0];
+        let assignedMember = null;
+        let deptMembers = [];
 
-        if (assignee && !bug.converted_task_id) {
+        // 1. Check which members belong to that specific department
+        if (targetDeptId) {
+          deptMembers = await departmentsApi.getDepartmentMembers(targetDeptId).catch(() => []);
+        }
+
+        const activeDeptMembers = deptMembers.filter(m => m.is_active);
+
+        if (activeDeptMembers.length > 0) {
+          // Select the primary member or engineer from that department
+          assignedMember = activeDeptMembers[0];
+        } else {
+          // Fallback if no members have been assigned to that department yet: Pick Operations Admin or Founder
+          const activeUsers = users.filter(u => u.is_active);
+          assignedMember =
+            activeUsers.find(u => u.role === 'ADMIN' || u.role === 'FOUNDER') ||
+            activeUsers[0];
+        }
+
+        if (assignedMember && !bug.converted_task_id) {
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
           const deadlineStr = tomorrow.toISOString().split('T')[0];
 
           const taskDescription = [
-            `🚨 [CRITICAL AI EMERGENCY TRIAGE]`,
+            `🚨 [CRITICAL AI EMERGENCY TRIAGE - AUTO-ASSIGNED]`,
             `\n• Target Department: ${triage.suggestedDepartmentName || 'Engineering'}`,
+            `• Assigned Department Member: ${assignedMember.full_name} (${assignedMember.role})`,
             `• Error Domain: ${triage.errorDomain || 'System Core'}`,
             `• Root Cause Hypothesis: ${triage.rootCauseSummary || 'Critical stability defect requiring immediate fix.'}`,
             triage.actionableSteps?.length ? `\n• Actionable Resolution Steps:\n${triage.actionableSteps.map(s => `  - ${s}`).join('\n')}` : '',
@@ -231,8 +248,8 @@ export const bugsApi = {
             description: taskDescription,
             priority: 'URGENT',
             deadline: deadlineStr,
-            assigned_to: assignee.id,
-            assigned_by: bug.reported_by || assignee.id,
+            assigned_to: assignedMember.id,
+            assigned_by: bug.reported_by || assignedMember.id,
             department_id: targetDeptId || null
           });
         }

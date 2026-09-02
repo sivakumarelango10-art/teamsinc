@@ -50,7 +50,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else if (isFoundingAdvisor) {
       return [
         { to: '/founding-advisor/dashboard', label: 'Overview', icon: LayoutDashboard },
-        { to: '/chat', label: 'Chats', icon: MessageSquare },
+        { to: '/chat', label: 'Leadership Chat', icon: Shield },
         { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare },
         { to: '/profile', label: 'My Profile', icon: User }
       ];

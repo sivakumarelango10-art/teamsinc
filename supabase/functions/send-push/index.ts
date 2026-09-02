@@ -35,6 +35,7 @@ import webpush from 'npm:web-push@3.6.7';
 // ─── Environment variables (set via: supabase secrets set KEY=value) ──────────
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const SEND_PUSH_SECRET = Deno.env.get('SEND_PUSH_SECRET') ?? '';
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:sivakumarelango10@gmail.com';
@@ -55,23 +56,66 @@ const adminSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 Deno.serve(async (req: Request) => {
   // Only accept POST
   if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
+  // 1. Authenticate Request: Verify Bearer token / Webhook secret
+  const authHeader = req.headers.get('Authorization') || '';
+  const customSecret = req.headers.get('X-Webhook-Secret') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
+
+  const expectedSecret = SEND_PUSH_SECRET || SUPABASE_SERVICE_ROLE_KEY;
+  const isAuthorized = Boolean(
+    expectedSecret && (token === expectedSecret || customSecret === expectedSecret)
+  );
+
+  if (!isAuthorized) {
+    console.warn('[send-push] Unauthorized invocation attempt blocked.');
+    return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing webhook secret' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // 2. Parse & Validate Payload
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return new Response('Bad Request: invalid JSON', { status: 400 });
+    return new Response(JSON.stringify({ error: 'Bad Request: Invalid JSON payload' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   // Supabase Database Webhooks send the row in `record` and event type in `type`
-  const eventType = (body.type as string) || '';
-  const record = (body.record as Record<string, unknown>) || {};
-  const oldRecord = (body.old_record as Record<string, unknown>) || {};
-  const table = (body.table as string) || '';
+  const eventType = typeof body.type === 'string' ? body.type.trim() : '';
+  const record = (body.record && typeof body.record === 'object') ? (body.record as Record<string, unknown>) : null;
+  const oldRecord = (body.old_record && typeof body.old_record === 'object') ? (body.old_record as Record<string, unknown>) : {};
+  const table = typeof body.table === 'string' ? body.table.trim() : '';
 
-  console.info(`[send-push] Event: ${eventType} on ${table}`, { id: record.id });
+  if (!record || !table || !eventType) {
+    return new Response(JSON.stringify({ error: 'Bad Request: Missing required webhook fields' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Whitelist permitted tables and events
+  const ALLOWED_TABLES = ['messages', 'call_history'];
+  const ALLOWED_EVENTS = ['INSERT', 'UPDATE'];
+
+  if (!ALLOWED_TABLES.includes(table) || !ALLOWED_EVENTS.includes(eventType)) {
+    return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'Unsupported table/event' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  console.info(`[send-push] Authorized Event: ${eventType} on ${table}`, { id: record.id });
 
   try {
     if (table === 'messages' && eventType === 'INSERT') {
@@ -85,14 +129,12 @@ Deno.serve(async (req: Request) => {
         }
       }
     } else {
-      // Unknown webhook event — acknowledge cleanly
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
   } catch (err) {
     console.error('[send-push] Handler error:', err);
-    // Return 200 so Supabase doesn't retry on application errors
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }

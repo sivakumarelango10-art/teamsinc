@@ -20,10 +20,6 @@ export const authApi = {
           .ilike('email', cleanEmail)
           .maybeSingle();
 
-        if (error) {
-          console.warn('Database registration query error:', error);
-        }
-
         if (profile) {
           if (!profile.is_active) {
             return {
@@ -35,11 +31,24 @@ export const authApi = {
           }
 
           // Return verified profile with database assigned role
-          const role = cleanEmail === FOUNDER_EMAIL ? 'FOUNDER' : (profile.role || 'MEMBER');
+          const role = profile.role || 'MEMBER';
           return {
             registered: true,
             profile: { ...profile, role },
             role,
+            error: null
+          };
+        }
+
+        // If unauthenticated (RLS hides profiles table), query safe RPC check
+        const { data: isRegistered, error: rpcError } = await supabase
+          .rpc('check_email_registered', { email_input: cleanEmail });
+
+        if (!rpcError && isRegistered) {
+          return {
+            registered: true,
+            profile: null,
+            role: null,
             error: null
           };
         }

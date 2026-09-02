@@ -81,12 +81,17 @@ export const chatApi = {
           });
 
         if (!uploadErr && uploadData) {
-          const { data: pubData } = supabase.storage
+          // Generate 7-day signed URL for private bucket attachment
+          const { data: signData } = await supabase.storage
             .from('chat-attachments')
-            .getPublicUrl(filePath);
+            .createSignedUrl(filePath, 60 * 60 * 24 * 7);
+
+          const finalUrl = signData?.signedUrl || supabase.storage
+            .from('chat-attachments')
+            .getPublicUrl(filePath)?.data?.publicUrl;
 
           return {
-            url: pubData?.publicUrl,
+            url: finalUrl,
             name: file.name || 'Voice Message',
             size: file.size || 0,
             type: detectedType

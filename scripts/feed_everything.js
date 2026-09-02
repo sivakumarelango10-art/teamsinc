@@ -1,7 +1,14 @@
 import pg from 'pg';
 const { Client } = pg;
 
-const connectionString = "postgresql://postgres.tuhkdblelsgjmcxiwyid:Y18mDguasYjVj5ue@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres";
+// Read connection string securely from environment variable
+const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
+
+if (!connectionString) {
+  console.error('ERROR: DATABASE_URL environment variable is required to seed the database.');
+  console.error('Usage: DATABASE_URL="postgresql://..." node scripts/feed_everything.js');
+  process.exit(1);
+}
 
 async function feedEverything() {
   const client = new Client({
@@ -53,25 +60,25 @@ async function feedEverything() {
       RETURNS TEXT AS $$
         SELECT role FROM public.profiles 
         WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'));
-      $$ LANGUAGE sql STABLE SECURITY DEFINER;
+      $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
       CREATE OR REPLACE FUNCTION public.is_founder()
       RETURNS BOOLEAN AS $$
-        SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+        SELECT EXISTS (
           SELECT 1 FROM public.profiles
           WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
             AND role = 'FOUNDER'
         );
-      $$ LANGUAGE sql STABLE SECURITY DEFINER;
+      $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
       CREATE OR REPLACE FUNCTION public.is_admin_or_founder()
       RETURNS BOOLEAN AS $$
-        SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+        SELECT EXISTS (
           SELECT 1 FROM public.profiles
           WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
             AND role IN ('FOUNDER', 'ADMIN')
         );
-      $$ LANGUAGE sql STABLE SECURITY DEFINER;
+      $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
       CREATE OR REPLACE FUNCTION public.is_founding_advisor()
       RETURNS BOOLEAN AS $$
@@ -80,16 +87,29 @@ async function feedEverything() {
           WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
             AND role = 'FOUNDING_ADVISOR'
         );
-      $$ LANGUAGE sql STABLE SECURITY DEFINER;
+      $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
       CREATE OR REPLACE FUNCTION public.is_leadership()
       RETURNS BOOLEAN AS $$
-        SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+        SELECT EXISTS (
           SELECT 1 FROM public.profiles
           WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
             AND role IN ('FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR')
         );
-      $$ LANGUAGE sql STABLE SECURITY DEFINER;
+      $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+      -- Public safe RPC to check if an email is registered without leaking user tables
+      CREATE OR REPLACE FUNCTION public.check_email_registered(email_input TEXT)
+      RETURNS BOOLEAN AS $$
+        SELECT EXISTS (
+          SELECT 1 FROM public.profiles
+          WHERE LOWER(email) = LOWER(email_input)
+            AND is_active = true
+        );
+      $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+      REVOKE ALL ON FUNCTION public.check_email_registered(TEXT) FROM public;
+      GRANT EXECUTE ON FUNCTION public.check_email_registered(TEXT) TO anon, authenticated;
 
       -- Auth link trigger
       CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -99,15 +119,10 @@ async function feedEverything() {
       BEGIN
         SELECT * INTO reg_profile FROM public.profiles WHERE LOWER(email) = LOWER(NEW.email);
 
-        IF LOWER(NEW.email) = 'sivakumarelango10@gmail.com' THEN
-          IF reg_profile.id IS NULL THEN
-            INSERT INTO public.profiles (auth_user_id, full_name, email, role, is_active)
-            VALUES (NEW.id, 'Sivakumar Elango', LOWER(NEW.email), 'FOUNDER', true);
-          ELSE
-            UPDATE public.profiles
-            SET auth_user_id = NEW.id, role = 'FOUNDER', is_active = true
-            WHERE id = reg_profile.id;
-          END IF;
+        IF reg_profile.id IS NOT NULL AND reg_profile.role = 'FOUNDER' THEN
+          UPDATE public.profiles
+          SET auth_user_id = NEW.id, is_active = true
+          WHERE id = reg_profile.id;
           RETURN NEW;
         END IF;
 
@@ -119,7 +134,7 @@ async function feedEverything() {
 
         RETURN NEW;
       END;
-      $$ LANGUAGE plpgsql SECURITY DEFINER;
+      $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
       DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
       CREATE TRIGGER on_auth_user_created
@@ -140,11 +155,19 @@ async function feedEverything() {
         TO authenticated
         USING (public.is_founder());
 
+      -- Drop anonymous select on profiles table
       DROP POLICY IF EXISTS "Public can check email registration" ON public.profiles;
-      CREATE POLICY "Public can check email registration"
-        ON public.profiles FOR SELECT
-        TO anon
-        USING (true);
+
+      -- Allow users to update their own non-privileged profile data
+      DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+      CREATE POLICY "Users can update own profile"
+        ON public.profiles FOR UPDATE
+        TO authenticated
+        USING (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+        WITH CHECK (
+          (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+          AND role = (SELECT role FROM public.profiles WHERE id = profiles.id)
+        );
     `);
 
     // Seed Team Profiles
@@ -468,22 +491,35 @@ async function feedEverything() {
       ALTER TABLE public.call_history ENABLE ROW LEVEL SECURITY;
 
       DROP POLICY IF EXISTS "Anyone authenticated can view call history" ON public.call_history;
-      CREATE POLICY "Anyone authenticated can view call history"
+      DROP POLICY IF EXISTS "Call history select policy" ON public.call_history;
+      CREATE POLICY "Call history select policy"
         ON public.call_history FOR SELECT
         TO authenticated
-        USING (true);
+        USING (
+          room_id = 'general'
+          OR (room_id = 'leadership' AND public.is_leadership())
+        );
 
       DROP POLICY IF EXISTS "Anyone authenticated can insert call history" ON public.call_history;
-      CREATE POLICY "Anyone authenticated can insert call history"
+      DROP POLICY IF EXISTS "Call history insert policy" ON public.call_history;
+      CREATE POLICY "Call history insert policy"
         ON public.call_history FOR INSERT
         TO authenticated
-        WITH CHECK (true);
+        WITH CHECK (
+          room_id = 'general'
+          OR (room_id = 'leadership' AND public.is_leadership())
+        );
 
       DROP POLICY IF EXISTS "Anyone authenticated can update call history" ON public.call_history;
-      CREATE POLICY "Anyone authenticated can update call history"
+      DROP POLICY IF EXISTS "Call history update policy" ON public.call_history;
+      CREATE POLICY "Call history update policy"
         ON public.call_history FOR UPDATE
         TO authenticated
-        USING (true);
+        USING (
+          public.is_admin_or_founder()
+          OR LOWER(caller_email) = LOWER(auth.jwt()->>'email')
+          OR caller_email IN (SELECT email FROM public.profiles WHERE auth_user_id = auth.uid())
+        );
     `);
 
     // =========================================================================
@@ -528,27 +564,37 @@ async function feedEverything() {
         ON public.push_subscriptions FOR ALL
         TO authenticated
         USING (
-          user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+          user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
         )
         WITH CHECK (
-          user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+          user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
         );
     `);
 
     // =========================================================================
-    // 9. STORAGE BUCKET (chat-attachments)
+    // 9. STORAGE BUCKET (chat-attachments) - Private & MIME-Restricted
     // =========================================================================
-    console.log('9. Setting up storage bucket chat-attachments...');
+    console.log('9. Setting up storage bucket chat-attachments (Private)...');
     try {
       await client.query(`
         INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-        VALUES ('chat-attachments', 'chat-attachments', true, 52428800, NULL)
+        VALUES (
+          'chat-attachments',
+          'chat-attachments',
+          false,
+          52428800,
+          ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/webm', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/aac', 'video/mp4', 'video/webm', 'video/quicktime', 'application/pdf', 'text/plain', 'text/csv', 'application/json', 'application/zip', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation']
+        )
         ON CONFLICT (id) DO UPDATE
-        SET public = true;
+        SET public = false,
+            file_size_limit = 52428800,
+            allowed_mime_types = EXCLUDED.allowed_mime_types;
 
         DROP POLICY IF EXISTS "Public chat attachments read" ON storage.objects;
-        CREATE POLICY "Public chat attachments read"
+        DROP POLICY IF EXISTS "Authenticated users view chat attachments" ON storage.objects;
+        CREATE POLICY "Authenticated users view chat attachments"
           ON storage.objects FOR SELECT
+          TO authenticated
           USING (bucket_id = 'chat-attachments');
 
         DROP POLICY IF EXISTS "Authenticated users upload chat attachments" ON storage.objects;
@@ -556,8 +602,19 @@ async function feedEverything() {
           ON storage.objects FOR INSERT
           TO authenticated
           WITH CHECK (bucket_id = 'chat-attachments');
+
+        DROP POLICY IF EXISTS "Users or Founder delete chat attachments" ON storage.objects;
+        CREATE POLICY "Users or Founder delete chat attachments"
+          ON storage.objects FOR DELETE
+          TO authenticated
+          USING (
+            bucket_id = 'chat-attachments' AND (
+              owner = auth.uid()
+              OR public.is_founder()
+            )
+          );
       `);
-      console.log('✓ Storage bucket configured successfully');
+      console.log('✓ Storage bucket configured securely (private, typed, authenticated-only)');
     } catch (sErr) {
       console.warn('Storage bucket note:', sErr.message);
     }

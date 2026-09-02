@@ -6,19 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/security.test.js"
   },
   "dependencies": {
-    "@prisma/client": "^7.10.0",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.49.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^1.16.0",
     "pg": "^8.23.0",
-    "prisma": "^8.0.0-rc.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.29.0",
+    "react-router-dom": "^6.29.1",
     "recharts": "^2.15.1"
   },
   "devDependencies": {

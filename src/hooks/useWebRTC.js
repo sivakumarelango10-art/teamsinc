@@ -1,15 +1,39 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../api/supabase';
 
-// Multi-provider STUN configuration with candidate pooling for <10ms ICE gathering
-const RTC_CONFIG = {
-  iceServers: [
+// Multi-provider STUN/TURN configuration with dynamic environment support & candidate pooling
+const getIceServers = () => {
+  const customIce = typeof import.meta !== 'undefined' && import.meta.env?.VITE_ICE_SERVERS_JSON;
+  if (customIce) {
+    try {
+      const parsed = JSON.parse(customIce);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {
+      console.warn('[WebRTC] Failed to parse VITE_ICE_SERVERS_JSON:', e);
+    }
+  }
+
+  const servers = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' }
-  ],
+  ];
+
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TURN_URL) {
+    servers.push({
+      urls: import.meta.env.VITE_TURN_URL,
+      username: import.meta.env.VITE_TURN_USERNAME || '',
+      credential: import.meta.env.VITE_TURN_PASSWORD || ''
+    });
+  }
+
+  return servers;
+};
+
+const RTC_CONFIG = {
+  iceServers: getIceServers(),
   iceCandidatePoolSize: 10
 };
 

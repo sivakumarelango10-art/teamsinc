@@ -112,6 +112,7 @@ BEFORE UPDATE ON public.tasks
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- -----------------------------------------------------------------------------
+-- -----------------------------------------------------------------------------
 -- AUTHENTICATION TRIGGER: LINK ON SIGN IN & REJECT UNREGISTERED
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -122,16 +123,11 @@ BEGIN
     -- Check if email exists in registered profiles
     SELECT * INTO reg_profile FROM public.profiles WHERE LOWER(email) = LOWER(NEW.email);
 
-    -- Special Exception: Founder is always registered
-    IF LOWER(NEW.email) = 'sivakumarelango10@gmail.com' THEN
-        IF reg_profile.id IS NULL THEN
-            INSERT INTO public.profiles (auth_user_id, full_name, email, role, is_active)
-            VALUES (NEW.id, 'Sivakumar Elango', LOWER(NEW.email), 'FOUNDER', true);
-        ELSE
-            UPDATE public.profiles
-            SET auth_user_id = NEW.id, role = 'FOUNDER', is_active = true
-            WHERE id = reg_profile.id;
-        END IF;
+    -- Special Exception: If profile is marked as FOUNDER or no profile yet for designated founder
+    IF reg_profile.id IS NOT NULL AND reg_profile.role = 'FOUNDER' THEN
+        UPDATE public.profiles
+        SET auth_user_id = NEW.id, is_active = true
+        WHERE id = reg_profile.id;
         RETURN NEW;
     END IF;
 
@@ -151,8 +147,9 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -170,25 +167,25 @@ ALTER TABLE public.daily_assignments ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION public.current_user_role()
 RETURNS TEXT AS $$
     SELECT role FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email');
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.is_founder()
 RETURNS BOOLEAN AS $$
-    SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+    SELECT EXISTS (
         SELECT 1 FROM public.profiles
         WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
           AND role = 'FOUNDER'
     );
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.is_admin_or_founder()
 RETURNS BOOLEAN AS $$
-    SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+    SELECT EXISTS (
         SELECT 1 FROM public.profiles
         WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
           AND role IN ('FOUNDER', 'ADMIN')
     );
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.is_founding_advisor()
 RETURNS BOOLEAN AS $$
@@ -197,16 +194,29 @@ RETURNS BOOLEAN AS $$
         WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
           AND role = 'FOUNDING_ADVISOR'
     );
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.is_leadership()
 RETURNS BOOLEAN AS $$
-    SELECT (LOWER(auth.jwt()->>'email') = 'sivakumarelango10@gmail.com') OR EXISTS (
+    SELECT EXISTS (
         SELECT 1 FROM public.profiles
         WHERE (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
           AND role IN ('FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR')
     );
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+-- Public safe RPC to check if an email is registered without leaking user tables
+CREATE OR REPLACE FUNCTION public.check_email_registered(email_input TEXT)
+RETURNS BOOLEAN AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE LOWER(email) = LOWER(email_input)
+          AND is_active = true
+    );
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+REVOKE ALL ON FUNCTION public.check_email_registered(TEXT) FROM public;
+GRANT EXECUTE ON FUNCTION public.check_email_registered(TEXT) TO anon, authenticated;
 
 -- Enable Realtime Publication for profiles
 DO $$
@@ -220,75 +230,119 @@ BEGIN
 END $$;
 
 -- PROFILES POLICIES
+DROP POLICY IF EXISTS "Anyone authenticated can view active profiles" ON public.profiles;
 CREATE POLICY "Anyone authenticated can view active profiles"
     ON public.profiles FOR SELECT
     TO authenticated
     USING (is_active = true OR auth_user_id = auth.uid() OR public.is_founder());
 
+DROP POLICY IF EXISTS "Founder can manage all profiles" ON public.profiles;
 CREATE POLICY "Founder can manage all profiles"
     ON public.profiles FOR ALL
     TO authenticated
     USING (public.is_founder());
 
--- Allow anon to read profile by email for registration validation before signin
-CREATE POLICY "Public can check email registration"
-    ON public.profiles FOR SELECT
-    TO anon
-    USING (true);
+-- Drop insecure anonymous select policy (Replaced by check_email_registered RPC)
+DROP POLICY IF EXISTS "Public can check email registration" ON public.profiles;
+
+-- Allow authenticated users to update their own non-privileged profile columns
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile"
+    ON public.profiles FOR UPDATE
+    TO authenticated
+    USING (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+    WITH CHECK (
+        (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+        AND role = (SELECT role FROM public.profiles WHERE id = profiles.id)
+    );
 
 -- DEPARTMENTS POLICIES
+DROP POLICY IF EXISTS "All authenticated view departments" ON public.departments;
 CREATE POLICY "All authenticated view departments"
     ON public.departments FOR SELECT
     TO authenticated
     USING (true);
 
+DROP POLICY IF EXISTS "Founder and Admin manage departments" ON public.departments;
 CREATE POLICY "Founder and Admin manage departments"
     ON public.departments FOR ALL
     TO authenticated
     USING (public.is_admin_or_founder());
 
 -- TASKS POLICIES
+DROP POLICY IF EXISTS "Founder and Admin manage tasks" ON public.tasks;
 CREATE POLICY "Founder and Admin manage tasks"
     ON public.tasks FOR ALL
     TO authenticated
     USING (public.is_admin_or_founder());
 
+DROP POLICY IF EXISTS "Task View Policy" ON public.tasks;
 CREATE POLICY "Task View Policy"
     ON public.tasks FOR SELECT
     TO authenticated
     USING (
         public.is_admin_or_founder()
         OR public.is_founding_advisor()
-        OR assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        OR assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     );
 
+DROP POLICY IF EXISTS "Members update assigned task status" ON public.tasks;
 CREATE POLICY "Members update assigned task status"
     ON public.tasks FOR UPDATE
     TO authenticated
     USING (
-        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     )
     WITH CHECK (
-        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     );
 
+-- Database-level task column modification protection
+CREATE OR REPLACE FUNCTION public.enforce_task_update_permissions()
+RETURNS trigger AS $$
+BEGIN
+    IF NOT public.is_admin_or_founder() THEN
+        -- Non-admins cannot alter core task definition fields
+        IF NEW.title IS DISTINCT FROM OLD.title OR
+           NEW.description IS DISTINCT FROM OLD.description OR
+           NEW.priority IS DISTINCT FROM OLD.priority OR
+           NEW.deadline IS DISTINCT FROM OLD.deadline OR
+           NEW.assigned_to IS DISTINCT FROM OLD.assigned_to OR
+           NEW.assigned_by IS DISTINCT FROM OLD.assigned_by OR
+           NEW.department_id IS DISTINCT FROM OLD.department_id THEN
+            RAISE EXCEPTION 'Access Denied: Only Administrators and Founders can modify task title, deadline, priority, or assignment.';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_enforce_task_update_permissions ON public.tasks;
+CREATE TRIGGER trg_enforce_task_update_permissions
+BEFORE UPDATE ON public.tasks
+FOR EACH ROW EXECUTE FUNCTION public.enforce_task_update_permissions();
+
 -- DAILY PLANS POLICIES
+DROP POLICY IF EXISTS "Founder and Admin manage daily plans" ON public.daily_plans;
 CREATE POLICY "Founder and Admin manage daily plans"
     ON public.daily_plans FOR ALL
     TO authenticated
     USING (public.is_admin_or_founder());
 
+DROP POLICY IF EXISTS "All authenticated view daily plans" ON public.daily_plans;
 CREATE POLICY "All authenticated view daily plans"
     ON public.daily_plans FOR SELECT
     TO authenticated
     USING (true);
 
 -- DAILY ASSIGNMENTS POLICIES
+DROP POLICY IF EXISTS "Founder and Admin manage daily assignments" ON public.daily_assignments;
 CREATE POLICY "Founder and Admin manage daily assignments"
     ON public.daily_assignments FOR ALL
     TO authenticated
     USING (public.is_admin_or_founder());
 
+DROP POLICY IF EXISTS "All authenticated view daily assignments" ON public.daily_assignments;
 CREATE POLICY "All authenticated view daily assignments"
     ON public.daily_assignments FOR SELECT
     TO authenticated
@@ -340,12 +394,6 @@ CREATE TABLE IF NOT EXISTS public.messages (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_url TEXT;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_name TEXT;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_size BIGINT;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_type TEXT;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'general';
-
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_messages_channel ON public.messages(channel);
 
@@ -353,7 +401,6 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
 -- 1. General Team Chat SELECT (Members, Admins, Founder — excludes Founding Advisor per spec)
 DROP POLICY IF EXISTS "General chat select policy" ON public.messages;
-DROP POLICY IF EXISTS "Anyone authenticated can view messages" ON public.messages;
 CREATE POLICY "General chat select policy"
     ON public.messages FOR SELECT
     TO authenticated
@@ -379,7 +426,6 @@ CREATE POLICY "Leadership chat select policy"
 
 -- 3. General Chat INSERT (Members, Admins, Founder)
 DROP POLICY IF EXISTS "General chat insert policy" ON public.messages;
-DROP POLICY IF EXISTS "Anyone authenticated can insert messages" ON public.messages;
 CREATE POLICY "General chat insert policy"
     ON public.messages FOR INSERT
     TO authenticated
@@ -436,23 +482,39 @@ CREATE INDEX IF NOT EXISTS idx_call_history_created_at ON public.call_history(cr
 
 ALTER TABLE public.call_history ENABLE ROW LEVEL SECURITY;
 
+-- Segregated Call History SELECT: General calls visible to all; Leadership calls restricted to Leadership
 DROP POLICY IF EXISTS "Anyone authenticated can view call_history" ON public.call_history;
-CREATE POLICY "Anyone authenticated can view call_history"
+DROP POLICY IF EXISTS "Call history select policy" ON public.call_history;
+CREATE POLICY "Call history select policy"
     ON public.call_history FOR SELECT
     TO authenticated
-    USING (true);
+    USING (
+        room_id = 'general'
+        OR (room_id = 'leadership' AND public.is_leadership())
+    );
 
+-- Segregated Call History INSERT: General calls created by all; Leadership calls created only by Leadership
 DROP POLICY IF EXISTS "Anyone authenticated can insert call_history" ON public.call_history;
-CREATE POLICY "Anyone authenticated can insert call_history"
+DROP POLICY IF EXISTS "Call history insert policy" ON public.call_history;
+CREATE POLICY "Call history insert policy"
     ON public.call_history FOR INSERT
     TO authenticated
-    WITH CHECK (true);
+    WITH CHECK (
+        room_id = 'general'
+        OR (room_id = 'leadership' AND public.is_leadership())
+    );
 
+-- Call History UPDATE: Only host caller or Admin/Founder can update call status / duration
 DROP POLICY IF EXISTS "Anyone authenticated can update call_history" ON public.call_history;
-CREATE POLICY "Anyone authenticated can update call_history"
+DROP POLICY IF EXISTS "Call history update policy" ON public.call_history;
+CREATE POLICY "Call history update policy"
     ON public.call_history FOR UPDATE
     TO authenticated
-    USING (true);
+    USING (
+        public.is_admin_or_founder()
+        OR LOWER(caller_email) = LOWER(auth.jwt()->>'email')
+        OR caller_email IN (SELECT email FROM public.profiles WHERE auth_user_id = auth.uid())
+    );
 
 -- -----------------------------------------------------------------------------
 -- 8. COMPOSITE PERFORMANCE INDEXES
@@ -464,8 +526,6 @@ CREATE INDEX IF NOT EXISTS idx_profiles_active_email ON public.profiles(email, i
 
 -- -----------------------------------------------------------------------------
 -- 9. PUSH NOTIFICATION SUBSCRIPTIONS
---    Supports multiple subscriptions per user (one per device/browser).
---    The VAPID private key NEVER lives here — it lives in Edge Function secrets.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -491,9 +551,12 @@ CREATE POLICY "Users manage own push subscriptions"
     ON public.push_subscriptions FOR ALL
     TO authenticated
     USING (
-        user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     )
     WITH CHECK (
+        user_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+    );
+
 -- -----------------------------------------------------------------------------
 -- 10. BUG REPORTS & RESOLUTION ENGINE
 -- -----------------------------------------------------------------------------
@@ -529,8 +592,8 @@ CREATE POLICY "Bug reports select policy"
     USING (
         public.is_admin_or_founder()
         OR public.is_founding_advisor()
-        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
-        OR assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+        OR assigned_to IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     );
 
 DROP POLICY IF EXISTS "Bug reports insert policy" ON public.bug_reports;
@@ -545,11 +608,11 @@ CREATE POLICY "Bug reports update policy"
     TO authenticated
     USING (
         public.is_admin_or_founder()
-        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     )
     WITH CHECK (
         public.is_admin_or_founder()
-        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid())
+        OR reported_by IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
     );
 
 DROP POLICY IF EXISTS "Bug reports delete policy" ON public.bug_reports;

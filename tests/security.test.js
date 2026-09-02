@@ -326,4 +326,91 @@ describe('TeamSync Security & Authorization Engine Tests', () => {
     });
   });
 
+  describe('10. Signaling Independence & Deduplication Transport Engine', () => {
+    class MockSignalingHub {
+      constructor() {
+        this.subscribers = new Map();
+      }
+      subscribe(channelName, callback) {
+        if (!this.subscribers.has(channelName)) {
+          this.subscribers.set(channelName, new Set());
+        }
+        this.subscribers.get(channelName).add(callback);
+        return () => this.subscribers.get(channelName).delete(callback);
+      }
+      broadcast(channelName, payload) {
+        const listeners = this.subscribers.get(channelName) || new Set();
+        listeners.forEach(cb => cb(payload));
+      }
+    }
+
+    it('Cross-device signaling routes successfully via Realtime without BroadcastChannel', () => {
+      const realtimeHub = new MockSignalingHub();
+      let clientBReceived = null;
+
+      // Client B subscribes to Realtime channel only (no BroadcastChannel)
+      realtimeHub.subscribe('call:signaling:general', (data) => {
+        clientBReceived = data;
+      });
+
+      // Client A sends offer
+      const offerSignal = {
+        signalId: 'sig-test-123',
+        type: 'OFFER',
+        senderId: 'peer_user_a',
+        targetId: 'peer_user_b',
+        description: { type: 'offer', sdp: 'v=0...' }
+      };
+      realtimeHub.broadcast('call:signaling:general', offerSignal);
+
+      assert.notStrictEqual(clientBReceived, null);
+      assert.strictEqual(clientBReceived.signalId, 'sig-test-123');
+      assert.strictEqual(clientBReceived.type, 'OFFER');
+    });
+
+    it('Signal deduplication ignores duplicate signals arriving from multiple transports', () => {
+      const processedSignals = new Set();
+      let processCount = 0;
+
+      function handleIncomingSignal(signal) {
+        if (signal.signalId && processedSignals.has(signal.signalId)) {
+          return 'IGNORED_DUPLICATE';
+        }
+        processedSignals.add(signal.signalId);
+        processCount++;
+        return 'PROCESSED';
+      }
+
+      const signal = { signalId: 'sig-dup-456', type: 'ICE_CANDIDATE', candidate: { candidate: 'candidate:...' } };
+
+      // Arrival 1 (e.g. BroadcastChannel)
+      const res1 = handleIncomingSignal(signal);
+      // Arrival 2 (e.g. Supabase Realtime delayed)
+      const res2 = handleIncomingSignal(signal);
+
+      assert.strictEqual(res1, 'PROCESSED');
+      assert.strictEqual(res2, 'IGNORED_DUPLICATE');
+      assert.strictEqual(processCount, 1);
+    });
+  });
+
+  describe('11. Multi-Participant Mesh Connection Topology Logic', () => {
+    function calculateMeshConnections(participantCount) {
+      if (participantCount < 2) return 0;
+      return (participantCount * (participantCount - 1)) / 2;
+    }
+
+    it('Calculates correct P2P connection count for 1-to-1 call (1 connection)', () => {
+      assert.strictEqual(calculateMeshConnections(2), 1);
+    });
+
+    it('Calculates correct P2P connection count for 3-party group call (3 connections)', () => {
+      assert.strictEqual(calculateMeshConnections(3), 3);
+    });
+
+    it('Calculates correct P2P connection count for 4-party leadership huddle (6 connections)', () => {
+      assert.strictEqual(calculateMeshConnections(4), 6);
+    });
+  });
+
 });

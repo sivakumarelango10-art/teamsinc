@@ -38,7 +38,7 @@ import { format, parseISO, isToday, isYesterday, isThisYear, isSameDay } from 'd
 
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🎉', '🔥', '🚀', '❤️', '✅', '👏', '💯', '🎯', '💡', '✨', '🙌'];
 
-// WhatsApp-style Date Divider Label (TODAY, YESTERDAY, 2 September, 14/08/2025)
+// WhatsApp-style Date Divider Label (Today, Yesterday, September 1, 2026, 14/08/2025)
 const formatDayDividerLabel = (isoString) => {
   if (!isoString) return '';
   try {
@@ -46,13 +46,13 @@ const formatDayDividerLabel = (isoString) => {
     if (isNaN(d.getTime())) return '';
 
     if (isToday(d)) {
-      return 'TODAY';
+      return 'Today';
     }
     if (isYesterday(d)) {
-      return 'YESTERDAY';
+      return 'Yesterday';
     }
     if (isThisYear(d)) {
-      return format(d, 'd MMMM');
+      return format(d, 'MMMM d, yyyy');
     }
     return format(d, 'dd/MM/yyyy');
   } catch {
@@ -997,8 +997,8 @@ export const TeamChat = ({
               return (
                 <React.Fragment key={msg.id || `msg-${index}`}>
                   {showDateDivider && dayLabel && (
-                    <div className="flex justify-center my-3.5 sticky top-2 z-10 select-none pointer-events-none">
-                      <span className="px-3.5 py-1 rounded-lg bg-neutral-900/90 backdrop-blur-md border border-neutral-800 text-[11px] font-bold tracking-wider uppercase text-neutral-300 shadow-md">
+                    <div className="flex justify-center my-3 select-none">
+                      <span className="px-3 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-semibold text-neutral-300 shadow-sm">
                         {dayLabel}
                       </span>
                     </div>

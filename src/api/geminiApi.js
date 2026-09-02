@@ -49,8 +49,8 @@ export const callGeminiApi = async ({
     throw new Error(`Gemini API key is not configured for role: ${role}. Please check your .env file.`);
   }
 
-  // Model cascade: try gemini-1.5-flash then gemini-2.0-flash
-  const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+  // Model cascade: prioritize gemini-3.6-flash supported by Google API
+  const models = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
   let lastError = null;
 
   for (const model of models) {

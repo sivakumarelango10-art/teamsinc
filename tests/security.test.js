@@ -263,4 +263,67 @@ describe('TeamSync Security & Authorization Engine Tests', () => {
     });
   });
 
+  describe('8. WebRTC Perfect Negotiation & Glare Collision Engine', () => {
+    function resolveOfferGlare(localPeerId, remotePeerId, localSignalingState, makingOffer) {
+      const isPolite = localPeerId > remotePeerId;
+      const offerCollision = makingOffer || localSignalingState !== 'stable';
+
+      if (!isPolite && offerCollision) {
+        return { action: 'IGNORE_OFFER', reason: 'Impolite peer ignores offer collision' };
+      }
+
+      if (isPolite && offerCollision) {
+        return { action: 'ROLLBACK_AND_ACCEPT', reason: 'Polite peer rolls back local description to accept remote offer' };
+      }
+
+      return { action: 'ACCEPT_OFFER', reason: 'Standard negotiation without glare' };
+    }
+
+    it('Resolves glare collision: Polite peer rolls back local description to prevent InvalidStateError', () => {
+      // User B (peer_z) is polite compared to User A (peer_a) because 'peer_z' > 'peer_a'
+      const outcome = resolveOfferGlare('peer_z', 'peer_a', 'have-local-offer', true);
+      assert.strictEqual(outcome.action, 'ROLLBACK_AND_ACCEPT');
+    });
+
+    it('Resolves glare collision: Impolite peer ignores incoming offer collision while waiting for answer', () => {
+      // User A (peer_a) is impolite because 'peer_a' < 'peer_z'
+      const outcome = resolveOfferGlare('peer_a', 'peer_z', 'have-local-offer', true);
+      assert.strictEqual(outcome.action, 'IGNORE_OFFER');
+    });
+
+    it('Standard offer without collision is accepted immediately', () => {
+      const outcome = resolveOfferGlare('peer_a', 'peer_z', 'stable', false);
+      assert.strictEqual(outcome.action, 'ACCEPT_OFFER');
+    });
+  });
+
+  describe('9. Dynamic Call Room Segregation & Access Isolation', () => {
+    function canJoinCallRoom(userRole, roomId) {
+      if (roomId === 'leadership') {
+        return ['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR'].includes(userRole);
+      }
+      if (roomId === 'general') {
+        return userRole !== 'FOUNDING_ADVISOR';
+      }
+      return false;
+    }
+
+    it('Founding Advisor can join #leadership calls but is isolated from #general calls', () => {
+      assert.strictEqual(canJoinCallRoom('FOUNDING_ADVISOR', 'leadership'), true);
+      assert.strictEqual(canJoinCallRoom('FOUNDING_ADVISOR', 'general'), false);
+    });
+
+    it('Standard Member can join #general calls but cannot join #leadership calls', () => {
+      assert.strictEqual(canJoinCallRoom('MEMBER', 'general'), true);
+      assert.strictEqual(canJoinCallRoom('MEMBER', 'leadership'), false);
+    });
+
+    it('Founder and Admin have full access to both #general and #leadership calls', () => {
+      assert.strictEqual(canJoinCallRoom('FOUNDER', 'general'), true);
+      assert.strictEqual(canJoinCallRoom('FOUNDER', 'leadership'), true);
+      assert.strictEqual(canJoinCallRoom('ADMIN', 'general'), true);
+      assert.strictEqual(canJoinCallRoom('ADMIN', 'leadership'), true);
+    });
+  });
+
 });

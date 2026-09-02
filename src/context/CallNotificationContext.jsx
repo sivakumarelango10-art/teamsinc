@@ -97,6 +97,15 @@ export const CallNotificationProvider = ({ children }) => {
   const handleIncomingCallSignal = (call) => {
     if (!call || call.status !== 'ongoing') return;
 
+    // Role-based room access guard
+    const userRole = currentUser?.role;
+    if (call.room_id === 'leadership' && userRole !== 'FOUNDER' && userRole !== 'ADMIN' && userRole !== 'FOUNDING_ADVISOR') {
+      return;
+    }
+    if (call.room_id === 'general' && userRole === 'FOUNDING_ADVISOR') {
+      return;
+    }
+
     setOngoingCall(call);
 
     // If current user is already in this call, do nothing
@@ -145,12 +154,12 @@ export const CallNotificationProvider = ({ children }) => {
     clearIncomingRing();
   };
 
-  const startCall = async (callType = 'video') => {
+  const startCall = async (callType = 'video', roomId = 'general', roomTitle = 'TeamSync Company HQ') => {
     // 1. Instant 0ms optimistic call session creation
     const optimisticSession = {
       id: 'call-' + Date.now(),
-      room_id: 'general',
-      room_title: 'TeamSync Company HQ',
+      room_id: roomId,
+      room_title: roomTitle,
       call_type: callType,
       caller_name: currentUser?.full_name || currentUser?.name || 'Team Member',
       caller_email: currentUser?.email || '',
@@ -169,15 +178,15 @@ export const CallNotificationProvider = ({ children }) => {
     setOngoingCall(optimisticSession);
 
     try {
-      const bc = new BroadcastChannel('teamsync_call_status_general');
+      const bc = new BroadcastChannel(`teamsync_call_status_${roomId}`);
       bc.postMessage({ type: 'CALL_STATUS', call: optimisticSession });
       bc.close();
     } catch {}
 
     // 2. Background DB synchronization
     callApi.createCallSession({
-      roomId: 'general',
-      roomTitle: 'TeamSync Company HQ',
+      roomId,
+      roomTitle,
       caller: currentUser,
       callType
     }).then(session => {
@@ -201,6 +210,8 @@ export const CallNotificationProvider = ({ children }) => {
   // Host ends the call for everyone
   const endCall = async (callId, { duration = 0, participants = [] } = {}) => {
     const targetCallId = callId || activeCallSession?.id || ongoingCall?.id;
+    const currentRoomId = activeCallSession?.room_id || ongoingCall?.room_id || 'general';
+
     if (targetCallId) {
       try {
         await callApi.endCallSession(targetCallId, { duration, participants });
@@ -209,7 +220,7 @@ export const CallNotificationProvider = ({ children }) => {
       }
 
       try {
-        const bc = new BroadcastChannel('teamsync_call_status_general');
+        const bc = new BroadcastChannel(`teamsync_call_status_${currentRoomId}`);
         bc.postMessage({ type: 'CALL_ENDED', callId: targetCallId });
         bc.close();
       } catch {}

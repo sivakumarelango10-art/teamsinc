@@ -2,10 +2,25 @@
 // Connects separate API keys for Founder, Admin, and Founding Advisor
 
 const GEMINI_API_KEYS = {
-  FOUNDER: import.meta.env.VITE_GEMINI_API_KEY_FOUNDER || '',
-  ADMIN: import.meta.env.VITE_GEMINI_API_KEY_ADMIN || '',
-  FOUNDING_ADVISOR: import.meta.env.VITE_GEMINI_API_KEY_ADVISOR || '',
-  MEMBER: import.meta.env.VITE_GEMINI_API_KEY_ADMIN || import.meta.env.VITE_GEMINI_API_KEY_FOUNDER || ''
+  FOUNDER:
+    import.meta.env.VITE_GEMINI_API_KEY_FOUNDER ||
+    import.meta.env.NEXT_PUBLIC_GEMINI_API_KEY_FOUNDER ||
+    import.meta.env.GEMINI_API_KEY_FOUNDER ||
+    '',
+  ADMIN:
+    import.meta.env.VITE_GEMINI_API_KEY_ADMIN ||
+    import.meta.env.NEXT_PUBLIC_GEMINI_API_KEY_ADMIN ||
+    import.meta.env.GEMINI_API_KEY_ADMIN ||
+    '',
+  FOUNDING_ADVISOR:
+    import.meta.env.VITE_GEMINI_API_KEY_ADVISOR ||
+    import.meta.env.NEXT_PUBLIC_GEMINI_API_KEY_ADVISOR ||
+    import.meta.env.GEMINI_API_KEY_ADVISOR ||
+    '',
+  MEMBER:
+    import.meta.env.VITE_GEMINI_API_KEY_ADMIN ||
+    import.meta.env.VITE_GEMINI_API_KEY_FOUNDER ||
+    ''
 };
 
 export const getGeminiApiKey = (role = 'MEMBER') => {

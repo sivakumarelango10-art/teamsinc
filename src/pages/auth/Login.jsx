@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { AlertCircle, ShieldCheck } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import BrandLogo from '../../components/common/BrandLogo';
 
 export const Login = () => {
@@ -32,7 +32,7 @@ export const Login = () => {
           <BrandLogo size="large" />
         </div>
         <p className="text-xs text-neutral-400">
-          Enterprise Task Management & Daily Workforce Allocation System
+          Enterprise Task Management & Daily Workspace
         </p>
       </div>
 
@@ -80,12 +80,6 @@ export const Login = () => {
             </svg>
             <span>{loading ? 'Authenticating...' : 'Continue with Google'}</span>
           </button>
-
-          {/* Security Notice */}
-          <div className="mt-6 pt-5 border-t border-neutral-900 flex items-center justify-center gap-2 text-center text-[11px] text-neutral-400">
-            <ShieldCheck className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Secured with Supabase Authentication & RLS</span>
-          </div>
         </div>
       </div>
     </div>

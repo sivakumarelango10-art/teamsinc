@@ -30,6 +30,7 @@ import AdvisorTasks from '../pages/advisor/AdvisorTasks';
 import BugManagement from '../pages/bugs/BugManagement';
 import MyReportedBugs from '../pages/bugs/MyReportedBugs';
 import Profile from '../pages/profile/Profile';
+import NotFound from '../pages/common/NotFound';
 
 export const AppRoutes = () => {
   const { user, profile, loading } = useAuth();
@@ -52,6 +53,9 @@ export const AppRoutes = () => {
 
   return (
     <Routes>
+      {/* Root Route Redirect */}
+      <Route path="/" element={getDefaultRedirect()} />
+
       {/* Public Route */}
       <Route
         path="/login"
@@ -73,6 +77,7 @@ export const AppRoutes = () => {
         <Route path="departments" element={<Departments />} />
         <Route path="reports" element={<Reports />} />
         <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* Admin / Task Manager Protected Routes (Accessible by Admin and Founder) */}
@@ -90,6 +95,7 @@ export const AppRoutes = () => {
         <Route path="assign-task" element={<AssignTask />} />
         <Route path="daily-planning" element={<DailyPlanning />} />
         <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* Founding Advisor Protected Routes (Oversight Portal) */}
@@ -104,6 +110,7 @@ export const AppRoutes = () => {
         <Route path="dashboard" element={<AdvisorDashboard />} />
         <Route path="tasks" element={<AdvisorTasks />} />
         <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* Member Protected Routes */}
@@ -120,6 +127,7 @@ export const AppRoutes = () => {
         <Route path="daily-plan" element={<MyDailyPlan />} />
         <Route path="bugs" element={<MyReportedBugs />} />
         <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* Unified WhatsApp-Style Chats Route (All Authenticated Roles) */}
@@ -149,8 +157,11 @@ export const AppRoutes = () => {
       {/* Legacy Redirect for /leadership-chat to unified /chat */}
       <Route path="/leadership-chat" element={<Navigate to="/chat" replace />} />
 
-      {/* Fallback Catch-all Route */}
-      <Route path="*" element={getDefaultRedirect()} />
+      {/* Dedicated 404 Route */}
+      <Route path="/404" element={<NotFound />} />
+
+      {/* Fallback Catch-all Route for any unmatched URL */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };

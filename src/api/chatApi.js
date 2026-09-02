@@ -191,7 +191,7 @@ export const chatApi = {
     return newMessage;
   },
 
-  async deleteMessage(messageId) {
+  async deleteMessage(messageId, channel = 'general') {
     if (supabase) {
       const { error } = await supabase
         .from('messages')
@@ -202,9 +202,10 @@ export const chatApi = {
     }
 
     try {
-      const current = await this.getMessages();
+      const storageKey = `${STORAGE_CHAT_KEY}_${channel}`;
+      const current = await this.getMessages(100, null, channel);
       const filtered = current.filter(m => m.id !== messageId);
-      localStorage.setItem(STORAGE_CHAT_KEY, JSON.stringify(filtered));
+      localStorage.setItem(storageKey, JSON.stringify(filtered));
     } catch {}
     return true;
   }

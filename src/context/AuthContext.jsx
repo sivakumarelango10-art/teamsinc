@@ -12,7 +12,9 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const currentUserRef = useRef(null);
+  const currentProfileRef = useRef(null);
   currentUserRef.current = user;
+  currentProfileRef.current = profile;
 
   useEffect(() => {
     // 1. Initial Session Check on app mount
@@ -77,7 +79,7 @@ export const AuthProvider = ({ children }) => {
 
         } else if (event === 'SIGNED_OUT') {
           // Clean up push subscription for this device on logout
-          const prevProfile = currentUserRef.current;
+          const prevProfile = currentProfileRef.current;
           if (prevProfile?.id) {
             notificationService.onLogout(prevProfile.id).catch(() => {});
           }

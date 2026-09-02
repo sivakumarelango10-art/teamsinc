@@ -9,9 +9,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Sparkles,
-  ArrowLeft,
-  Building2,
   Award
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';

@@ -4,7 +4,6 @@ import {
   Download,
   FileText,
   Shield,
-  ShieldAlert,
   Award
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';

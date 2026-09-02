@@ -20,25 +20,15 @@ import {
   Send,
   FileText,
   Image as ImageIcon,
-  Download,
   X,
   Shield,
-  ShieldAlert,
-  User,
-  Trash2,
   Users,
-  CheckCheck,
-  Paperclip,
-  Lock,
-  ExternalLink,
   MessageSquare,
   Video,
   Phone,
   Clock,
-  Clock3,
   Loader2,
   Search,
-  ChevronLeft,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
@@ -452,6 +442,11 @@ export const TeamChat = ({
   };
 
   const removeAttachment = () => {
+    if (attachmentPreview?.url && attachmentPreview.url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(attachmentPreview.url);
+      } catch {}
+    }
     setSelectedFile(null);
     setAttachmentPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';

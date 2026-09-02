@@ -9,7 +9,6 @@ import {
   BarChart3,
   PlusCircle,
   LogOut,
-  Sparkles,
   MessageSquare,
   Shield,
   Bug,

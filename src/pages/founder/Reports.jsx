@@ -21,8 +21,6 @@ import { format } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StatCard from '../../components/common/StatCard';
 
-const MONO_SHADES = ['#ffffff', '#a3a3a3', '#525252', '#d4d4d4', '#737373', '#262626'];
-
 export const Reports = () => {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
@@ -30,12 +28,11 @@ export const Reports = () => {
   const [departments, setDepartments] = useState([]);
   const [todayAssignments, setTodayAssignments] = useState([]);
 
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
         const [allTasks, allUsers, allDepts, todayPlan] = await Promise.all([
           tasksApi.getTasks(),
           usersApi.getUsers(),

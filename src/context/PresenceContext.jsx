@@ -94,7 +94,11 @@ export const PresenceProvider = ({ children }) => {
       const heartbeatTimer = setInterval(updateHeartbeat, 60000); // every 60s
 
       const handleUnload = () => {
-        if (bc) bc.postMessage({ type: 'OFFLINE_PING', email: currentEmail });
+        if (bc) {
+          try {
+            bc.postMessage({ type: 'OFFLINE_PING', email: currentEmail });
+          } catch {}
+        }
         if (channel) channel.untrack();
       };
 
@@ -104,8 +108,10 @@ export const PresenceProvider = ({ children }) => {
         clearInterval(heartbeatTimer);
         window.removeEventListener('beforeunload', handleUnload);
         if (bc) {
-          bc.postMessage({ type: 'OFFLINE_PING', email: currentEmail });
-          bc.close();
+          try {
+            bc.postMessage({ type: 'OFFLINE_PING', email: currentEmail });
+            bc.close();
+          } catch {}
         }
         if (channel) {
           channel.untrack();
@@ -113,6 +119,14 @@ export const PresenceProvider = ({ children }) => {
         }
       };
     }
+
+    return () => {
+      if (bc) {
+        try {
+          bc.close();
+        } catch {}
+      }
+    };
   }, [user?.email]);
 
   const isUserOnline = (email) => {

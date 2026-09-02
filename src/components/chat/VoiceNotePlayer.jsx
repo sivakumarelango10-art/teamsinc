@@ -141,11 +141,11 @@ const VoiceNotePlayerComponent = ({
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px] sm:min-w-[270px] select-none py-0.5">
-      {/* Hidden Audio Element */}
+      {/* Hidden Audio Element with instant preload */}
       <audio
         ref={audioRef}
         src={audioUrl}
-        preload="metadata"
+        preload="auto"
         playsInline
       />
 

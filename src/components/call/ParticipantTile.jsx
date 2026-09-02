@@ -36,6 +36,9 @@ const ParticipantTileComponent = ({
     }
     if (audioRef.current && stream && !isLocal) {
       audioRef.current.srcObject = stream;
+      audioRef.current.play().catch(() => {
+        // Autoplay policy fallback: audio element plays upon user interaction
+      });
     }
   }, [stream, isLocal, isVideoOff]);
 

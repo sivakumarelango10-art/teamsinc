@@ -146,28 +146,50 @@ export const CallNotificationProvider = ({ children }) => {
   };
 
   const startCall = async (callType = 'video') => {
+    // 1. Instant 0ms optimistic call session creation
+    const optimisticSession = {
+      id: 'call-' + Date.now(),
+      room_id: 'general',
+      room_title: 'TeamSync Company HQ',
+      call_type: callType,
+      caller_name: currentUser?.full_name || currentUser?.name || 'Team Member',
+      caller_email: currentUser?.email || '',
+      started_at: new Date().toISOString(),
+      status: 'ongoing',
+      participants: [{
+        id: currentUser?.id || 'local-user',
+        name: currentUser?.full_name || currentUser?.name || 'Team Member',
+        email: currentUser?.email || '',
+        role: currentUser?.role || 'MEMBER',
+        joined_at: new Date().toISOString()
+      }]
+    };
+
+    setActiveCallSession(optimisticSession);
+    setOngoingCall(optimisticSession);
+
     try {
-      const session = await callApi.createCallSession({
-        roomId: 'general',
-        roomTitle: 'TeamSync Company HQ',
-        caller: currentUser,
-        callType
-      });
+      const bc = new BroadcastChannel('teamsync_call_status_general');
+      bc.postMessage({ type: 'CALL_STATUS', call: optimisticSession });
+      bc.close();
+    } catch {}
 
-      setActiveCallSession(session);
-      setOngoingCall(session);
+    // 2. Background DB synchronization
+    callApi.createCallSession({
+      roomId: 'general',
+      roomTitle: 'TeamSync Company HQ',
+      caller: currentUser,
+      callType
+    }).then(session => {
+      if (session && session.id) {
+        setActiveCallSession(prev => (prev?.id === optimisticSession.id ? session : prev));
+        setOngoingCall(prev => (prev?.id === optimisticSession.id ? session : prev));
+      }
+    }).catch(err => {
+      console.warn('Call background sync notice:', err);
+    });
 
-      try {
-        const bc = new BroadcastChannel('teamsync_call_status_general');
-        bc.postMessage({ type: 'CALL_STATUS', call: session });
-        bc.close();
-      } catch {}
-
-      return session;
-    } catch (err) {
-      console.error('Failed to start call session:', err);
-      throw err;
-    }
+    return optimisticSession;
   };
 
   const leaveCall = () => {

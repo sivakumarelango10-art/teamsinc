@@ -112,7 +112,7 @@ export const AIDepartmentModal = ({ isOpen, onClose, currentDepartments = [], on
               <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 <span>AI Department Architect</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-950 border border-purple-800 text-purple-300 font-bold uppercase">
-                  Powered by Gemini
+                  Enterprise AI
                 </span>
               </h2>
               <p className="text-xs text-neutral-400 mt-0.5">

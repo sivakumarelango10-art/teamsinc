@@ -200,7 +200,7 @@ export const ConvertBugToTaskModal = ({ bug, isOpen, onClose, onSuccess }) => {
             {aiLoading ? (
               <div className="p-3 rounded-2xl bg-purple-950/30 border border-purple-800/50 flex items-center gap-2.5 text-xs text-purple-300">
                 <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                <span>Gemini AI is analyzing bug details & routing to target department...</span>
+                <span>AI is analyzing bug details & routing to target department...</span>
               </div>
             ) : aiTriage ? (
               <div className="p-3.5 rounded-2xl bg-gradient-to-tr from-purple-950/40 via-neutral-900/60 to-neutral-900 border border-purple-800/60 space-y-2 animate-fadeIn">

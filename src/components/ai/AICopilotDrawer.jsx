@@ -41,7 +41,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
     {
       id: 'welcome-1',
       sender: 'copilot',
-      text: `Hello **${profile?.full_name || 'Team Member'}**! I am your **TeamSync AI Copilot**, connected via Google Gemini.\n\nI have live visibility across your dashboard tasks, daily workforce planning, bug reports, and department workloads. How can I assist your operations today?`,
+      text: `Hello **${profile?.full_name || 'Team Member'}**! I am your **TeamSync AI Copilot**.\n\nI have live visibility across your dashboard tasks, daily workforce planning, bug reports, and department workloads. How can I assist your operations today?`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -257,8 +257,8 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
             <div>
               <div className="flex items-center gap-1.5">
                 <h2 className="text-sm font-bold text-white tracking-tight">TeamSync Copilot</h2>
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-950/80 border border-purple-800/80 text-purple-300 font-bold uppercase">
-                  Gemini AI
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 font-bold uppercase">
+                  Active
                 </span>
               </div>
               <p className="text-[10px] text-neutral-400">
@@ -379,7 +379,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
               </div>
               <div className="px-3.5 py-2.5 rounded-2xl bg-neutral-900/60 border border-neutral-800 text-xs text-neutral-400 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
-                <span>Analyzing workspace telemetry with Gemini...</span>
+                <span>Analyzing workspace telemetry...</span>
               </div>
             </div>
           )}

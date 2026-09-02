@@ -221,13 +221,35 @@ async function handleChatMessage(record: Record<string, unknown>) {
 }
 
 // ─── Incoming Call Push ───────────────────────────────────────────────────────
+// ─── Incoming Call Push ───────────────────────────────────────────────────────
 async function handleIncomingCall(record: Record<string, unknown>) {
   const callerEmail = String(record.caller_email || '').toLowerCase();
   const callerName = String(record.caller_name || 'Team Member');
   const callType = String(record.call_type || 'video');
   const callId = String(record.id || '');
+  const roomId = String(record.room_id || 'general');
 
-  // Get all subscriptions except the caller's
+  // Filter allowed recipient roles based on call room
+  const allowedRoles = roomId === 'leadership'
+    ? ['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR']
+    : ['FOUNDER', 'ADMIN', 'MEMBER'];
+
+  const { data: allowedProfiles } = await adminSupabase
+    .from('profiles')
+    .select('id, email, role')
+    .in('role', allowedRoles);
+
+  const profilesList = (allowedProfiles as ProfileRecord[]) || [];
+  const allowedUserIds = new Set(profilesList.map((p: ProfileRecord) => p.id));
+
+  // Get caller profile ID to exclude
+  let callerProfileId: string | null = null;
+  if (callerEmail) {
+    const caller = profilesList.find((p: ProfileRecord) => p.email?.toLowerCase() === callerEmail);
+    callerProfileId = caller?.id ?? null;
+  }
+
+  // Query push subscriptions matching allowed users
   const { data: subscriptions, error } = await adminSupabase
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth, user_id')
@@ -235,26 +257,17 @@ async function handleIncomingCall(record: Record<string, unknown>) {
 
   if (error || !subscriptions?.length) return;
 
-  let callerProfileId: string | null = null;
-  if (callerEmail) {
-    const { data: callerProfile } = await adminSupabase
-      .from('profiles')
-      .select('id')
-      .ilike('email', callerEmail)
-      .maybeSingle();
-    callerProfileId = (callerProfile as ProfileRecord | null)?.id ?? null;
-  }
-
   const subList = (subscriptions as PushSubscriptionRecord[]) || [];
   const targetSubscriptions = subList.filter(
-    (sub: PushSubscriptionRecord) => sub.user_id !== callerProfileId
+    (sub: PushSubscriptionRecord) => allowedUserIds.has(sub.user_id) && sub.user_id !== callerProfileId
   );
 
   const payload = JSON.stringify({
     type: 'incoming_call',
-    callerName,
+    callerName: roomId === 'leadership' ? `[Leadership] ${callerName}` : callerName,
     callType,
-    callId
+    callId,
+    roomId
   });
 
   await sendPushToSubscriptions(targetSubscriptions, payload);
@@ -263,21 +276,39 @@ async function handleIncomingCall(record: Record<string, unknown>) {
 // ─── Call Cancelled / Ended Push ─────────────────────────────────────────────
 async function handleCallCancelled(record: Record<string, unknown>) {
   const callId = String(record.id || '');
+  const roomId = String(record.room_id || 'general');
 
-  // Send a cancellation push so SW can close the ringing notification
+  const allowedRoles = roomId === 'leadership'
+    ? ['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR']
+    : ['FOUNDER', 'ADMIN', 'MEMBER'];
+
+  const { data: allowedProfiles } = await adminSupabase
+    .from('profiles')
+    .select('id, role')
+    .in('role', allowedRoles);
+
+  const profilesList = (allowedProfiles as ProfileRecord[]) || [];
+  const allowedUserIds = new Set(profilesList.map((p: ProfileRecord) => p.id));
+
   const { data: subscriptions } = await adminSupabase
     .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth')
+    .select('id, endpoint, p256dh, auth, user_id')
     .limit(100);
 
   if (!subscriptions?.length) return;
 
+  const subList = (subscriptions as PushSubscriptionRecord[]) || [];
+  const targetSubscriptions = subList.filter(
+    (sub: PushSubscriptionRecord) => allowedUserIds.has(sub.user_id)
+  );
+
   const payload = JSON.stringify({
     type: 'call_cancelled',
-    callId
+    callId,
+    roomId
   });
 
-  await sendPushToSubscriptions(subscriptions, payload);
+  await sendPushToSubscriptions(targetSubscriptions, payload);
 }
 
 // ─── Send push to a batch of subscriptions ───────────────────────────────────

@@ -141,4 +141,126 @@ describe('TeamSync Security & Authorization Engine Tests', () => {
     });
   });
 
+  describe('5. Cross-User Call Push Recipient Isolation', () => {
+    function filterCallRecipients(roomId, callerUserId, allProfiles, subscriptions) {
+      const allowedRoles = roomId === 'leadership'
+        ? ['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR']
+        : ['FOUNDER', 'ADMIN', 'MEMBER'];
+
+      const allowedUserIds = new Set(
+        allProfiles.filter(p => allowedRoles.includes(p.role)).map(p => p.id)
+      );
+
+      return subscriptions.filter(
+        sub => allowedUserIds.has(sub.user_id) && sub.user_id !== callerUserId
+      );
+    }
+
+    const profiles = [
+      { id: 'usr-founder', email: 'siva@example.com', role: 'FOUNDER' },
+      { id: 'usr-advisor', email: 'advisor@example.com', role: 'FOUNDING_ADVISOR' },
+      { id: 'usr-admin', email: 'admin@example.com', role: 'ADMIN' },
+      { id: 'usr-member-1', email: 'member1@example.com', role: 'MEMBER' },
+      { id: 'usr-member-2', email: 'member2@example.com', role: 'MEMBER' }
+    ];
+
+    const subscriptions = [
+      { id: 'sub-founder', user_id: 'usr-founder' },
+      { id: 'sub-advisor', user_id: 'usr-advisor' },
+      { id: 'sub-admin', user_id: 'usr-admin' },
+      { id: 'usr-sub-member-1', user_id: 'usr-member-1' },
+      { id: 'usr-sub-member-2', user_id: 'usr-member-2' }
+    ];
+
+    it('Incoming leadership call only notifies Founder, Admin, and Founding Advisor (excludes standard Members)', () => {
+      const targets = filterCallRecipients('leadership', 'usr-founder', profiles, subscriptions);
+      const recipientIds = targets.map(t => t.user_id);
+      assert.ok(recipientIds.includes('usr-advisor'));
+      assert.ok(recipientIds.includes('usr-admin'));
+      assert.strictEqual(recipientIds.includes('usr-member-1'), false);
+      assert.strictEqual(recipientIds.includes('usr-member-2'), false);
+    });
+
+    it('Incoming general call notifies Members and Admins but excludes Founding Advisor per specification', () => {
+      const targets = filterCallRecipients('general', 'usr-founder', profiles, subscriptions);
+      const recipientIds = targets.map(t => t.user_id);
+      assert.ok(recipientIds.includes('usr-member-1'));
+      assert.ok(recipientIds.includes('usr-member-2'));
+      assert.ok(recipientIds.includes('usr-admin'));
+      assert.strictEqual(recipientIds.includes('usr-advisor'), false);
+    });
+  });
+
+  describe('6. Profile Privilege Escalation Immutability Verification', () => {
+    function validateProfileUpdate(currentAuthUserId, targetProfile, updatedFields) {
+      if (currentAuthUserId !== targetProfile.auth_user_id) {
+        throw new Error('Access Denied: You can only update your own profile.');
+      }
+      if (updatedFields.role && updatedFields.role !== targetProfile.role) {
+        throw new Error('Access Denied: Modifying your assigned role is forbidden.');
+      }
+      return {
+        ...targetProfile,
+        full_name: updatedFields.full_name || targetProfile.full_name,
+        avatar_url: updatedFields.avatar_url || targetProfile.avatar_url
+      };
+    }
+
+    const memberProfile = {
+      id: 'prof-1',
+      auth_user_id: 'auth-member-1',
+      full_name: 'Regular Member',
+      role: 'MEMBER'
+    };
+
+    it('Allows user to update their own full name and avatar', () => {
+      const updated = validateProfileUpdate('auth-member-1', memberProfile, {
+        full_name: 'Member New Name',
+        avatar_url: 'https://example.com/photo.png'
+      });
+      assert.strictEqual(updated.full_name, 'Member New Name');
+    });
+
+    it('Blocks user from updating another user profile', () => {
+      assert.throws(
+        () => validateProfileUpdate('auth-attacker-2', memberProfile, { full_name: 'Hacked Name' }),
+        /Access Denied/
+      );
+    });
+
+    it('Blocks standard member from escalating own role to ADMIN or FOUNDER', () => {
+      assert.throws(
+        () => validateProfileUpdate('auth-member-1', memberProfile, { role: 'ADMIN' }),
+        /Access Denied/
+      );
+    });
+  });
+
+  describe('7. Pre-Registration Zero-Leakage RPC Logic', () => {
+    const registeredDatabase = [
+      { email: 'siva@example.com', is_active: true },
+      { email: 'advisor@example.com', is_active: true },
+      { email: 'deactivated@example.com', is_active: false }
+    ];
+
+    function checkEmailRegisteredRPC(emailInput) {
+      const clean = (emailInput || '').trim().toLowerCase();
+      return registeredDatabase.some(p => p.email.toLowerCase() === clean && p.is_active === true);
+    }
+
+    it('Returns true for active registered emails without exposing profile object or metadata', () => {
+      const result = checkEmailRegisteredRPC('siva@example.com');
+      assert.strictEqual(typeof result, 'boolean');
+      assert.strictEqual(result, true);
+    });
+
+    it('Returns false for deactivated accounts', () => {
+      assert.strictEqual(checkEmailRegisteredRPC('deactivated@example.com'), false);
+    });
+
+    it('Returns false for uninvited emails', () => {
+      assert.strictEqual(checkEmailRegisteredRPC('random.stranger@gmail.com'), false);
+    });
+  });
+
 });

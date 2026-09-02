@@ -42,19 +42,19 @@ export const DashboardLayout = ({ title, children }) => {
         </main>
       </div>
 
-      {/* Floating AI Copilot Trigger Symbol Button (Bottom Right) */}
+      {/* WhatsApp Meta-AI Style Floating Action Button (Bottom Right) */}
       <button
         type="button"
         onClick={() => setCopilotOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-13 h-13 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 p-[2px] shadow-[0_4px_25px_rgba(147,51,234,0.4)] hover:shadow-[0_4px_35px_rgba(99,102,241,0.65)] hover:scale-110 active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center cursor-pointer group animate-fadeIn"
+        className="fixed bottom-6 right-6 z-40 w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-full bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 p-[2px] shadow-[0_4px_20px_rgba(99,102,241,0.45)] hover:shadow-[0_4px_28px_rgba(99,102,241,0.7)] hover:scale-110 active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center cursor-pointer group animate-fadeIn"
         title="AI Copilot (Ctrl + K)"
         aria-label="Open AI Copilot"
       >
-        <div className="w-full h-full bg-black rounded-full overflow-hidden flex items-center justify-center">
+        <div className="w-full h-full bg-neutral-950 rounded-full overflow-hidden flex items-center justify-center p-0.5">
           <img
             src="/ai-logo.png"
             alt="AI Copilot"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none pointer-events-none"
+            className="w-full h-full object-cover object-center rounded-full group-hover:scale-105 transition-transform duration-300 select-none pointer-events-none"
           />
         </div>
       </button>

@@ -62,7 +62,7 @@ export const CallHistoryModal = ({ roomId = 'general', isOpen, onClose }) => {
             </div>
             <div>
               <h3 className="text-sm md:text-base font-bold text-white">Call History</h3>
-              <p className="text-[11px] text-neutral-400">Past group calls in #general</p>
+              <p className="text-[11px] text-neutral-400">Past group calls in #{roomId}</p>
             </div>
           </div>
 

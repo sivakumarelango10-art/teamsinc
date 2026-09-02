@@ -1,12 +1,13 @@
 import React from 'react';
 import { Video, Phone, Users, ArrowRight } from 'lucide-react';
 
-export const ActiveCallBanner = ({ activeCall, onJoin, onDismiss }) => {
-  if (!activeCall) return null;
+export const ActiveCallBanner = ({ activeCall, call, onJoin, onDismiss }) => {
+  const currentCall = activeCall || call;
+  if (!currentCall) return null;
 
-  const callerName = activeCall.caller_name || 'Team Member';
-  const participantCount = activeCall.participants?.length || 1;
-  const isVoice = activeCall.call_type === 'voice';
+  const callerName = currentCall.caller_name || 'Team Member';
+  const participantCount = currentCall.participants?.length || 1;
+  const isVoice = currentCall.call_type === 'voice';
 
   return (
     <div className="mx-4 my-2 p-3 sm:p-3.5 bg-gradient-to-r from-emerald-950/80 via-neutral-900 to-emerald-950/60 border border-emerald-500/40 rounded-2xl flex items-center justify-between gap-3 shadow-xl backdrop-blur-md animate-fadeIn shrink-0">

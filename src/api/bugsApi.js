@@ -1,6 +1,9 @@
 import { supabase } from './supabase';
 import { tasksApi } from './tasksApi';
 import { chatApi } from './chatApi';
+import { departmentsApi } from './departmentsApi';
+import { usersApi } from './usersApi';
+import { geminiApi } from './geminiApi';
 
 const STORAGE_BUGS_KEY = 'teamsync_bug_reports';
 
@@ -135,6 +138,10 @@ export const bugsApi = {
         console.error('Error in reportBug:', error);
         throw error;
       }
+
+      // Background AI Auto-Triage & Auto-Assignment for Critical / Urgent bugs
+      this.autoTriageAndAssign(data).catch(err => console.warn('Auto-triage background notice:', err));
+
       return data;
     }
 
@@ -159,9 +166,80 @@ export const bugsApi = {
       const bugs = await this.getBugs();
       bugs.unshift(newBug);
       localStorage.setItem(STORAGE_BUGS_KEY, JSON.stringify(bugs));
+      this.autoTriageAndAssign(newBug).catch(err => console.warn('Auto-triage fallback notice:', err));
     } catch {}
 
     return newBug;
+  },
+
+  /**
+   * Automated AI Bug Triage & Auto-Assignment Engine
+   * Classifies root cause, maps target department, and automatically assigns Critical bugs!
+   */
+  async autoTriageAndAssign(bug) {
+    if (!bug) return;
+    try {
+      const [departments, users] = await Promise.all([
+        departmentsApi.getDepartments().catch(() => []),
+        usersApi.getUsers().catch(() => [])
+      ]);
+
+      const triage = await geminiApi.classifyAndRouteBug({
+        bugTitle: bug.title,
+        bugDescription: bug.description,
+        stepsToReproduce: bug.steps_to_reproduce,
+        departments,
+        severity: bug.severity
+      });
+
+      if (!triage) return;
+
+      let targetDeptId = triage.suggestedDepartmentId;
+      if (!targetDeptId && triage.suggestedDepartmentName) {
+        const foundDept = departments.find(
+          d => d.name.toLowerCase() === triage.suggestedDepartmentName.toLowerCase()
+        );
+        if (foundDept) targetDeptId = foundDept.id;
+      }
+
+      // If severity is CRITICAL, automatically convert to high-priority task assigned to the department!
+      if (bug.severity === 'CRITICAL' || triage.recommendedSeverity === 'CRITICAL') {
+        const activeUsers = users.filter(u => u.is_active);
+        const assignee =
+          activeUsers.find(u => u.role === 'ADMIN' || u.role === 'FOUNDER') ||
+          activeUsers[0];
+
+        if (assignee && !bug.converted_task_id) {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const deadlineStr = tomorrow.toISOString().split('T')[0];
+
+          const taskDescription = [
+            `🚨 [CRITICAL AI EMERGENCY TRIAGE]`,
+            `\n• Target Department: ${triage.suggestedDepartmentName || 'Engineering'}`,
+            `• Error Domain: ${triage.errorDomain || 'System Core'}`,
+            `• Root Cause Hypothesis: ${triage.rootCauseSummary || 'Critical stability defect requiring immediate fix.'}`,
+            triage.actionableSteps?.length ? `\n• Actionable Resolution Steps:\n${triage.actionableSteps.map(s => `  - ${s}`).join('\n')}` : '',
+            `\n• Issue Description:\n${bug.description}`,
+            bug.steps_to_reproduce ? `\n• Steps to Reproduce:\n${bug.steps_to_reproduce}` : '',
+            bug.screenshot_url ? `\n• Reference Screenshot: ${bug.screenshot_url}` : '',
+            `\nReported by: ${bug.reporter_name || 'Team Member'}`
+          ].filter(Boolean).join('\n');
+
+          await this.convertBugToTask(bug.id, {
+            title: `[CRITICAL FIX] ${bug.title}`,
+            description: taskDescription,
+            priority: 'URGENT',
+            deadline: deadlineStr,
+            assigned_to: assignee.id,
+            assigned_by: bug.reported_by || assignee.id,
+            department_id: targetDeptId || null
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Auto-triage engine execution note:', err);
+    }
   },
 
   async updateBug(id, updates) {

@@ -51,7 +51,135 @@ export const getGeminiApiKey = (role = 'MEMBER') => {
   );
 };
 
-export const callGeminiApi = async ({
+// ─── Gemini AI Client-Side Rate Limiter & Sequential Queue ───────────────────
+// Enforces a strict sliding window (max 10 requests / 60 seconds per browser session)
+// and handles HTTP 429 / RESOURCE_EXHAUSTED with exponential backoff and jitter.
+
+export class GeminiRateLimiter {
+  constructor({ maxRequests = 10, windowMs = 60000 } = {}) {
+    this.maxRequests = maxRequests;
+    this.windowMs = windowMs;
+    this.requestTimestamps = [];
+    this.queue = [];
+    this.isProcessing = false;
+    this.blockedUntil = 0; // Timestamp until which all requests must pause on 429
+  }
+
+  _recordRequest() {
+    this.requestTimestamps.push(Date.now());
+  }
+
+  _cleanWindow() {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+    this.requestTimestamps = this.requestTimestamps.filter(t => t > cutoff);
+  }
+
+  _getWaitTimeMs() {
+    const now = Date.now();
+
+    // If active backoff is in effect
+    if (this.blockedUntil > now) {
+      return this.blockedUntil - now;
+    }
+
+    this._cleanWindow();
+
+    // Within sliding window capacity
+    if (this.requestTimestamps.length < this.maxRequests) {
+      return 0;
+    }
+
+    // Delay until the oldest slot expires from the sliding window
+    const oldest = this.requestTimestamps[0];
+    const waitTime = oldest + this.windowMs - now + 50;
+    return Math.max(waitTime, 0);
+  }
+
+  applyBackoff(retryAfterSec = null, attempt = 1) {
+    let delayMs = 2000 * Math.pow(2, attempt - 1) + Math.random() * 1000;
+    if (retryAfterSec && !isNaN(Number(retryAfterSec))) {
+      delayMs = Math.max(Number(retryAfterSec) * 1000, delayMs);
+    }
+    delayMs = Math.min(delayMs, 30000); // 30s maximum backoff ceiling
+
+    const now = Date.now();
+    this.blockedUntil = Math.max(this.blockedUntil, now + delayMs);
+    console.warn(`[GeminiRateLimiter] HTTP 429 Rate Limit encountered. Pausing queue for ${Math.round(delayMs)}ms.`);
+    return delayMs;
+  }
+
+  enqueue(taskFn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ taskFn, resolve, reject, attempts: 0 });
+      this._processQueue();
+    });
+  }
+
+  async _processQueue() {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+
+    while (this.queue.length > 0) {
+      const waitTime = this._getWaitTimeMs();
+      if (waitTime > 0) {
+        await new Promise(r => setTimeout(r, waitTime));
+      }
+
+      const item = this.queue.shift();
+      if (!item) continue;
+
+      this._recordRequest();
+
+      try {
+        const result = await item.taskFn();
+        item.resolve(result);
+      } catch (err) {
+        const is429 =
+          err?.status === 429 ||
+          (typeof err?.message === 'string' && (
+            err.message.includes('429') ||
+            err.message.includes('RESOURCE_EXHAUSTED') ||
+            err.message.includes('Quota exceeded') ||
+            err.message.includes('rate limit')
+          ));
+
+        if (is429 && item.attempts < 3) {
+          item.attempts += 1;
+          const backoffMs = this.applyBackoff(err?.retryAfter, item.attempts);
+          console.warn(`[GeminiRateLimiter] Retrying queued request (attempt ${item.attempts}/3) after ${Math.round(backoffMs)}ms.`);
+          // Prepend back to front of queue to retry after backoff expires
+          this.queue.unshift(item);
+        } else {
+          item.reject(err);
+        }
+      }
+    }
+
+    this.isProcessing = false;
+  }
+
+  getStatus() {
+    this._cleanWindow();
+    const now = Date.now();
+    return {
+      currentRequestsInWindow: this.requestTimestamps.length,
+      maxRequestsPerMinute: this.maxRequests,
+      queueLength: this.queue.length,
+      isProcessing: this.isProcessing,
+      isBlockedByBackoff: this.blockedUntil > now,
+      backoffRemainingMs: Math.max(0, this.blockedUntil - now),
+      nextAvailableSlotMs: this._getWaitTimeMs()
+    };
+  }
+}
+
+export const geminiRateLimiter = new GeminiRateLimiter({
+  maxRequests: 10,
+  windowMs: 60000
+});
+
+const _rawCallGeminiApi = async ({
   prompt,
   systemInstruction = '',
   role = 'MEMBER',
@@ -121,7 +249,10 @@ export const callGeminiApi = async ({
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errMsg = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-        throw new Error(errMsg);
+        const err = new Error(errMsg);
+        err.status = response.status;
+        err.retryAfter = response.headers.get('Retry-After');
+        throw err;
       }
 
       const data = await response.json();
@@ -130,13 +261,23 @@ export const callGeminiApi = async ({
     } catch (err) {
       clearTimeout(timerId);
       lastError = err;
+
+      // If HTTP 429 or quota exceeded, rethrow immediately to trigger queue backoff
+      if (err.status === 429 || err.message?.includes('RESOURCE_EXHAUSTED')) {
+        throw err;
+      }
+
       const isTimeout = err.name === 'AbortError';
       console.warn(`[Gemini API] Failed with model ${model}:`, isTimeout ? `Request timed out after ${timeoutMs}ms` : err.message);
-      // Immediately failover to the next candidate model
+      // Failover immediately to the next candidate model
     }
   }
 
   throw lastError || new Error('Failed to generate response from Gemini API.');
+};
+
+export const callGeminiApi = (params) => {
+  return geminiRateLimiter.enqueue(() => _rawCallGeminiApi(params));
 };
 
 export const geminiApi = {
@@ -455,7 +596,13 @@ Return STRICT JSON format:
       }
     }
 
+    results.rateLimiter = geminiRateLimiter.getStatus();
     return results;
+  },
+
+  // ─── 7. Rate Limiter Telemetry ────────────────────────────────────────────
+  getRateLimiterStatus() {
+    return geminiRateLimiter.getStatus();
   }
 };
 

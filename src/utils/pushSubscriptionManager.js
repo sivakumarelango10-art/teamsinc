@@ -84,6 +84,7 @@ export async function saveSubscriptionToDatabase(subscription, userId) {
         {
           user_id: userId,
           device_id: deviceId,
+          subscription: subJson,
           endpoint: subJson.endpoint,
           p256dh: subJson.keys?.p256dh || '',
           auth: subJson.keys?.auth || '',

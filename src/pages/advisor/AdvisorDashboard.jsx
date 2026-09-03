@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Award,
@@ -18,6 +18,7 @@ import {
 import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { supabase } from '../../api/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import TaskStatusBadge from '../../components/tasks/TaskStatusBadge';
 import TaskDetailsModal from '../../components/tasks/TaskDetailsModal';
@@ -29,41 +30,32 @@ export const AdvisorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [allTasks, allUsers] = await Promise.all([
         tasksApi.getTasks(),
         usersApi.getUsers()
       ]);
-      setTasks(allTasks);
-      setUsers(allUsers);
+      setTasks(allTasks || []);
+      setUsers(allUsers || []);
     } catch (err) {
       console.error('Failed to load Advisor dashboard data:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+  }, [loadData]);
 
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('advisor-dashboard-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => loadData()
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
-  }, []);
+  // Real-time synchronization for strategic oversight
+  useRealtime(
+    ['tasks', 'daily_assignments', 'daily_plans', 'profiles'],
+    () => loadData(true),
+    { channelPrefix: 'advisor_dash', broadcastChannel: 'teamsync_bc_tasks' }
+  );
 
   // Compute Task Metrics
   const totalTasks = tasks.length;

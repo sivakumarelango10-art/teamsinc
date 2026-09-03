@@ -119,6 +119,7 @@ export const TeamChat = ({
   const typingTimeoutRef = useRef(null);
   const lastTypingBroadcastRef = useRef(0);
   const realtimeChannelRef = useRef(null);
+  const typingBcRef = useRef(null);
 
   // Pagination & Smart Scroll State
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
@@ -232,11 +233,11 @@ export const TeamChat = ({
       });
     }
 
-    try {
-      const bc = new BroadcastChannel(`teamsync_typing_channel_${activeChannel}`);
-      bc.postMessage(payload);
-      bc.close();
-    } catch {}
+    if (typingBcRef.current) {
+      try {
+        typingBcRef.current.postMessage(payload);
+      } catch {}
+    }
   }, [profile, user, activeChannel]);
 
   const handleTypingSignal = useCallback((payload) => {
@@ -361,6 +362,17 @@ export const TeamChat = ({
         )
         .on(
           'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages' },
+          (payload) => {
+            if (payload.new) {
+              const updatedMsg = payload.new;
+              if ((updatedMsg.channel || 'general') !== activeChannel) return;
+              setMessages(prev => prev.map(m => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)));
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
           { event: 'DELETE', schema: 'public', table: 'messages' },
           (payload) => {
             if (payload.old?.id) {
@@ -404,6 +416,7 @@ export const TeamChat = ({
       };
 
       typingBc = new BroadcastChannel(`teamsync_typing_channel_${activeChannel}`);
+      typingBcRef.current = typingBc;
       typingBc.onmessage = (event) => {
         if (event.data && event.data.channel === activeChannel) {
           handleTypingSignal(event.data);
@@ -415,7 +428,10 @@ export const TeamChat = ({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (rtChannel && supabase) supabase.removeChannel(rtChannel);
       if (bc) bc.close();
-      if (typingBc) typingBc.close();
+      if (typingBc) {
+        typingBc.close();
+        typingBcRef.current = null;
+      }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       notificationService.setForegroundState(false);
     };

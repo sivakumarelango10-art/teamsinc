@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { usersApi } from '../../api/usersApi';
 import { useAuth } from '../../hooks/useAuth';
+import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import UserTable from '../../components/users/UserTable';
 import UserForm from '../../components/users/UserForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
@@ -26,60 +27,48 @@ export const Users = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const list = await usersApi.getUsers();
-      setUsers(list);
+      setUsers(list || []);
     } catch (err) {
       console.error('Failed to load users:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadUsers();
-
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('realtime-users-list')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles' },
-          () => {
-            loadUsers();
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
   }, []);
 
+  useEffect(() => {
+    loadUsers(false);
+  }, [loadUsers]);
+
+  // Real-time synchronization on profiles table
+  useRealtime(
+    'profiles',
+    () => loadUsers(true),
+    { channelPrefix: 'users_list', broadcastChannel: 'teamsync_bc_profiles' }
+  );
+
   const handleRoleChange = async (userId, newRole) => {
+    const prevUsers = [...users];
+    // Optimistic instant feedback
+    setUsers(curr => curr.map(u => (u.id === userId ? { ...u, role: newRole } : u)));
+
     try {
-      const target = users.find(u => u.id === userId);
+      const target = prevUsers.find(u => u.id === userId);
       await usersApi.changeUserRole(userId, newRole);
 
-      // Broadcast to other browser tabs/windows
-      try {
-        if (target?.email) {
-          const bc = new BroadcastChannel('teamsync_role_changes');
-          bc.postMessage({ type: 'ROLE_CHANGED', email: target.email, role: newRole });
-          bc.close();
-        }
-      } catch {}
+      broadcastRealtimeEvent('teamsync_role_changes', { type: 'ROLE_CHANGED', email: target?.email, role: newRole });
+      broadcastRealtimeEvent('teamsync_bc_profiles', { userId, role: newRole });
 
       setFeedback({
         type: 'success',
         text: `Role for ${target?.full_name || 'user'} changed to ${newRole}. Updates reflect immediately.`
       });
-      await loadUsers();
+      loadUsers(true);
     } catch (err) {
+      setUsers(prevUsers);
       setFeedback({ type: 'error', text: err.message || 'Failed to update user role.' });
     }
   };
@@ -92,33 +81,45 @@ export const Users = () => {
       await usersApi.createUser(formData);
       setFeedback({ type: 'success', text: `Created new user ${formData.full_name}` });
     }
-    await loadUsers();
+    broadcastRealtimeEvent('teamsync_bc_profiles');
+    await loadUsers(true);
     setEditingUser(null);
   };
 
   const handleToggleStatus = async (targetUser) => {
+    const nextStatus = !targetUser.is_active;
+    const prevUsers = [...users];
+    setUsers(curr => curr.map(u => (u.id === targetUser.id ? { ...u, is_active: nextStatus } : u)));
+
     try {
-      const nextStatus = !targetUser.is_active;
       await usersApi.toggleUserStatus(targetUser.id, nextStatus);
       setFeedback({
         type: 'success',
         text: `User ${targetUser.full_name} is now ${nextStatus ? 'active' : 'inactive'}.`
       });
-      await loadUsers();
+      broadcastRealtimeEvent('teamsync_bc_profiles');
+      loadUsers(true);
     } catch (err) {
+      setUsers(prevUsers);
       setFeedback({ type: 'error', text: err.message });
     }
   };
 
   const handleDeleteUser = async () => {
     if (!deleteConfirmUser) return;
+    const target = deleteConfirmUser;
+    setDeleteConfirmUser(null);
+    const prevUsers = [...users];
+    setUsers(curr => curr.filter(u => u.id !== target.id));
+
     try {
       setActionLoading(true);
-      await usersApi.deleteUser(deleteConfirmUser.id);
-      setFeedback({ type: 'success', text: `User ${deleteConfirmUser.full_name} has been removed.` });
-      setDeleteConfirmUser(null);
-      await loadUsers();
+      await usersApi.deleteUser(target.id);
+      setFeedback({ type: 'success', text: `User ${target.full_name} has been removed.` });
+      broadcastRealtimeEvent('teamsync_bc_profiles');
+      loadUsers(true);
     } catch (err) {
+      setUsers(prevUsers);
       setFeedback({ type: 'error', text: err.message });
     } finally {
       setActionLoading(false);

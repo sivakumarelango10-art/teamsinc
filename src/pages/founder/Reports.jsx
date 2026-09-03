@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -16,6 +16,7 @@ import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { planningApi } from '../../api/planningApi';
 import { supabase } from '../../api/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import { BarChart3, CheckCircle2, Clock, Users, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -28,57 +29,38 @@ export const Reports = () => {
   const [departments, setDepartments] = useState([]);
   const [todayAssignments, setTodayAssignments] = useState([]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const [allTasks, allUsers, allDepts, todayPlan] = await Promise.all([
-          tasksApi.getTasks(),
-          usersApi.getUsers(),
-          departmentsApi.getDepartments(),
-          planningApi.getDailyAllocations(todayStr)
-        ]);
+  const fetchData = useCallback(async (isSilent = false) => {
+    try {
+      if (!isSilent) setLoading(true);
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const [allTasks, allUsers, allDepts, todayPlan] = await Promise.all([
+        tasksApi.getTasks(),
+        usersApi.getUsers(),
+        departmentsApi.getDepartments(),
+        planningApi.getDailyAllocations(todayStr)
+      ]);
 
-        setTasks(allTasks);
-        setUsers(allUsers);
-        setDepartments(allDepts);
-        setTodayAssignments(todayPlan.assignments || []);
-      } catch (err) {
-        console.error('Error fetching analytics data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('reports-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => fetchData()
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_assignments' },
-          () => fetchData()
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles' },
-          () => fetchData()
-        )
-        .subscribe();
+      setTasks(allTasks || []);
+      setUsers(allUsers || []);
+      setDepartments(allDepts || []);
+      setTodayAssignments(todayPlan.assignments || []);
+    } catch (err) {
+      console.error('Error fetching analytics data:', err);
+    } finally {
+      if (!isSilent) setLoading(false);
     }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
   }, []);
+
+  useEffect(() => {
+    fetchData(false);
+  }, [fetchData]);
+
+  // Real-time synchronization for workforce analytics
+  useRealtime(
+    ['tasks', 'daily_assignments', 'profiles', 'departments'],
+    () => fetchData(true),
+    { channelPrefix: 'reports_realtime' }
+  );
 
   if (loading) {
     return <LoadingSpinner text="Computing workforce analytics..." size="large" />;

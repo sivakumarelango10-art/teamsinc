@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { tasksApi } from '../../api/tasksApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { usersApi } from '../../api/usersApi';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../api/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import DailyTaskAllocation from '../../components/planning/DailyTaskAllocation';
 import TaskForm from '../../components/tasks/TaskForm';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -27,9 +28,9 @@ export const DailyPlanning = () => {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
-  const loadData = async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [allTasks, allDepts, allUsers, memberMap] = await Promise.all([
         tasksApi.getTasks(),
         departmentsApi.getDepartments(),
@@ -44,58 +45,42 @@ export const DailyPlanning = () => {
     } catch (err) {
       console.error('Error loading daily task allocation data:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadData();
-
-    // Realtime synchronization across all tabs and devices
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('realtime-tasks-allocation')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => {
-            loadData();
-          }
-        )
-        .subscribe();
-    }
-
-    let bc = null;
-    try {
-      bc = new BroadcastChannel('teamsync_task_updates');
-      bc.onmessage = () => {
-        loadData();
-      };
-    } catch {}
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-      if (bc) bc.close();
-    };
   }, []);
 
+  useEffect(() => {
+    loadData(false);
+  }, [loadData]);
+
+  // Real-time synchronization across tasks, daily plans, assignments, and departments
+  useRealtime(
+    ['tasks', 'daily_plans', 'daily_assignments', 'departments', 'department_members'],
+    () => loadData(true),
+    { channelPrefix: 'daily_planning', broadcastChannel: 'teamsync_bc_daily_plans' }
+  );
+
   const handleCreateTask = async (taskData) => {
-    await tasksApi.createTask({
-      ...taskData,
-      created_by: user?.id,
-      deadline: taskData.deadline || selectedDate
-    });
-
     try {
-      const bc = new BroadcastChannel('teamsync_task_updates');
-      bc.postMessage({ type: 'TASK_CREATED' });
-      bc.close();
-    } catch {}
+      await tasksApi.createTask({
+        ...taskData,
+        assigned_by: user?.id,
+        created_by: user?.id,
+        deadline: taskData.deadline || selectedDate
+      });
 
-    await loadData();
-    setIsTaskModalOpen(false);
-    setTaskModalInitialData(null);
+      try {
+        const bc = new BroadcastChannel('teamsync_task_updates');
+        bc.postMessage({ type: 'TASK_CREATED' });
+        bc.close();
+      } catch {}
+
+      await loadData(true);
+      setIsTaskModalOpen(false);
+      setTaskModalInitialData(null);
+    } catch (err) {
+      console.error('Failed to create task:', err);
+    }
   };
 
   return (

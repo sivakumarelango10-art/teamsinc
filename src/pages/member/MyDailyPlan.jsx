@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { planningApi } from '../../api/planningApi';
 import { supabase } from '../../api/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import { Calendar, Building2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -19,10 +20,10 @@ export const MyDailyPlan = () => {
   const memberId = profile?.id || user?.id;
   const memberEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
 
-  const loadPlans = async () => {
+  const loadPlans = useCallback(async (isSilent = false) => {
     if (!memberId) return;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [todayRes, tomorrowRes] = await Promise.all([
         planningApi.getDailyAllocations(todayStr),
         planningApi.getDailyAllocations(tomorrowStr)
@@ -47,38 +48,20 @@ export const MyDailyPlan = () => {
     } catch (err) {
       console.error('Failed to load my daily plan:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, [memberId, memberEmail, todayStr, tomorrowStr]);
 
   useEffect(() => {
-    loadPlans();
+    loadPlans(false);
+  }, [loadPlans]);
 
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('my-daily-plan-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_assignments' },
-          () => {
-            loadPlans();
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_plans' },
-          () => {
-            loadPlans();
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
-  }, [memberId, memberEmail]);
+  // Real-time synchronization for daily schedules
+  useRealtime(
+    ['daily_assignments', 'daily_plans'],
+    () => loadPlans(true),
+    { channelPrefix: 'my_daily_plan', broadcastChannel: 'teamsync_bc_daily_plans' }
+  );
 
   if (loading) {
     return <LoadingSpinner text="Retrieving your department schedule..." size="large" />;

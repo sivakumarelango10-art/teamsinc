@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -20,6 +20,7 @@ import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
 import { usePresence } from '../../context/PresenceContext';
 import { supabase } from '../../api/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UserForm from '../../components/users/UserForm';
@@ -44,9 +45,9 @@ export const FounderDashboard = () => {
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [allUsers, allTasks, allDepts, memberMap] = await Promise.all([
         usersApi.getUsers(),
         tasksApi.getTasks(),
@@ -61,44 +62,20 @@ export const FounderDashboard = () => {
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadDashboardData();
+    loadDashboardData(false);
+  }, [loadDashboardData]);
 
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('founder-dashboard-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => loadDashboardData()
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_assignments' },
-          () => loadDashboardData()
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_plans' },
-          () => loadDashboardData()
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles' },
-          () => loadDashboardData()
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
-  }, []);
+  // Real-time synchronization across all core company data
+  useRealtime(
+    ['tasks', 'daily_assignments', 'daily_plans', 'profiles', 'departments', 'department_members', 'bug_reports'],
+    () => loadDashboardData(true),
+    { channelPrefix: 'founder_dash', broadcastChannel: 'teamsync_bc_founder' }
+  );
 
   const totalTeamMembers = users.filter(u => u.role === 'MEMBER').length;
   const totalAdmins = users.filter(u => u.role === 'ADMIN').length;

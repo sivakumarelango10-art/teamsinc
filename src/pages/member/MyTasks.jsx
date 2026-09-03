@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { tasksApi } from '../../api/tasksApi';
 import { supabase } from '../../api/supabase';
+import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import TaskCard from '../../components/tasks/TaskCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
@@ -18,46 +19,41 @@ export const MyTasks = () => {
   const memberId = profile?.id || user?.id;
   const memberEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
 
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async (isSilent = false) => {
     if (!memberId) return;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const userTasks = await tasksApi.getTasks({ assigned_to: memberId, user_email: memberEmail });
       setTasks(userTasks || []);
     } catch (err) {
       console.error('Failed to load my tasks:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadTasks();
-
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('my-tasks-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => {
-            loadTasks();
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
   }, [memberId, memberEmail]);
 
+  useEffect(() => {
+    loadTasks(false);
+  }, [loadTasks]);
+
+  // Real-time synchronization on tasks table
+  useRealtime(
+    ['tasks'],
+    () => loadTasks(true),
+    { channelPrefix: 'my_tasks', broadcastChannel: 'teamsync_bc_tasks' }
+  );
+
   const handleStatusChange = async (taskId, newStatus) => {
+    const prevTasks = [...tasks];
+    // Optimistic instant feedback
+    setTasks(current => current.map(t => (t.id === taskId ? { ...t, status: newStatus } : t)));
+
     try {
       await tasksApi.updateTaskStatus(taskId, newStatus);
-      await loadTasks();
+      broadcastRealtimeEvent('teamsync_bc_tasks', { taskId, newStatus });
+      loadTasks(true);
     } catch (err) {
+      setTasks(prevTasks);
       alert(err.message || 'Failed to update status');
     }
   };

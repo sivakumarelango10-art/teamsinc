@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckSquare,
@@ -17,6 +17,7 @@ import { departmentsApi } from '../../api/departmentsApi';
 import { usersApi } from '../../api/usersApi';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../api/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import TaskForm from '../../components/tasks/TaskForm';
@@ -36,9 +37,9 @@ export const AdminDashboard = () => {
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-  const loadData = async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [allTasks, allDepts, allUsers, memberMap] = await Promise.all([
         tasksApi.getTasks(),
         departmentsApi.getDepartments(),
@@ -54,39 +55,20 @@ export const AdminDashboard = () => {
     } catch (err) {
       console.error('Failed to load admin dashboard:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+  }, [loadData]);
 
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('admin-dashboard-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => loadData()
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_assignments' },
-          () => loadData()
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'daily_plans' },
-          () => loadData()
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
-  }, []);
+  // Real-time synchronization across tasks, schedules, members, and departments
+  useRealtime(
+    ['tasks', 'daily_assignments', 'daily_plans', 'profiles', 'departments'],
+    () => loadData(true),
+    { channelPrefix: 'admin_dash', broadcastChannel: 'teamsync_bc_admin' }
+  );
 
   const myCreatedTasks = tasks.filter(t => t.assigned_by === user?.id);
   const totalAssignedTasks = tasks.length;
@@ -96,7 +78,7 @@ export const AdminDashboard = () => {
 
   const handleCreateTask = async (taskData) => {
     await tasksApi.createTask(taskData);
-    await loadData();
+    await loadData(true);
   };
 
   if (loading) {

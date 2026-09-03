@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
+import { useRealtime } from '../../hooks/useRealtime';
 import { PlusCircle, ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -29,33 +30,39 @@ export const AssignTask = () => {
     status: 'TODO'
   });
 
-  useEffect(() => {
-    const loadOptions = async () => {
-      try {
-        setLoading(true);
-        const [usersList, deptsList] = await Promise.all([
-          usersApi.getUsers(),
-          departmentsApi.getDepartments()
-        ]);
-        const activeMembers = usersList.filter(u => u.role === 'MEMBER' && u.is_active);
-        setMembers(activeMembers);
-        setDepartments(deptsList);
+  const loadOptions = useCallback(async (isSilent = false) => {
+    try {
+      if (!isSilent) setLoading(true);
+      const [usersList, deptsList] = await Promise.all([
+        usersApi.getUsers(),
+        departmentsApi.getDepartments()
+      ]);
+      const activeMembers = usersList.filter(u => u.role === 'MEMBER' && u.is_active);
+      setMembers(activeMembers);
+      setDepartments(deptsList || []);
 
-        if (activeMembers.length > 0) {
-          setFormData(prev => ({ ...prev, assigned_to: activeMembers[0].id }));
-        }
-        if (deptsList.length > 0) {
-          setFormData(prev => ({ ...prev, department_id: deptsList[0].id }));
-        }
-      } catch (err) {
-        console.error('Failed to load form options:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadOptions();
+      setFormData(prev => ({
+        ...prev,
+        assigned_to: prev.assigned_to || (activeMembers.length > 0 ? activeMembers[0].id : ''),
+        department_id: prev.department_id || (deptsList.length > 0 ? deptsList[0].id : '')
+      }));
+    } catch (err) {
+      console.error('Failed to load form options:', err);
+    } finally {
+      if (!isSilent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadOptions(false);
+  }, [loadOptions]);
+
+  // Real-time synchronization for members and departments
+  useRealtime(
+    ['profiles', 'departments'],
+    () => loadOptions(true),
+    { channelPrefix: 'assign_task' }
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();

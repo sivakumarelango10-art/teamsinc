@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   CheckSquare,
   Search,
@@ -17,6 +17,7 @@ import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { supabase } from '../../api/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import TaskStatusBadge from '../../components/tasks/TaskStatusBadge';
 import TaskDetailsModal from '../../components/tasks/TaskDetailsModal';
@@ -39,43 +40,34 @@ export const AdvisorTasks = () => {
   // Inspection Modal
   const [selectedTask, setSelectedTask] = useState(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [allTasks, allUsers, allDepts] = await Promise.all([
         tasksApi.getTasks(),
         usersApi.getUsers(),
         departmentsApi.getDepartments()
       ]);
-      setTasks(allTasks);
-      setUsers(allUsers);
-      setDepartments(allDepts);
+      setTasks(allTasks || []);
+      setUsers(allUsers || []);
+      setDepartments(allDepts || []);
     } catch (err) {
       console.error('Failed to load tasks for Founding Advisor:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+  }, [loadData]);
 
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('advisor-tasks-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => loadData()
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
-  }, []);
+  // Real-time synchronization for advisor tasks inspection
+  useRealtime(
+    ['tasks', 'profiles', 'departments'],
+    () => loadData(true),
+    { channelPrefix: 'advisor_tasks', broadcastChannel: 'teamsync_bc_tasks' }
+  );
 
   const priorityWeights = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
 

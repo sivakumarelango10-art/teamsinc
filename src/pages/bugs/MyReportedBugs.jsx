@@ -12,6 +12,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { bugsApi } from '../../api/bugsApi';
 import { useAuth } from '../../hooks/useAuth';
+import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ReportBugModal from '../../components/bugs/ReportBugModal';
 
@@ -21,9 +22,9 @@ export const MyReportedBugs = () => {
   const [loading, setLoading] = useState(true);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
-  const fetchMyBugs = useCallback(async () => {
+  const fetchMyBugs = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const userId = profile?.id || user?.id;
       const data = await bugsApi.getBugs({
         reported_by: userId
@@ -32,13 +33,20 @@ export const MyReportedBugs = () => {
     } catch (err) {
       console.error('Failed to load my bugs:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [profile?.id, user?.id]);
 
   useEffect(() => {
-    fetchMyBugs();
+    fetchMyBugs(false);
   }, [fetchMyBugs]);
+
+  // Real-time synchronization for bug reports
+  useRealtime(
+    'bug_reports',
+    () => fetchMyBugs(true),
+    { channelPrefix: 'my_bugs', broadcastChannel: 'teamsync_bc_bugs' }
+  );
 
   const getSeverityBadge = (sev) => {
     switch (sev) {

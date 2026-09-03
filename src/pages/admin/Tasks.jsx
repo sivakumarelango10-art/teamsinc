@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../api/supabase';
+import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import TaskCard from '../../components/tasks/TaskCard';
 import TaskForm from '../../components/tasks/TaskForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
@@ -23,19 +24,19 @@ export const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
-  const [deptFilter, setDeptFilter] = useState('ALL');
   const [assigneeFilter, setAssigneeFilter] = useState('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
 
-  // Modals
+  // Modals & Action States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [deleteConfirmTask, setDeleteConfirmTask] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
 
-  const loadData = async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [allTasks, allUsers, allDepts] = await Promise.all([
         tasksApi.getTasks(),
         usersApi.getUsers(),
@@ -47,29 +48,20 @@ export const Tasks = () => {
     } catch (err) {
       console.error('Failed to load tasks:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+  }, [loadData]);
 
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('admin-tasks-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => loadData()
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
-  }, []);
+  // Real-time synchronization on tasks, members, and departments
+  useRealtime(
+    ['tasks', 'profiles', 'departments'],
+    () => loadData(true),
+    { channelPrefix: 'admin_tasks', broadcastChannel: 'teamsync_bc_tasks' }
+  );
 
   const handleCreateOrUpdateTask = async (taskData) => {
     if (editingTask) {
@@ -79,29 +71,40 @@ export const Tasks = () => {
       await tasksApi.createTask(taskData);
       setFeedback({ type: 'success', text: `Task "${taskData.title}" created successfully.` });
     }
-    await loadData();
+    await loadData(true);
     setEditingTask(null);
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
+    const prevTasks = [...tasks];
+    setTasks(current => current.map(t => (t.id === taskId ? { ...t, status: newStatus } : t)));
+
     try {
       await tasksApi.updateTaskStatus(taskId, newStatus);
-      await loadData();
+      broadcastRealtimeEvent('teamsync_bc_tasks', { taskId, newStatus });
+      loadData(true);
     } catch (err) {
+      setTasks(prevTasks);
       alert(err.message || 'Failed to update task status');
     }
   };
 
   const handleDeleteTask = async () => {
     if (!deleteConfirmTask) return;
+    const target = deleteConfirmTask;
+    setDeleteConfirmTask(null);
+    const prevTasks = [...tasks];
+    setTasks(current => current.filter(t => t.id !== target.id));
+
     try {
       setActionLoading(true);
-      await tasksApi.deleteTask(deleteConfirmTask.id);
-      setFeedback({ type: 'success', text: `Task "${deleteConfirmTask.title}" has been deleted.` });
-      setDeleteConfirmTask(null);
-      await loadData();
+      await tasksApi.deleteTask(target.id);
+      setFeedback({ type: 'success', text: `Task "${target.title}" has been deleted.` });
+      broadcastRealtimeEvent('teamsync_bc_tasks', { taskId: target.id, action: 'DELETE' });
+      loadData(true);
     } catch (err) {
-      setFeedback({ type: 'error', text: err.message });
+      setTasks(prevTasks);
+      setFeedback({ type: 'error', text: err.message || 'Failed to delete task' });
     } finally {
       setActionLoading(false);
     }

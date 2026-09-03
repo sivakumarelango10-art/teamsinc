@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { departmentsApi } from '../../api/departmentsApi';
+import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import { Building2, Plus, Edit2, Trash2, X, AlertCircle, UserPlus, Users, UserMinus, Bot } from 'lucide-react';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -21,9 +22,9 @@ export const Departments = () => {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [deptList, memberMap] = await Promise.all([
         departmentsApi.getDepartments(),
         departmentsApi.getAllDepartmentMemberships()
@@ -33,13 +34,20 @@ export const Departments = () => {
     } catch (err) {
       console.error('Failed to load departments data:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData(false);
+  }, [loadData]);
+
+  // Real-time synchronization for departments and memberships
+  useRealtime(
+    ['departments', 'department_members'],
+    () => loadData(true),
+    { channelPrefix: 'departments_page', broadcastChannel: 'teamsync_bc_departments' }
+  );
 
   const handleOpenCreate = () => {
     setEditingDept(null);
@@ -71,7 +79,8 @@ export const Departments = () => {
         await departmentsApi.createDepartment(formData);
       }
       setIsModalOpen(false);
-      await loadData();
+      broadcastRealtimeEvent('teamsync_bc_departments');
+      await loadData(true);
     } catch (err) {
       setError(err.message || 'Failed to save department');
     } finally {
@@ -85,7 +94,8 @@ export const Departments = () => {
       setSaving(true);
       await departmentsApi.deleteDepartment(deleteConfirmDept.id);
       setDeleteConfirmDept(null);
-      await loadData();
+      broadcastRealtimeEvent('teamsync_bc_departments');
+      await loadData(true);
     } catch (err) {
       alert(err.message || 'Failed to delete department');
     } finally {
@@ -96,7 +106,8 @@ export const Departments = () => {
   const handleQuickRemoveMember = async (deptId, userId) => {
     try {
       await departmentsApi.removeMemberFromDepartment(deptId, userId);
-      await loadData();
+      broadcastRealtimeEvent('teamsync_bc_departments');
+      await loadData(true);
     } catch (err) {
       console.error('Failed to remove member:', err);
     }

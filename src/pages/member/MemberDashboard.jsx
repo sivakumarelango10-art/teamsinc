@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { tasksApi } from '../../api/tasksApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { supabase } from '../../api/supabase';
+import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import TaskCard from '../../components/tasks/TaskCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
@@ -19,10 +20,10 @@ export const MemberDashboard = () => {
   const memberId = profile?.id || user?.id;
   const memberEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
 
-  const loadMemberData = async () => {
+  const loadMemberData = useCallback(async (isSilent = false) => {
     if (!memberId) return;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const [userTasks, depts] = await Promise.all([
         tasksApi.getTasks({ assigned_to: memberId, user_email: memberEmail }),
         departmentsApi.getUserDepartments(memberId).catch(() => [])
@@ -33,38 +34,34 @@ export const MemberDashboard = () => {
     } catch (err) {
       console.error('Failed to load member workspace:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadMemberData();
-
-    // Real-time synchronization: Any task or department assignment reflects instantly
-    let channel = null;
-    if (supabase) {
-      channel = supabase
-        .channel('member-tasks-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          () => {
-            loadMemberData();
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) supabase.removeChannel(channel);
-    };
   }, [memberId, memberEmail]);
 
+  useEffect(() => {
+    loadMemberData(false);
+  }, [loadMemberData]);
+
+  // Real-time synchronization: Instant updates on tasks, department memberships, and daily plans
+  useRealtime(
+    ['tasks', 'daily_assignments', 'department_members', 'departments'],
+    () => loadMemberData(true),
+    { channelPrefix: 'member_dash', broadcastChannel: 'teamsync_bc_tasks' }
+  );
+
   const handleStatusChange = async (taskId, newStatus) => {
+    // 1. Snapshot previous state for rollback
+    const prevTasks = [...tasks];
+    // 2. Optimistic UI update (0ms latency)
+    setTasks(current => current.map(t => (t.id === taskId ? { ...t, status: newStatus } : t)));
+
     try {
       await tasksApi.updateTaskStatus(taskId, newStatus);
-      await loadMemberData();
+      broadcastRealtimeEvent('teamsync_bc_tasks', { taskId, newStatus });
+      loadMemberData(true);
     } catch (err) {
+      // Revert optimistic update on network/permission error
+      setTasks(prevTasks);
       alert(err.message || 'Failed to update task status');
     }
   };

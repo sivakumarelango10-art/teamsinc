@@ -21,6 +21,7 @@ import { format, parseISO } from 'date-fns';
 import { bugsApi } from '../../api/bugsApi';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../api/supabase';
+import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ConvertBugToTaskModal from '../../components/bugs/ConvertBugToTaskModal';
 
@@ -37,9 +38,9 @@ export const BugManagement = () => {
   const [convertingBug, setConvertingBug] = useState(null);
   const [selectedBugDetails, setSelectedBugDetails] = useState(null);
 
-  const fetchBugs = useCallback(async () => {
+  const fetchBugs = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const data = await bugsApi.getBugs({
         status: statusFilter,
         severity: severityFilter
@@ -48,45 +49,44 @@ export const BugManagement = () => {
     } catch (err) {
       console.error('Failed to load bugs:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [statusFilter, severityFilter]);
 
   useEffect(() => {
-    fetchBugs();
+    fetchBugs(false);
   }, [fetchBugs]);
 
   // Realtime subscription for incoming bug reports
-  useEffect(() => {
-    if (!supabase) return;
-
-    const channel = supabase
-      .channel('realtime_bug_reports')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bug_reports' }, () => {
-        fetchBugs();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchBugs]);
+  useRealtime(
+    'bug_reports',
+    () => fetchBugs(true),
+    { channelPrefix: 'bug_mgmt', broadcastChannel: 'teamsync_bc_bugs' }
+  );
 
   const handleUpdateStatus = async (bugId, newStatus) => {
+    const prevBugs = [...bugs];
+    setBugs(prev => prev.map(b => (b.id === bugId ? { ...b, status: newStatus } : b)));
     try {
       await bugsApi.updateBug(bugId, { status: newStatus });
-      setBugs(prev => prev.map(b => (b.id === bugId ? { ...b, status: newStatus } : b)));
+      broadcastRealtimeEvent('teamsync_bc_bugs', { bugId, newStatus });
+      fetchBugs(true);
     } catch (err) {
+      setBugs(prevBugs);
       console.error('Failed to update bug status:', err);
     }
   };
 
   const handleDeleteBug = async (bugId) => {
     if (!window.confirm('Are you sure you want to delete this bug report?')) return;
+    const prevBugs = [...bugs];
+    setBugs(prev => prev.filter(b => b.id !== bugId));
     try {
       await bugsApi.deleteBug(bugId);
-      setBugs(prev => prev.filter(b => b.id !== bugId));
+      broadcastRealtimeEvent('teamsync_bc_bugs', { bugId, action: 'DELETE' });
+      fetchBugs(true);
     } catch (err) {
+      setBugs(prevBugs);
       console.error('Failed to delete bug report:', err);
     }
   };

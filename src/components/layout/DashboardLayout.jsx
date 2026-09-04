@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
-import AICopilotDrawer from '../ai/AICopilotDrawer';
 import { useAuth } from '../../hooks/useAuth';
+
+const AICopilotDrawer = React.lazy(() => import('../ai/AICopilotDrawer'));
 
 export const DashboardLayout = ({ title, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -68,12 +69,14 @@ export const DashboardLayout = ({ title, children }) => {
         </button>
       )}
 
-      {/* AI Copilot Drawer (Leadership only) */}
-      {canAccessAI && (
-        <AICopilotDrawer
-          isOpen={copilotOpen}
-          onClose={() => setCopilotOpen(false)}
-        />
+      {/* AI Copilot Drawer (Leadership only, dynamically loaded on open) */}
+      {canAccessAI && copilotOpen && (
+        <React.Suspense fallback={null}>
+          <AICopilotDrawer
+            isOpen={copilotOpen}
+            onClose={() => setCopilotOpen(false)}
+          />
+        </React.Suspense>
       )}
     </div>
   );

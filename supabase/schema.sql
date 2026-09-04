@@ -622,6 +622,33 @@ CREATE POLICY "Bug reports delete policy"
     TO authenticated
     USING (public.is_admin_or_founder());
 
+-- -----------------------------------------------------------------------------
+-- PERFORMANCE INDEXES (High-Speed Foreign Keys, Status, and Timestamp Ordering)
+-- -----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON public.tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_by ON public.tasks(assigned_by);
+CREATE INDEX IF NOT EXISTS idx_tasks_department_id ON public.tasks(department_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON public.tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_at_desc ON public.tasks(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON public.tasks(deadline);
+
+CREATE INDEX IF NOT EXISTS idx_messages_channel_created_at ON public.messages(channel, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON public.bug_reports(status);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_severity ON public.bug_reports(severity);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_reported_by ON public.bug_reports(reported_by);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_created_at_desc ON public.bug_reports(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_daily_plans_plan_date ON public.daily_plans(plan_date);
+CREATE INDEX IF NOT EXISTS idx_daily_assignments_plan_id ON public.daily_assignments(plan_id);
+CREATE INDEX IF NOT EXISTS idx_daily_assignments_user_id ON public.daily_assignments(user_id);
+CREATE INDEX IF NOT EXISTS idx_daily_assignments_department_id ON public.daily_assignments(department_id);
+
+CREATE INDEX IF NOT EXISTS idx_profiles_email_lower ON public.profiles(LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
+CREATE INDEX IF NOT EXISTS idx_profiles_is_active ON public.profiles(is_active);
+
+
 
 
 

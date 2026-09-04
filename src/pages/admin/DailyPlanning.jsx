@@ -31,12 +31,13 @@ export const DailyPlanning = () => {
   const loadData = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      const [allTasks, allDepts, allUsers, memberMap] = await Promise.all([
+      const [allTasks, allDepts, allUsers] = await Promise.all([
         tasksApi.getTasks(),
         departmentsApi.getDepartments(),
-        usersApi.getUsers(),
-        departmentsApi.getAllDepartmentMemberships().catch(() => ({}))
+        usersApi.getUsers()
       ]);
+
+      const memberMap = await departmentsApi.getAllDepartmentMemberships(allUsers).catch(() => ({}));
 
       setTasks(allTasks);
       setDepartments(allDepts);

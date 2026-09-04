@@ -48,12 +48,13 @@ export const FounderDashboard = () => {
   const loadDashboardData = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      const [allUsers, allTasks, allDepts, memberMap] = await Promise.all([
+      const [allUsers, allTasks, allDepts] = await Promise.all([
         usersApi.getUsers(),
         tasksApi.getTasks(),
-        departmentsApi.getDepartments(),
-        departmentsApi.getAllDepartmentMemberships().catch(() => ({}))
+        departmentsApi.getDepartments()
       ]);
+
+      const memberMap = await departmentsApi.getAllDepartmentMemberships(allUsers).catch(() => ({}));
 
       setUsers(allUsers);
       setTasks(allTasks);

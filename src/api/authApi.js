@@ -3,6 +3,9 @@ import { AUTHORIZED_EMAILS, INITIAL_PROFILES } from './mockData';
 
 const FOUNDER_EMAIL = 'sivakumarelango10@gmail.com';
 
+// Cache in-flight verification requests to avoid duplicate concurrent round-trips
+const inFlightVerifications = new Map();
+
 export const authApi = {
   // Verify if an email is registered in the database
   async verifyDatabaseRegistration(email) {
@@ -10,6 +13,24 @@ export const authApi = {
     if (!cleanEmail) {
       return { registered: false, profile: null, role: null, error: 'Email address is missing.' };
     }
+
+    if (inFlightVerifications.has(cleanEmail)) {
+      return inFlightVerifications.get(cleanEmail);
+    }
+
+    const verificationPromise = (async () => {
+      try {
+        return await this._doVerifyDatabaseRegistration(cleanEmail);
+      } finally {
+        inFlightVerifications.delete(cleanEmail);
+      }
+    })();
+
+    inFlightVerifications.set(cleanEmail, verificationPromise);
+    return verificationPromise;
+  },
+
+  async _doVerifyDatabaseRegistration(cleanEmail) {
 
     // 1. Direct database check against Supabase profiles table
     if (supabase) {

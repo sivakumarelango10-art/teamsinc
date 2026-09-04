@@ -1,6 +1,46 @@
 import { supabase, isDemoMode } from './supabase';
 import { getStored, setStored, STORAGE_KEYS, INITIAL_TASKS, INITIAL_PROFILES, INITIAL_DEPARTMENTS } from './mockData';
 
+// In-memory profile resolution cache to eliminate repeated round-trips
+const profileIdCache = new Map();
+
+export const resolveProfileId = async (idOrEmail) => {
+  if (!idOrEmail) return null;
+  const key = String(idOrEmail).trim().toLowerCase();
+  if (profileIdCache.has(key)) {
+    return profileIdCache.get(key);
+  }
+
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+
+  if (supabase) {
+    try {
+      const filterClause = isUUID
+        ? `id.eq.${idOrEmail},auth_user_id.eq.${idOrEmail}`
+        : `email.ilike.${idOrEmail}`;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(filterClause)
+        .maybeSingle();
+
+      if (data?.id) {
+        profileIdCache.set(key, data.id);
+        profileIdCache.set(data.id.toLowerCase(), data.id);
+        return data.id;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  if (isUUID) {
+    profileIdCache.set(key, idOrEmail);
+  }
+  return idOrEmail;
+};
+
 export const tasksApi = {
   async getTasks(filter = {}) {
     if (supabase) {
@@ -15,18 +55,7 @@ export const tasksApi = {
         .order('created_at', { ascending: false });
 
       if (filter.assigned_to) {
-        // Resolve target profile ID
-        let targetId = filter.assigned_to;
-        try {
-          const { data: p } = await supabase
-            .from('profiles')
-            .select('id')
-            .or(`id.eq.${filter.assigned_to},auth_user_id.eq.${filter.assigned_to}${filter.user_email ? `,email.ilike.${filter.user_email}` : ''}`)
-            .maybeSingle();
-          if (p?.id) targetId = p.id;
-        } catch {
-          // fallback to original ID
-        }
+        const targetId = await resolveProfileId(filter.assigned_to);
         query = query.eq('assigned_to', targetId);
       }
 
@@ -107,27 +136,10 @@ export const tasksApi = {
 
   async createTask(taskData) {
     if (supabase) {
-      // Resolve assignee to a valid profiles.id
-      let assigneeId = taskData.assigned_to;
-      if (assigneeId) {
-        const { data: ap } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`id.eq.${assigneeId},auth_user_id.eq.${assigneeId}`)
-          .maybeSingle();
-        if (ap?.id) assigneeId = ap.id;
-      }
-
-      // Resolve creator to a valid profiles.id
-      let creatorId = taskData.assigned_by;
-      if (creatorId) {
-        const { data: cp } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`id.eq.${creatorId},auth_user_id.eq.${creatorId}`)
-          .maybeSingle();
-        creatorId = cp?.id || null;
-      }
+      const [assigneeId, creatorId] = await Promise.all([
+        taskData.assigned_to ? resolveProfileId(taskData.assigned_to) : Promise.resolve(null),
+        taskData.assigned_by ? resolveProfileId(taskData.assigned_by) : Promise.resolve(null)
+      ]);
 
       const { data, error } = await supabase
         .from('tasks')

@@ -4,7 +4,8 @@ import { useAuth } from '../hooks/useAuth';
 import { callApi } from '../api/callApi';
 import { supabase } from '../api/supabase';
 import notificationService from '../utils/notificationService';
-import VideoCallModal from '../components/call/VideoCallModal';
+
+const VideoCallModal = React.lazy(() => import('../components/call/VideoCallModal'));
 
 const CallNotificationContext = createContext(null);
 
@@ -340,15 +341,17 @@ export const CallNotificationProvider = ({ children }) => {
 
       {/* Global Video Call Modal (Visible across entire application) */}
       {activeCallSession && (
-        <VideoCallModal
-          callSession={activeCallSession}
-          currentUser={currentUser}
-          roomId={activeCallSession.room_id || 'general'}
-          roomTitle={activeCallSession.room_title || 'TeamSync Company HQ'}
-          isAudioOnly={activeCallSession.call_type === 'voice'}
-          onLeaveCall={leaveCall}
-          onEndCall={endCall}
-        />
+        <React.Suspense fallback={null}>
+          <VideoCallModal
+            callSession={activeCallSession}
+            currentUser={currentUser}
+            roomId={activeCallSession.room_id || 'general'}
+            roomTitle={activeCallSession.room_title || 'TeamSync Company HQ'}
+            isAudioOnly={activeCallSession.call_type === 'voice'}
+            onLeaveCall={leaveCall}
+            onEndCall={endCall}
+          />
+        </React.Suspense>
       )}
     </CallNotificationContext.Provider>
   );

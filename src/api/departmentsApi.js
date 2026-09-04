@@ -124,8 +124,8 @@ export const departmentsApi = {
   /**
    * Get all member profiles assigned to a specific department
    */
-  async getDepartmentMembers(departmentId) {
-    const allUsers = await usersApi.getUsers().catch(() => []);
+  async getDepartmentMembers(departmentId, preloadedUsers = null) {
+    const allUsers = preloadedUsers || (await usersApi.getUsers().catch(() => []));
     const memberships = getStoredMemberships();
     const userIds = memberships[departmentId] || [];
     return allUsers.filter(u => userIds.includes(u.id));
@@ -134,8 +134,8 @@ export const departmentsApi = {
   /**
    * Get all department memberships mapping: { [departmentId]: [profileObj, ...] }
    */
-  async getAllDepartmentMemberships() {
-    const allUsers = await usersApi.getUsers().catch(() => []);
+  async getAllDepartmentMemberships(preloadedUsers = null) {
+    const allUsers = preloadedUsers || (await usersApi.getUsers().catch(() => []));
     const memberships = getStoredMemberships();
     const result = {};
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { authApi } from '../api/authApi';
 import { supabase } from '../api/supabase';
 import notificationService from '../utils/notificationService';
@@ -139,7 +139,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
     setError(null);
     try {
       setLoading(true);
@@ -150,9 +150,9 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } finally {
@@ -160,29 +160,29 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setError(null);
     }
-  };
+  }, []);
 
-  const refreshProfile = async () => {
-    if (user?.email) {
-      const verification = await authApi.verifyDatabaseRegistration(user.email);
+  const refreshProfile = useCallback(async () => {
+    if (currentUserRef.current?.email) {
+      const verification = await authApi.verifyDatabaseRegistration(currentUserRef.current.email);
       if (verification.registered) {
         setProfile(verification.profile);
       }
     }
-  };
+  }, []);
 
-  const uploadUserAvatar = async (file) => {
+  const uploadUserAvatar = useCallback(async (file) => {
     const avatarUrl = await authApi.uploadAvatar(file);
     return avatarUrl;
-  };
+  }, []);
 
-  const updateCurrentUserProfile = async (updates) => {
-    const profileId = profile?.id;
+  const updateCurrentUserProfile = useCallback(async (updates) => {
+    const profileId = currentProfileRef.current?.id;
     if (!profileId) throw new Error('Not authenticated');
     const updated = await authApi.updateProfile(profileId, updates);
     setProfile(prev => ({ ...prev, ...updated }));
     return updated;
-  };
+  }, []);
 
   const role = profile?.role || null;
   const isFounder = role === 'FOUNDER';
@@ -191,7 +191,7 @@ export const AuthProvider = ({ children }) => {
   const isFoundingAdvisor = role === 'FOUNDING_ADVISOR';
   const isLeadership = ['FOUNDER', 'ADMIN', 'FOUNDING_ADVISOR'].includes(role);
 
-  const value = {
+  const value = React.useMemo(() => ({
     user,
     profile,
     role,
@@ -207,7 +207,23 @@ export const AuthProvider = ({ children }) => {
     refreshProfile,
     uploadUserAvatar,
     updateCurrentUserProfile
-  };
+  }), [
+    user,
+    profile,
+    role,
+    isFounder,
+    isAdmin,
+    isMember,
+    isFoundingAdvisor,
+    isLeadership,
+    loading,
+    error,
+    signInWithGoogle,
+    logout,
+    refreshProfile,
+    uploadUserAvatar,
+    updateCurrentUserProfile
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

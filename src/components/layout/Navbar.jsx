@@ -4,11 +4,8 @@ import { Menu, Calendar, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../../hooks/useAuth';
 
-export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }) => {
-  const { profile, role, isFounder, isAdmin, isFoundingAdvisor } = useAuth();
-  const [currentDateTime, setCurrentDateTime] = useState(new Date());
-
-  const canAccessAI = Boolean(isFounder || isAdmin || isFoundingAdvisor);
+const LiveClock = React.memo(() => {
+  const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -16,6 +13,20 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  return (
+    <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs font-mono text-neutral-300 shadow-sm">
+      <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+      <span>{format(currentDateTime, 'EEE, MMM d, yyyy')}</span>
+      <span className="text-neutral-600">•</span>
+      <span className="text-white font-bold">{format(currentDateTime, 'hh:mm:ss a')}</span>
+    </div>
+  );
+});
+
+export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }) => {
+  const { profile, role, isFounder, isAdmin, isFoundingAdvisor } = useAuth();
+  const canAccessAI = Boolean(isFounder || isAdmin || isFoundingAdvisor);
 
   return (
     <header className="h-16 px-4 md:px-8 bg-black/90 backdrop-blur-md border-b border-neutral-800 sticky top-0 z-30 flex items-center justify-between">
@@ -33,12 +44,7 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
 
       <div className="flex items-center gap-3 md:gap-4">
         {/* Real-time Live Date & Clock indicator */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs font-mono text-neutral-300 shadow-sm">
-          <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-          <span>{format(currentDateTime, 'EEE, MMM d, yyyy')}</span>
-          <span className="text-neutral-600">•</span>
-          <span className="text-white font-bold">{format(currentDateTime, 'hh:mm:ss a')}</span>
-        </div>
+        <LiveClock />
 
         {/* AI Copilot Trigger (Leadership Only) */}
         {canAccessAI && onToggleCopilot && (

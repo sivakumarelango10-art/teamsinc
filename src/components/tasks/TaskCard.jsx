@@ -3,7 +3,7 @@ import { Calendar, Building2, Edit2, Trash2, CheckCircle } from 'lucide-react';
 import { TaskStatusBadge, TaskPriorityBadge } from './TaskStatusBadge';
 import { format, parseISO, isPast } from 'date-fns';
 
-export const TaskCard = ({
+const TaskCardComponent = ({
   task,
   canManage = false,
   canUpdateStatus = false,
@@ -121,4 +121,5 @@ export const TaskCard = ({
   );
 };
 
+export const TaskCard = React.memo(TaskCardComponent);
 export default TaskCard;

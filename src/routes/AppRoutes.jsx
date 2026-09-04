@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
@@ -7,30 +7,37 @@ import DashboardLayout from '../components/layout/DashboardLayout';
 import ProtectedRoute from '../components/common/ProtectedRoute';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
-// Pages
-import Login from '../pages/auth/Login';
-import FounderDashboard from '../pages/founder/FounderDashboard';
-import Users from '../pages/founder/Users';
-import Departments from '../pages/founder/Departments';
-import Reports from '../pages/founder/Reports';
+// Lightweight fallback for fast page transitions
+const PageLoadingFallback = () => (
+  <div className="flex-1 flex items-center justify-center min-h-[360px]">
+    <LoadingSpinner text="Loading view..." size="medium" />
+  </div>
+);
 
-import AdminDashboard from '../pages/admin/AdminDashboard';
-import Tasks from '../pages/admin/Tasks';
-import AssignTask from '../pages/admin/AssignTask';
-import DailyPlanning from '../pages/admin/DailyPlanning';
+// Route-level code-splitting (cuts initial bundle size & defers recharts/chat/reports)
+const Login = lazy(() => import('../pages/auth/Login'));
+const FounderDashboard = lazy(() => import('../pages/founder/FounderDashboard'));
+const Users = lazy(() => import('../pages/founder/Users'));
+const Departments = lazy(() => import('../pages/founder/Departments'));
+const Reports = lazy(() => import('../pages/founder/Reports'));
 
-import MemberDashboard from '../pages/member/MemberDashboard';
-import MyTasks from '../pages/member/MyTasks';
-import MyDailyPlan from '../pages/member/MyDailyPlan';
-import TeamChat from '../pages/chat/TeamChat';
-import LeadershipChat from '../pages/chat/LeadershipChat';
-import AdvisorDashboard from '../pages/advisor/AdvisorDashboard';
-import AdvisorTasks from '../pages/advisor/AdvisorTasks';
+const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
+const Tasks = lazy(() => import('../pages/admin/Tasks'));
+const AssignTask = lazy(() => import('../pages/admin/AssignTask'));
+const DailyPlanning = lazy(() => import('../pages/admin/DailyPlanning'));
 
-import BugManagement from '../pages/bugs/BugManagement';
-import MyReportedBugs from '../pages/bugs/MyReportedBugs';
-import Profile from '../pages/profile/Profile';
-import NotFound from '../pages/common/NotFound';
+const MemberDashboard = lazy(() => import('../pages/member/MemberDashboard'));
+const MyTasks = lazy(() => import('../pages/member/MyTasks'));
+const MyDailyPlan = lazy(() => import('../pages/member/MyDailyPlan'));
+const TeamChat = lazy(() => import('../pages/chat/TeamChat'));
+const LeadershipChat = lazy(() => import('../pages/chat/LeadershipChat'));
+const AdvisorDashboard = lazy(() => import('../pages/advisor/AdvisorDashboard'));
+const AdvisorTasks = lazy(() => import('../pages/advisor/AdvisorTasks'));
+
+const BugManagement = lazy(() => import('../pages/bugs/BugManagement'));
+const MyReportedBugs = lazy(() => import('../pages/bugs/MyReportedBugs'));
+const Profile = lazy(() => import('../pages/profile/Profile'));
+const NotFound = lazy(() => import('../pages/common/NotFound'));
 
 export const AppRoutes = () => {
   const { user, profile, loading } = useAuth();
@@ -52,7 +59,8 @@ export const AppRoutes = () => {
   };
 
   return (
-    <Routes>
+    <Suspense fallback={<PageLoadingFallback />}>
+      <Routes>
       {/* Root Route Redirect */}
       <Route path="/" element={getDefaultRedirect()} />
 
@@ -163,6 +171,7 @@ export const AppRoutes = () => {
       {/* Fallback Catch-all Route for any unmatched URL */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 };
 

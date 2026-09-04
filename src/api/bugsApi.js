@@ -1,9 +1,8 @@
 import { supabase } from './supabase';
-import { tasksApi } from './tasksApi';
+import { tasksApi, resolveProfileId } from './tasksApi';
 import { chatApi } from './chatApi';
 import { departmentsApi } from './departmentsApi';
 import { usersApi } from './usersApi';
-import { geminiApi } from './geminiApi';
 
 const STORAGE_BUGS_KEY = 'teamsync_bug_reports';
 
@@ -104,16 +103,7 @@ export const bugsApi = {
     }
 
     if (supabase) {
-      // Resolve reporter to profiles.id if UUID matches auth_user_id
-      let finalReporterId = reporterId;
-      if (reporterId) {
-        const { data: p } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`id.eq.${reporterId},auth_user_id.eq.${reporterId}`)
-          .maybeSingle();
-        if (p?.id) finalReporterId = p.id;
-      }
+      const finalReporterId = reporterId ? await resolveProfileId(reporterId) : null;
 
       const { data, error } = await supabase
         .from('bug_reports')
@@ -184,6 +174,7 @@ export const bugsApi = {
         usersApi.getUsers().catch(() => [])
       ]);
 
+      const { geminiApi } = await import('./geminiApi');
       const triage = await geminiApi.classifyAndRouteBug({
         bugTitle: bug.title,
         bugDescription: bug.description,

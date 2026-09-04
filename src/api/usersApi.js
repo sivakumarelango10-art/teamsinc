@@ -3,8 +3,22 @@ import { getStored, setStored, STORAGE_KEYS, INITIAL_PROFILES } from './mockData
 
 const FOUNDER_EMAIL = 'sivakumarelango10@gmail.com';
 
+// Lightweight memory cache with 15-second TTL for instant page-to-page navigation
+let usersCache = null;
+let usersCacheTime = 0;
+const CACHE_TTL_MS = 15000;
+
+export const invalidateUsersCache = () => {
+  usersCache = null;
+  usersCacheTime = 0;
+};
+
 export const usersApi = {
-  async getUsers() {
+  async getUsers(forceRefresh = false) {
+    if (!forceRefresh && usersCache && (Date.now() - usersCacheTime < CACHE_TTL_MS)) {
+      return usersCache;
+    }
+
     if (supabase) {
       try {
         const { data, error } = await supabase
@@ -14,13 +28,18 @@ export const usersApi = {
           .order('full_name', { ascending: true });
 
         if (error) throw error;
-        return data || [];
+        usersCache = data || [];
+        usersCacheTime = Date.now();
+        return usersCache;
       } catch (err) {
         console.error('Error fetching users from Supabase:', err);
       }
     }
 
-    return getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
+    const fallback = getStored(STORAGE_KEYS.PROFILES, INITIAL_PROFILES);
+    usersCache = fallback;
+    usersCacheTime = Date.now();
+    return fallback;
   },
 
   async getUserById(id) {
@@ -56,6 +75,7 @@ export const usersApi = {
         .single();
 
       if (error) throw error;
+      invalidateUsersCache();
       return data;
     }
 
@@ -76,6 +96,7 @@ export const usersApi = {
 
     profiles.unshift(newUser);
     setStored(STORAGE_KEYS.PROFILES, profiles);
+    invalidateUsersCache();
     return newUser;
   },
 
@@ -108,6 +129,7 @@ export const usersApi = {
         .single();
 
       if (error) throw error;
+      invalidateUsersCache();
       return data;
     }
 
@@ -136,6 +158,7 @@ export const usersApi = {
     });
 
     setStored(STORAGE_KEYS.PROFILES, updated);
+    invalidateUsersCache();
     return updated.find(p => p.id === id);
   },
 
@@ -161,6 +184,7 @@ export const usersApi = {
 
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
+      invalidateUsersCache();
       return true;
     }
 
@@ -172,6 +196,7 @@ export const usersApi = {
 
     const filtered = profiles.filter(p => p.id !== id);
     setStored(STORAGE_KEYS.PROFILES, filtered);
+    invalidateUsersCache();
     return true;
   }
 };

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../api/supabase';
 import { useAuth } from '../hooks/useAuth';
 
@@ -129,7 +129,7 @@ export const PresenceProvider = ({ children }) => {
     };
   }, [user?.email]);
 
-  const isUserOnline = (email) => {
+  const isUserOnline = useCallback((email) => {
     if (!email) return false;
     const clean = email.toLowerCase();
     // Current user is always online in their own active session
@@ -137,10 +137,16 @@ export const PresenceProvider = ({ children }) => {
       return true;
     }
     return onlineEmails.has(clean);
-  };
+  }, [user?.email, onlineEmails]);
+
+  const value = useMemo(() => ({
+    isUserOnline,
+    onlineEmails,
+    onlineCount: onlineEmails.size
+  }), [isUserOnline, onlineEmails]);
 
   return (
-    <PresenceContext.Provider value={{ isUserOnline, onlineEmails, onlineCount: onlineEmails.size }}>
+    <PresenceContext.Provider value={value}>
       {children}
     </PresenceContext.Provider>
   );

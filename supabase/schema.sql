@@ -80,6 +80,17 @@ CREATE TABLE public.daily_assignments (
 );
 
 -- -----------------------------------------------------------------------------
+-- 6. DEPARTMENT MEMBERS TABLE (Permanent Department Responsibilities)
+-- -----------------------------------------------------------------------------
+CREATE TABLE public.department_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    department_id UUID NOT NULL REFERENCES public.departments(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_dept_user UNIQUE (department_id, user_id)
+);
+
+-- -----------------------------------------------------------------------------
 -- INDEXES
 -- -----------------------------------------------------------------------------
 CREATE INDEX idx_profiles_role ON public.profiles(role);
@@ -91,6 +102,8 @@ CREATE INDEX idx_tasks_status ON public.tasks(status);
 CREATE INDEX idx_daily_plans_date ON public.daily_plans(plan_date);
 CREATE INDEX idx_daily_assignments_plan ON public.daily_assignments(plan_id);
 CREATE INDEX idx_daily_assignments_user ON public.daily_assignments(user_id);
+CREATE INDEX idx_dept_members_dept ON public.department_members(department_id);
+CREATE INDEX idx_dept_members_user ON public.department_members(user_id);
 
 -- -----------------------------------------------------------------------------
 -- AUTOMATED UPDATED_AT TRIGGER
@@ -345,6 +358,21 @@ CREATE POLICY "Founder and Admin manage daily assignments"
 DROP POLICY IF EXISTS "All authenticated view daily assignments" ON public.daily_assignments;
 CREATE POLICY "All authenticated view daily assignments"
     ON public.daily_assignments FOR SELECT
+    TO authenticated
+    USING (true);
+
+-- DEPARTMENT MEMBERS POLICIES
+ALTER TABLE public.department_members ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Founder and Admin manage department members" ON public.department_members;
+CREATE POLICY "Founder and Admin manage department members"
+    ON public.department_members FOR ALL
+    TO authenticated
+    USING (public.is_admin_or_founder());
+
+DROP POLICY IF EXISTS "All authenticated view department members" ON public.department_members;
+CREATE POLICY "All authenticated view department members"
+    ON public.department_members FOR SELECT
     TO authenticated
     USING (true);
 

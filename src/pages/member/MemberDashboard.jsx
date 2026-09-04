@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { tasksApi } from '../../api/tasksApi';
 import { departmentsApi } from '../../api/departmentsApi';
+import { planningApi } from '../../api/planningApi';
 import { supabase } from '../../api/supabase';
 import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import TaskCard from '../../components/tasks/TaskCard';
@@ -24,13 +25,41 @@ export const MemberDashboard = () => {
     if (!memberId) return;
     try {
       if (!isSilent) setLoading(true);
-      const [userTasks, depts] = await Promise.all([
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const [userTasks, permanentDepts, todayPlan] = await Promise.all([
         tasksApi.getTasks({ assigned_to: memberId, user_email: memberEmail }),
-        departmentsApi.getUserDepartments(memberId).catch(() => [])
+        departmentsApi.getUserDepartments(memberId).catch(() => []),
+        planningApi.getDailyAllocations(todayStr).catch(() => ({ plan: null, assignments: [] }))
       ]);
 
+      // Combine permanent department memberships, today's daily allocation, and task departments
+      const deptMap = new Map();
+
+      // 1. Permanent department assignments (from Founder / Admin management)
+      (permanentDepts || []).forEach(d => {
+        if (d?.id) deptMap.set(d.id, { ...d, source: 'permanent' });
+      });
+
+      // 2. Today's daily schedule allocation (from Daily Task Allocation)
+      if (todayPlan?.assignments?.length) {
+        const todayAsgn = todayPlan.assignments.find(a =>
+          a.user_id === memberId ||
+          (a.user && a.user.email?.toLowerCase() === memberEmail)
+        );
+        if (todayAsgn?.department?.id && !deptMap.has(todayAsgn.department.id)) {
+          deptMap.set(todayAsgn.department.id, { ...todayAsgn.department, source: 'daily' });
+        }
+      }
+
+      // 3. Departments associated with active deliverables
+      (userTasks || []).forEach(t => {
+        if (t.department?.id && !deptMap.has(t.department.id)) {
+          deptMap.set(t.department.id, { ...t.department, source: 'task' });
+        }
+      });
+
       setTasks(userTasks || []);
-      setUserDepartments(depts || []);
+      setUserDepartments(Array.from(deptMap.values()));
     } catch (err) {
       console.error('Failed to load member workspace:', err);
     } finally {
@@ -176,7 +205,7 @@ export const MemberDashboard = () => {
                         <span>{dept.name}</span>
                       </div>
                       <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-950/60 text-purple-300 border border-purple-800 font-bold">
-                        Active Member
+                        {dept.source === 'daily' ? "Today's Schedule" : dept.source === 'task' ? "Task Assignment" : "Active Member"}
                       </span>
                     </div>
                     <p className="text-xs text-neutral-400 leading-relaxed">

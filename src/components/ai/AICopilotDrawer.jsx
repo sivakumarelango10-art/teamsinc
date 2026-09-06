@@ -37,6 +37,7 @@ import {
   classifyIntentRuleBased,
   resolveDepartment,
   resolveUser,
+  extractPriority,
   isConfirmationPhrase,
   isCancellationPhrase,
   executeAgentAction
@@ -69,6 +70,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const isExecutingRef = useRef(false);
 
   // Ultra-smooth mount and slide coordination
   useEffect(() => {
@@ -178,7 +180,11 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
   // Controlled Action Execution: Direct backend operation with real verification
   const handleExecutePendingAction = async (actionToExecute) => {
     const act = actionToExecute || pendingAction;
-    if (!act) return;
+    if (!act || act.status !== 'PENDING') return;
+
+    // Strict concurrency lock: Prevent double-click or rapid Enter race conditions
+    if (isExecutingRef.current) return;
+    isExecutingRef.current = true;
 
     setExecutingActionId(act.id);
 
@@ -220,6 +226,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
       };
       setMessages(prev => [...prev, errMsg]);
     } finally {
+      isExecutingRef.current = false;
       setExecutingActionId(null);
     }
   };
@@ -285,22 +292,25 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
           return;
         }
 
-        // C. Target Modification before confirmation (e.g. "Actually send to Testing" or "Assign to Yashas")
+        // C. Target Modification before confirmation (Department, Assignee, Priority)
         const deptChange = resolveDepartment(textToSend, departments);
         const userChange = resolveUser(textToSend, users);
+        const priorityChange = extractPriority(textToSend);
 
-        if (deptChange || userChange.match) {
+        if (deptChange || userChange.match || priorityChange) {
           const updatedAction = {
             ...pendingAction,
             data: {
               ...pendingAction.data,
               ...(deptChange ? { department_id: deptChange.id } : {}),
-              ...(userChange.match ? { assigned_to: userChange.match.id } : {})
+              ...(userChange.match ? { assigned_to: userChange.match.id } : {}),
+              ...(priorityChange ? { priority: priorityChange, severity: priorityChange } : {})
             },
             preview: {
               ...pendingAction.preview,
               ...(deptChange ? { departmentName: deptChange.name } : {}),
-              ...(userChange.match ? { assigneeName: userChange.match.full_name } : {})
+              ...(userChange.match ? { assigneeName: userChange.match.full_name } : {}),
+              ...(priorityChange ? { priority: priorityChange } : {})
             }
           };
 
@@ -309,10 +319,15 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
             prev.map(m => (m.action?.id === pendingAction.id ? { ...m, action: updatedAction } : m))
           );
 
+          const changes = [];
+          if (deptChange) changes.push(`destination to **${deptChange.name}**`);
+          if (userChange.match) changes.push(`assignee to **${userChange.match.full_name}**`);
+          if (priorityChange) changes.push(`priority to **${priorityChange}**`);
+
           const modMsg = {
             id: 'copilot-mod-' + Date.now(),
             sender: 'copilot',
-            text: `Understood. I've updated the destination to **${deptChange ? deptChange.name : updatedAction.preview.departmentName}**${userChange.match ? ` and assigned to **${userChange.match.full_name}**` : ''}.\n\nWould you like me to proceed with this updated action?`,
+            text: `Understood. I've updated the ${changes.join(' and ')}.\n\nWould you like me to proceed with this updated action?`,
             action: updatedAction,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
@@ -330,6 +345,20 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
         users,
         pendingAction
       });
+
+      // CASE 0: UNAUTHORIZED REQUEST (Privilege Escalation or Credential Leak Probing)
+      if (agentAnalysis.intent === 'UNAUTHORIZED_REQUEST') {
+        const secMsg = {
+          id: 'copilot-sec-' + Date.now(),
+          sender: 'copilot',
+          text: `🛡️ **Access Denied**: ${agentAnalysis.reason || 'Privilege escalation, secret inspection, and unauthorized administrative actions are strictly prevented by platform security.'}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isError: true
+        };
+        setMessages(prev => [...prev, secMsg]);
+        setLoading(false);
+        return;
+      }
 
       // CASE A: REPORT_ISSUE or CREATE_BUG
       if (agentAnalysis.intent === 'REPORT_ISSUE' || agentAnalysis.intent === 'CREATE_BUG') {
@@ -389,6 +418,57 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
 
       // CASE B: CREATE_TASK
       if (agentAnalysis.intent === 'CREATE_TASK') {
+        const userRole = (role || 'MEMBER').toUpperCase();
+
+        // RLS Authorization Guard: Standard members cannot directly create enterprise tasks
+        if (userRole !== 'FOUNDER' && userRole !== 'ADMIN') {
+          const task = agentAnalysis.task;
+          const targetDept = task.targetDeptName ? resolveDepartment(task.targetDeptName, departments) : null;
+
+          const newAction = {
+            id: 'act-' + Date.now(),
+            type: 'SEND_ISSUE',
+            status: 'PENDING',
+            data: {
+              title: task.title,
+              description: `Task creation request submitted by team member: ${task.description}`,
+              severity: task.priority || 'MEDIUM',
+              department_id: targetDept?.id || null
+            },
+            preview: {
+              title: task.title,
+              priority: task.priority || 'MEDIUM',
+              category: 'Member Work Request / Issue',
+              departmentName: targetDept?.name || 'Development',
+              impact: 'Submitted to department leadership for review and task creation.'
+            }
+          };
+
+          setPendingAction(newAction);
+          setLastContextItem(newAction);
+
+          const memberNotice = [
+            `ℹ️ **Role Notice**: Standard team members cannot directly insert enterprise backlog tasks.`,
+            `However, I can submit this as a prioritized **Issue / Work Request** to the **${targetDept?.name || 'Development'}** department for management review.\n`,
+            `**Request:** ${task.title}`,
+            `**Priority:** ${task.priority}`,
+            `**Target Department:** ${targetDept?.name || 'Development'}`,
+            `\nWould you like me to submit this request to **${targetDept?.name || 'Development'}**?`
+          ].join('\n');
+
+          const copilotMsg = {
+            id: 'copilot-' + Date.now(),
+            sender: 'copilot',
+            text: memberNotice,
+            action: newAction,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          setMessages(prev => [...prev, copilotMsg]);
+          setLoading(false);
+          return;
+        }
+
         const task = agentAnalysis.task;
         const targetDept = task.targetDeptName ? resolveDepartment(task.targetDeptName, departments) : null;
         const userResolution = task.targetPersonName ? resolveUser(task.targetPersonName, users) : { match: null, ambiguous: [] };

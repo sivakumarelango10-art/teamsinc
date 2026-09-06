@@ -98,6 +98,14 @@ export const STORAGE_KEYS = {
 
 export const getStored = (key, initial) => {
   try {
+    if (typeof localStorage === 'undefined') {
+      const item = memoryStore.get(key);
+      if (!item) {
+        memoryStore.set(key, JSON.stringify(initial));
+        return initial;
+      }
+      return JSON.parse(item);
+    }
     const item = localStorage.getItem(key);
     if (!item) {
       localStorage.setItem(key, JSON.stringify(initial));
@@ -141,18 +149,26 @@ export const getStored = (key, initial) => {
   }
 };
 
+const memoryStore = new Map();
+
 export const setStored = (key, value) => {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(value));
+    } else {
+      memoryStore.set(key, JSON.stringify(value));
+    }
   } catch (err) {
     console.error('Storage error:', err);
   }
 };
 
 export const resetStoreToDefaults = () => {
-  localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(INITIAL_PROFILES));
-  localStorage.setItem(STORAGE_KEYS.DEPARTMENTS, JSON.stringify(INITIAL_DEPARTMENTS));
-  localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(INITIAL_TASKS));
-  localStorage.setItem(STORAGE_KEYS.PLANS, JSON.stringify(INITIAL_PLANS));
-  localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(INITIAL_ASSIGNMENTS));
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(INITIAL_PROFILES));
+    localStorage.setItem(STORAGE_KEYS.DEPARTMENTS, JSON.stringify(INITIAL_DEPARTMENTS));
+    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(INITIAL_TASKS));
+    localStorage.setItem(STORAGE_KEYS.PLANS, JSON.stringify(INITIAL_PLANS));
+    localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(INITIAL_ASSIGNMENTS));
+  }
 };

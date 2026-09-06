@@ -25,11 +25,27 @@ export const ActionConfirmationCard = ({
 }) => {
   if (!action) return null;
 
+  const [clicked, setClicked] = React.useState(false);
+
   const { type, preview = {}, status = 'PENDING' } = action;
 
   const isPending = status === 'PENDING';
   const isCompleted = status === 'COMPLETED';
   const isCancelled = status === 'CANCELLED';
+
+  const handleConfirmClick = (e) => {
+    e.preventDefault();
+    if (clicked || isExecuting || !isPending) return;
+    setClicked(true);
+    onConfirm?.();
+  };
+
+  const handleCancelClick = (e) => {
+    e.preventDefault();
+    if (clicked || isExecuting || !isPending) return;
+    setClicked(true);
+    onCancel?.();
+  };
 
   const getActionTitle = () => {
     switch (type) {
@@ -165,8 +181,8 @@ export const ActionConfirmationCard = ({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={onCancel}
-              disabled={isExecuting}
+              onClick={handleCancelClick}
+              disabled={clicked || isExecuting}
               className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
             >
               <X className="w-3 h-3" />
@@ -175,11 +191,11 @@ export const ActionConfirmationCard = ({
 
             <button
               type="button"
-              onClick={onConfirm}
-              disabled={isExecuting}
+              onClick={handleConfirmClick}
+              disabled={clicked || isExecuting}
               className="px-3 py-1 rounded-lg bg-white text-black hover:bg-neutral-200 text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-sm disabled:opacity-50"
             >
-              {isExecuting ? (
+              {(clicked || isExecuting) ? (
                 <>
                   <Loader2 className="w-3 h-3 animate-spin" />
                   <span>Processing...</span>

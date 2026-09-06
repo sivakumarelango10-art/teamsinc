@@ -25,7 +25,7 @@ export const Tasks = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [assigneeFilter, setAssigneeFilter] = useState('ALL');
-  const [departmentFilter, setDepartmentFilter] = useState('ALL');
+  const [deptFilter, setDeptFilter] = useState('ALL');
 
   // Modals & Action States
   const [isFormOpen, setIsFormOpen] = useState(false);

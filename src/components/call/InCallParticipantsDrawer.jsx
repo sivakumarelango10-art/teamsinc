@@ -8,6 +8,20 @@ export const InCallParticipantsDrawer = ({
   onClose
 }) => {
   const getRoleBadge = (r) => {
+    if (r === 'FOUNDER') {
+      return (
+        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-white text-black px-1.5 py-0.5 rounded border border-white">
+          <ShieldAlert className="w-2.5 h-2.5 text-black" /> Founder
+        </span>
+      );
+    }
+    if (r === 'FOUNDING_ADVISOR') {
+      return (
+        <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold bg-purple-950/80 text-purple-200 px-1.5 py-0.5 rounded border border-purple-800">
+          <Shield className="w-2.5 h-2.5 text-purple-300" /> Advisor
+        </span>
+      );
+    }
     if (r === 'ADMIN') {
       return (
         <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold bg-neutral-900 text-neutral-300 px-1.5 py-0.5 rounded border border-neutral-700">

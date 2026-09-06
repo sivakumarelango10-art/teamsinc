@@ -11,7 +11,7 @@ const TaskCardComponent = ({
   onEdit,
   onDelete
 }) => {
-  const isOverdue = task.status !== 'COMPLETED' && isPast(parseISO(task.deadline));
+  const isOverdue = Boolean(task.deadline && task.status !== 'COMPLETED' && isPast(parseISO(task.deadline)));
 
   return (
     <div className="glass-card rounded-2xl p-5 border border-neutral-800 flex flex-col justify-between hover:border-neutral-700 transition duration-200 group bg-neutral-950">
@@ -75,11 +75,15 @@ const TaskCardComponent = ({
             </span>
           </div>
 
-          <div className={`flex items-center gap-1 ${isOverdue ? 'text-neutral-300 font-semibold' : 'text-neutral-400'}`}>
-            <Calendar className="w-3.5 h-3.5 text-neutral-500" />
-            <span>{format(parseISO(task.deadline), 'MMM d')}</span>
-            {isOverdue && <span className="text-[10px] ml-0.5 text-neutral-400">(Overdue)</span>}
-          </div>
+          {task.deadline ? (
+            <div className={`flex items-center gap-1 ${isOverdue ? 'text-neutral-300 font-semibold' : 'text-neutral-400'}`}>
+              <Calendar className="w-3.5 h-3.5 text-neutral-500" />
+              <span>{format(parseISO(task.deadline), 'MMM d')}</span>
+              {isOverdue && <span className="text-[10px] ml-0.5 text-neutral-400">(Overdue)</span>}
+            </div>
+          ) : (
+            <span className="text-neutral-500 text-xs">No deadline</span>
+          )}
         </div>
 
         {/* Status Badge or Status Controller */}

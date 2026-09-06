@@ -10,21 +10,26 @@ import {
   Calendar,
   UserPlus,
   PlusCircle,
-  ArrowUpRight
+  ArrowUpRight,
+  Building2,
+  BarChart3,
+  Bug,
+  ArrowRight,
+  ChevronRight
 } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { format, parseISO, isPast } from 'date-fns';
 import { usersApi } from '../../api/usersApi';
 import { tasksApi } from '../../api/tasksApi';
-import { planningApi } from '../../api/planningApi';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useAuth } from '../../hooks/useAuth';
 import { usePresence } from '../../context/PresenceContext';
-import { supabase } from '../../api/supabase';
 import { useRealtime } from '../../hooks/useRealtime';
 import StatCard from '../../components/common/StatCard';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UserForm from '../../components/users/UserForm';
 import TaskForm from '../../components/tasks/TaskForm';
+import TaskDetailsModal from '../../components/tasks/TaskDetailsModal';
+import { TaskStatusBadge, TaskPriorityBadge } from '../../components/tasks/TaskStatusBadge';
 
 export const FounderDashboard = () => {
   const { user } = useAuth();
@@ -42,6 +47,7 @@ export const FounderDashboard = () => {
   const [userModalPresetRole, setUserModalPresetRole] = useState('MEMBER');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskModalInitialData, setTaskModalInitialData] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -202,6 +208,170 @@ export const FounderDashboard = () => {
         />
       </div>
 
+      {/* Executive Quick Launch Hub */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {[
+          { label: 'User Directory', desc: `${users.length} registered accounts`, icon: Users, path: '/founder/users', color: 'text-white' },
+          { label: 'Departments', desc: `${departments.length} functional units`, icon: Building2, path: '/founder/departments', color: 'text-purple-400' },
+          { label: 'Workforce Planning', desc: 'Daily task allocation', icon: Calendar, path: '/admin/daily-planning', color: 'text-emerald-400' },
+          { label: 'Bug Reports', desc: 'Triage & engineer route', icon: Bug, path: '/founder/bugs', color: 'text-red-400' },
+          { label: 'Analytics & Reports', desc: 'Completion metrics', icon: BarChart3, path: '/founder/reports', color: 'text-blue-400' }
+        ].map(hub => {
+          const Icon = hub.icon;
+          return (
+            <button
+              key={hub.label}
+              type="button"
+              onClick={() => navigate(hub.path)}
+              className="p-4 rounded-2xl bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition flex flex-col justify-between text-left group cursor-pointer shadow-sm"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-8 h-8 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+                  <Icon className={`w-4 h-4 ${hub.color}`} />
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-600 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white group-hover:text-white transition tracking-tight">{hub.label}</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">{hub.desc}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Two-Column Main Content: Deliverables Pipeline & Department Snapshot */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Recent Deliverables & Tasks (2 cols) */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-white" />
+                <span>Executive Deliverables Pipeline</span>
+              </h3>
+              <p className="text-xs text-neutral-400">Recent active tasks across all departments</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/admin/tasks')}
+              className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 font-semibold transition cursor-pointer"
+            >
+              <span>View All ({tasks.length})</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {tasks.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-neutral-950 border border-neutral-800 text-center">
+              <CheckSquare className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
+              <p className="text-xs font-bold text-white">No tasks created yet</p>
+              <p className="text-[11px] text-neutral-500 mt-1">Use "Create Task" above to assign work items.</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {tasks.slice(0, 6).map((t) => {
+                const isOverdue = Boolean(t.deadline && t.status !== 'COMPLETED' && isPast(parseISO(t.deadline)));
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => setSelectedTask(t)}
+                    className="p-3.5 rounded-2xl bg-neutral-950 hover:bg-neutral-900/80 border border-neutral-800 hover:border-neutral-700 transition flex items-center justify-between gap-3 cursor-pointer group shadow-sm"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <TaskPriorityBadge priority={t.priority} />
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-white group-hover:text-white truncate">
+                          {t.title}
+                        </h4>
+                        <div className="flex items-center gap-2 text-[11px] text-neutral-400 mt-0.5">
+                          {t.department?.name && (
+                            <span className="text-neutral-400 flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-neutral-500" />
+                              {t.department.name}
+                            </span>
+                          )}
+                          <span>•</span>
+                          <span>{t.assignee?.full_name || 'Unassigned'}</span>
+                          {t.deadline && (
+                            <>
+                              <span>•</span>
+                              <span className={isOverdue ? 'text-red-400 font-bold' : ''}>
+                                Due {format(parseISO(t.deadline), 'MMM d')}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <TaskStatusBadge status={t.status} />
+                      <ChevronRight className="w-4 h-4 text-neutral-600 group-hover:text-white transition" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Department Workforce Snapshot (1 col) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-purple-400" />
+                <span>Departments</span>
+              </h3>
+              <p className="text-xs text-neutral-400">Workforce distribution</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/founder/departments')}
+              className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 font-semibold transition cursor-pointer"
+            >
+              <span>Manage</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {departments.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-neutral-950 border border-neutral-800 text-center">
+              <Building2 className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
+              <p className="text-xs font-bold text-white">No departments added</p>
+              <p className="text-[11px] text-neutral-500 mt-1">Set up functional departments to organize team members.</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {departments.map((dept) => {
+                const deptMembers = memberships[dept.id] || [];
+                const deptTasks = tasks.filter(t => t.department_id === dept.id);
+                return (
+                  <div
+                    key={dept.id}
+                    onClick={() => navigate('/founder/departments')}
+                    className="p-3.5 rounded-2xl bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition flex items-center justify-between cursor-pointer group shadow-sm"
+                  >
+                    <div>
+                      <h4 className="text-xs font-bold text-white group-hover:text-purple-300 transition">
+                        {dept.name}
+                      </h4>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">
+                        {deptMembers.length} {deptMembers.length === 1 ? 'member' : 'members'} • {deptTasks.length} active tasks
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-neutral-900 text-neutral-300 border border-neutral-800">
+                      {deptTasks.filter(t => t.status === 'COMPLETED').length}/{deptTasks.length} done
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Modals */}
       <UserForm
         isOpen={isUserModalOpen}
@@ -221,6 +391,12 @@ export const FounderDashboard = () => {
         departments={departments}
         currentUserId={user?.id}
         initialData={taskModalInitialData}
+      />
+
+      <TaskDetailsModal
+        task={selectedTask}
+        isOpen={Boolean(selectedTask)}
+        onClose={() => setSelectedTask(null)}
       />
     </div>
   );

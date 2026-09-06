@@ -1,12 +1,32 @@
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 const STORAGE_CALL_HISTORY_KEY = 'teamsync_call_history';
 const STORAGE_ACTIVE_CALL_KEY = 'teamsync_active_call';
 
+export const isValidUuid = (str) => {
+  return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+};
+
+export const generateCallId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {}
+  }
+  // Standard RFC4122 v4 UUID generator fallback
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const callApi = {
-  // Create a new call session
-  async createCallSession({ roomId = 'general', roomTitle = 'TeamSync HQ General Call', caller, callType = 'video' }) {
+  // Create a new call session with canonical UUID
+  async createCallSession({ id, roomId = 'general', roomTitle = 'TeamSync HQ General Call', caller, callType = 'video' }) {
+    const callUuid = isValidUuid(id) ? id : generateCallId();
     const sessionData = {
+      id: callUuid,
       room_id: roomId,
       room_title: roomTitle,
       call_type: callType,
@@ -36,7 +56,7 @@ export const callApi = {
         if (!error && data) {
           createdRecord = data;
         } else {
-          console.warn('Supabase call session insert error, using local state:', error);
+          console.warn('Supabase call session insert notice, using canonical session data:', error?.message);
         }
       } catch (err) {
         console.warn('Call session error, using fallback:', err);
@@ -45,13 +65,12 @@ export const callApi = {
 
     if (!createdRecord) {
       createdRecord = {
-        id: 'call-' + Date.now(),
         ...sessionData,
         created_at: new Date().toISOString()
       };
     }
 
-    // Save active call locally and broadcast
+    // Save active call locally
     try {
       localStorage.setItem(STORAGE_ACTIVE_CALL_KEY, JSON.stringify(createdRecord));
     } catch {}
@@ -59,8 +78,8 @@ export const callApi = {
     return createdRecord;
   },
 
-  // Update or finish a call session
-  async endCallSession(callId, { duration = 0, participants = [] } = {}) {
+  // Update or finish a call session cleanly
+  async endCallSession(callId, { duration = 0, participants = [], roomId = null } = {}) {
     const endedAt = new Date().toISOString();
     const updateData = {
       ended_at: endedAt,
@@ -74,12 +93,21 @@ export const callApi = {
       status: 'ended'
     };
 
-    if (supabase && callId && !callId.startsWith('call-')) {
+    if (supabase) {
       try {
-        await supabase
-          .from('call_history')
-          .update(updateData)
-          .eq('id', callId);
+        if (callId && isValidUuid(callId)) {
+          await supabase
+            .from('call_history')
+            .update(updateData)
+            .eq('id', callId);
+        } else if (roomId) {
+          // If callId is not a valid UUID, close any ongoing call in that room
+          await supabase
+            .from('call_history')
+            .update(updateData)
+            .eq('room_id', roomId)
+            .eq('status', 'ongoing');
+        }
       } catch (err) {
         console.warn('Supabase call update error:', err);
       }
@@ -91,7 +119,7 @@ export const callApi = {
       const list = stored ? JSON.parse(stored) : [];
       const updatedList = [
         {
-          id: callId || 'call-' + Date.now(),
+          id: callId || generateCallId(),
           ...updateData,
           created_at: endedAt
         },
@@ -104,7 +132,7 @@ export const callApi = {
     return true;
   },
 
-  // Get active call for a room if any
+  // Get active call for a room if any (excludes stale calls > 1 hour)
   async getActiveCall(roomId = 'general') {
     if (supabase) {
       try {
@@ -118,9 +146,9 @@ export const callApi = {
           .maybeSingle();
 
         if (!error && data) {
-          // Verify call is not stale (older than 4 hours)
+          // Verify call is not stale (older than 1 hour)
           const startTime = new Date(data.started_at).getTime();
-          if (Date.now() - startTime < 4 * 60 * 60 * 1000) {
+          if (Date.now() - startTime < 60 * 60 * 1000) {
             return data;
           }
         }
@@ -135,7 +163,10 @@ export const callApi = {
       if (active) {
         const parsed = JSON.parse(active);
         if (parsed && parsed.room_id === roomId && parsed.status === 'ongoing') {
-          return parsed;
+          const startTime = new Date(parsed.started_at).getTime();
+          if (Date.now() - startTime < 60 * 60 * 1000) {
+            return parsed;
+          }
         }
       }
     } catch {}

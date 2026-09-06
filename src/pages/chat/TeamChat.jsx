@@ -291,7 +291,8 @@ export const TeamChat = ({
 
   const handleStartCall = async (callType = 'video') => {
     try {
-      await startCall(callType, activeChannel, currentChatTitle);
+      const channelTitle = activeChannel === 'leadership' ? 'Leadership Council' : (initialTitle || 'Team Chat');
+      await startCall(callType, activeChannel, channelTitle);
     } catch (err) {
       console.error('Error starting call:', err);
       setError(err.message || 'Failed to start call. Please try again.');

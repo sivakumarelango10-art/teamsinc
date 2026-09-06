@@ -34,37 +34,48 @@ const ParticipantTileComponent = ({
   const handleVideoRef = (element) => {
     videoRef.current = element;
     if (element && stream) {
-      element.muted = isLocal;
-      element.defaultMuted = isLocal;
+      element.muted = true; // Video element is always muted to satisfy browser autoplay policies
+      element.defaultMuted = true;
       element.playsInline = true;
       element.autoplay = true;
       if (element.srcObject !== stream) {
         element.srcObject = stream;
       }
-      element.play().catch(() => {});
+      const playPromise = element.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
     }
   };
 
   useEffect(() => {
     const videoEl = videoRef.current;
-    if (videoEl && stream) {
-      videoEl.muted = isLocal;
-      videoEl.defaultMuted = isLocal;
+    if (videoEl && stream && !isVideoOff) {
+      videoEl.muted = true;
+      videoEl.defaultMuted = true;
       videoEl.playsInline = true;
       videoEl.autoplay = true;
       if (videoEl.srcObject !== stream) {
         videoEl.srcObject = stream;
       }
-      videoEl.play().catch(() => {});
+      const playPromise = videoEl.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
     }
+
     const audioEl = audioRef.current;
     if (audioEl && stream && !isLocal) {
       if (audioEl.srcObject !== stream) {
         audioEl.srcObject = stream;
       }
-      audioEl.play().catch(() => {});
+      audioEl.muted = isAudioMuted;
+      const playPromise = audioEl.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
     }
-  }, [stream, isLocal, isVideoOff]);
+  }, [stream, isLocal, isVideoOff, isAudioMuted]);
 
   const filterStyle = isLocal && activeFilter ? (FILTER_STYLES[activeFilter] || '') : '';
 
@@ -109,7 +120,7 @@ const ParticipantTileComponent = ({
             ref={handleVideoRef}
             autoPlay
             playsInline
-            muted={isLocal}
+            muted={true}
             onLoadedMetadata={(e) => {
               e.target.play().catch(() => {});
             }}

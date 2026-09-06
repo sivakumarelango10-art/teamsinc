@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Phone, Video, PhoneOff, ArrowRight } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { callApi } from '../api/callApi';
+import { callApi, generateCallId, isValidUuid } from '../api/callApi';
 import { supabase } from '../api/supabase';
 import notificationService from '../utils/notificationService';
 
@@ -16,11 +16,15 @@ export const CallNotificationProvider = ({ children }) => {
   const [ongoingCall, setOngoingCall] = useState(null); // General active call in room
   const dismissedCallIdsRef = useRef(new Set());
   const incomingCallRef = useRef(null);
+  const activeCallSessionRef = useRef(null);
   const ringTimeoutRef = useRef(null);
   const globalChannelRef = useRef(null);
+  const isChannelSubscribedRef = useRef(false);
+  const pendingBroadcastsRef = useRef([]);
 
   const currentUser = profile || user;
   incomingCallRef.current = incomingCall;
+  activeCallSessionRef.current = activeCallSession;
 
   // Clear incoming ring
   const clearIncomingRing = () => {
@@ -30,6 +34,19 @@ export const CallNotificationProvider = ({ children }) => {
       ringTimeoutRef.current = null;
     }
     setIncomingCall(null);
+  };
+
+  // Safe Realtime broadcaster with queuing if channel is connecting
+  const broadcastGlobal = (event, payload) => {
+    if (globalChannelRef.current && isChannelSubscribedRef.current) {
+      globalChannelRef.current.send({
+        type: 'broadcast',
+        event,
+        payload
+      }).catch(err => console.warn('[Call] Broadcast error:', err));
+    } else {
+      pendingBroadcastsRef.current.push({ event, payload });
+    }
   };
 
   // Check active calls on app load
@@ -58,9 +75,10 @@ export const CallNotificationProvider = ({ children }) => {
           handleIncomingCallSignal(event.data.call);
         } else if (event.data?.type === 'CALL_ENDED') {
           const endedCallId = event.data?.callId;
-          setOngoingCall(prev => (prev?.id === endedCallId ? null : prev));
-          setActiveCallSession(prev => (prev?.id === endedCallId ? null : prev));
-          if (incomingCallRef.current?.id === endedCallId) {
+          const endedRoomId = event.data?.roomId;
+          setOngoingCall(prev => (prev?.id === endedCallId || prev?.room_id === endedRoomId ? null : prev));
+          setActiveCallSession(prev => (prev?.id === endedCallId || prev?.room_id === endedRoomId ? null : prev));
+          if (incomingCallRef.current?.id === endedCallId || incomingCallRef.current?.room_id === endedRoomId) {
             clearIncomingRing();
           }
         }
@@ -79,12 +97,11 @@ export const CallNotificationProvider = ({ children }) => {
         })
         .on('broadcast', { event: 'call_ended' }, ({ payload }) => {
           const endedCallId = payload?.callId;
-          if (endedCallId) {
-            setOngoingCall(prev => (prev?.id === endedCallId ? null : prev));
-            setActiveCallSession(prev => (prev?.id === endedCallId ? null : prev));
-            if (incomingCallRef.current?.id === endedCallId) {
-              clearIncomingRing();
-            }
+          const endedRoomId = payload?.roomId;
+          setOngoingCall(prev => (prev?.id === endedCallId || prev?.room_id === endedRoomId ? null : prev));
+          setActiveCallSession(prev => (prev?.id === endedCallId || prev?.room_id === endedRoomId ? null : prev));
+          if (incomingCallRef.current?.id === endedCallId || incomingCallRef.current?.room_id === endedRoomId) {
+            clearIncomingRing();
           }
         })
         .on(
@@ -94,16 +111,35 @@ export const CallNotificationProvider = ({ children }) => {
             if (payload.new?.status === 'ongoing') {
               handleIncomingCallSignal(payload.new);
             } else if (payload.new?.status === 'ended') {
-              setOngoingCall(prev => (prev?.id === payload.new.id ? null : prev));
-              if (incomingCallRef.current?.id === payload.new.id) {
+              const endedId = payload.new.id;
+              const endedRoom = payload.new.room_id;
+              setOngoingCall(prev => (prev?.id === endedId || prev?.room_id === endedRoom ? null : prev));
+              if (incomingCallRef.current?.id === endedId || incomingCallRef.current?.room_id === endedRoom) {
                 clearIncomingRing();
               }
               // If call ended by host, terminate call modal for all active participants
-              setActiveCallSession(prev => (prev?.id === payload.new.id ? null : prev));
+              setActiveCallSession(prev => (prev?.id === endedId || prev?.room_id === endedRoom ? null : prev));
             }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            isChannelSubscribedRef.current = true;
+            // Drain any pending broadcasts queued while connecting
+            while (pendingBroadcastsRef.current.length > 0) {
+              const item = pendingBroadcastsRef.current.shift();
+              if (item) {
+                callSub.send({
+                  type: 'broadcast',
+                  event: item.event,
+                  payload: item.payload
+                }).catch(() => {});
+              }
+            }
+          } else {
+            isChannelSubscribedRef.current = false;
+          }
+        });
       
       globalChannelRef.current = callSub;
     }
@@ -112,7 +148,7 @@ export const CallNotificationProvider = ({ children }) => {
       if (callBc) callBc.close();
       if (callSub && supabase) supabase.removeChannel(callSub);
       globalChannelRef.current = null;
-      clearIncomingRing();
+      isChannelSubscribedRef.current = false;
     };
   }, [currentUser?.email]);
 
@@ -120,7 +156,7 @@ export const CallNotificationProvider = ({ children }) => {
     if (!call || call.status !== 'ongoing') return;
 
     // Role-based room access guard
-    const userRole = currentUser?.role;
+    const userRole = profile?.role || user?.role || user?.user_metadata?.role;
     if (call.room_id === 'leadership' && userRole !== 'FOUNDER' && userRole !== 'ADMIN' && userRole !== 'FOUNDING_ADVISOR') {
       return;
     }
@@ -130,11 +166,11 @@ export const CallNotificationProvider = ({ children }) => {
 
     setOngoingCall(call);
 
-    // If current user is already in this call, do nothing
-    if (activeCallSession?.id === call.id || activeCallSession?.room_id === call.room_id) return;
+    // If current user is already in this call, do not ring
+    if (activeCallSessionRef.current?.id === call.id || activeCallSessionRef.current?.room_id === call.room_id) return;
 
     // If current user was the caller, do not ring themselves
-    const myEmail = currentUser?.email?.toLowerCase();
+    const myEmail = (currentUser?.email || profile?.email || user?.email)?.toLowerCase();
     if (call.caller_email && myEmail && call.caller_email.toLowerCase() === myEmail) {
       return;
     }
@@ -142,7 +178,7 @@ export const CallNotificationProvider = ({ children }) => {
     // If already dismissed, skip ring
     if (dismissedCallIdsRef.current.has(call.id)) return;
 
-    // If already ringing for this call/room, seamlessly merge metadata without restarting ringtone/flicker
+    // If already ringing for this call/room, merge metadata seamlessly without restarting ringtone
     if (incomingCallRef.current && (incomingCallRef.current.id === call.id || incomingCallRef.current.room_id === call.room_id)) {
       setIncomingCall(prev => ({ ...prev, ...call }));
       return;
@@ -183,7 +219,8 @@ export const CallNotificationProvider = ({ children }) => {
   };
 
   const startCall = async (callType = 'video', roomId = 'general', roomTitle = 'TeamSync Company HQ') => {
-    const callId = `call_${roomId}_${Date.now()}`;
+    // Generate canonical UUID for call session
+    const callId = generateCallId();
     const sessionData = {
       id: callId,
       room_id: roomId,
@@ -212,16 +249,10 @@ export const CallNotificationProvider = ({ children }) => {
       bc.close();
     } catch {}
 
-    // Supabase Realtime broadcast to all online team members (single canonical dispatch)
-    if (globalChannelRef.current) {
-      globalChannelRef.current.send({
-        type: 'broadcast',
-        event: 'incoming_call',
-        payload: sessionData
-      }).catch(err => console.warn('[Call] Realtime broadcast error:', err));
-    }
+    // Supabase Realtime broadcast to all online team members
+    broadcastGlobal('incoming_call', sessionData);
 
-    // Background DB synchronization with the same canonical callId
+    // Background DB synchronization with the same canonical UUID
     callApi.createCallSession({
       id: callId,
       roomId,
@@ -248,23 +279,17 @@ export const CallNotificationProvider = ({ children }) => {
 
     if (targetCallId) {
       try {
-        await callApi.endCallSession(targetCallId, { duration, participants });
+        await callApi.endCallSession(targetCallId, { duration, participants, roomId: currentRoomId });
       } catch (err) {
         console.warn('Error ending call session:', err);
       }
 
       // Supabase Realtime broadcast to close call for all participants
-      if (globalChannelRef.current) {
-        globalChannelRef.current.send({
-          type: 'broadcast',
-          event: 'call_ended',
-          payload: { callId: targetCallId, roomId: currentRoomId }
-        }).catch(() => {});
-      }
+      broadcastGlobal('call_ended', { callId: targetCallId, roomId: currentRoomId });
 
       try {
         const bc = new BroadcastChannel('teamsync_global_call_status');
-        bc.postMessage({ type: 'CALL_ENDED', callId: targetCallId });
+        bc.postMessage({ type: 'CALL_ENDED', callId: targetCallId, roomId: currentRoomId });
         bc.close();
       } catch {}
     }

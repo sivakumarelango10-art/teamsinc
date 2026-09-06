@@ -818,9 +818,6 @@ export const TeamChat = ({
                       <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
                         <span>Leadership Chat</span>
                       </span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/80 font-bold">
-                        🔒 Executive
-                      </span>
                     </div>
                     <p className="text-[11px] text-neutral-400 truncate mt-0.5">
                       Founder, Admin & Advisor

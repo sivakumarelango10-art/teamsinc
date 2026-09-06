@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 const STORAGE_CHAT_KEY = 'teamsync_chat_messages';
 

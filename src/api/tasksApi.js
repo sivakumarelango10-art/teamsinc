@@ -1,5 +1,5 @@
-import { supabase, isDemoMode } from './supabase';
-import { getStored, setStored, STORAGE_KEYS, INITIAL_TASKS, INITIAL_PROFILES, INITIAL_DEPARTMENTS } from './mockData';
+import { supabase, isDemoMode } from './supabase.js';
+import { getStored, setStored, STORAGE_KEYS, INITIAL_TASKS, INITIAL_PROFILES, INITIAL_DEPARTMENTS } from './mockData.js';
 
 // In-memory profile resolution cache to eliminate repeated round-trips
 const profileIdCache = new Map();

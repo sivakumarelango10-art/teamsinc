@@ -30,7 +30,17 @@ import { departmentsApi } from '../../api/departmentsApi';
 import { planningApi } from '../../api/planningApi';
 import { bugsApi } from '../../api/bugsApi';
 import { format, isPast, parseISO } from 'date-fns';
+import { usersApi } from '../../api/usersApi';
 import MarkdownRenderer from '../common/MarkdownRenderer';
+import ActionConfirmationCard from './ActionConfirmationCard';
+import {
+  classifyIntentRuleBased,
+  resolveDepartment,
+  resolveUser,
+  isConfirmationPhrase,
+  isCancellationPhrase,
+  executeAgentAction
+} from '../../utils/aiAgentEngine';
 
 export const AICopilotDrawer = ({ isOpen, onClose }) => {
   const { user, profile, role, isFounder, isAdmin, isFoundingAdvisor } = useAuth();
@@ -51,6 +61,11 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
   ]);
   const [copiedId, setCopiedId] = useState(null);
   const [isBriefingLoading, setIsBriefingLoading] = useState(false);
+
+  // Agent State: Pending Consequential Action & Context Memory
+  const [pendingAction, setPendingAction] = useState(null);
+  const [lastContextItem, setLastContextItem] = useState(null);
+  const [executingActionId, setExecutingActionId] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -160,6 +175,77 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
     }
   };
 
+  // Controlled Action Execution: Direct backend operation with real verification
+  const handleExecutePendingAction = async (actionToExecute) => {
+    const act = actionToExecute || pendingAction;
+    if (!act) return;
+
+    setExecutingActionId(act.id);
+
+    try {
+      const result = await executeAgentAction({
+        action: act,
+        currentUser: profile || user,
+        role: role || 'MEMBER'
+      });
+
+      // Update the confirmation card to COMPLETED
+      setMessages(prev =>
+        prev.map(m =>
+          m.action?.id === act.id
+            ? { ...m, action: { ...m.action, status: 'COMPLETED', result } }
+            : m
+        )
+      );
+
+      const successMsg = {
+        id: 'agent-res-' + Date.now(),
+        sender: 'copilot',
+        text: `✅ **Operation Executed & Verified**\n\n${result.message}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages(prev => [...prev, successMsg]);
+
+      // Reset pending state
+      setPendingAction(null);
+      setLastContextItem(null);
+    } catch (err) {
+      console.error('Agent action execution failed:', err);
+      const errMsg = {
+        id: 'agent-err-' + Date.now(),
+        sender: 'copilot',
+        text: `⚠️ **Action Execution Failed**: ${err.message || 'The server rejected the request.'} Nothing was submitted.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isError: true
+      };
+      setMessages(prev => [...prev, errMsg]);
+    } finally {
+      setExecutingActionId(null);
+    }
+  };
+
+  const handleCancelPendingAction = (actionToCancel) => {
+    const act = actionToCancel || pendingAction;
+    if (act) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.action?.id === act.id
+            ? { ...m, action: { ...m.action, status: 'CANCELLED' } }
+            : m
+        )
+      );
+    }
+
+    setPendingAction(null);
+    const cancelMsg = {
+      id: 'agent-cancel-' + Date.now(),
+      sender: 'copilot',
+      text: 'Understood. I have cancelled the pending action. No changes were made.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setMessages(prev => [...prev, cancelMsg]);
+  };
+
   const handleSendMessage = async (customPrompt = null) => {
     const textToSend = customPrompt || input.trim();
     if (!textToSend || loading) return;
@@ -176,7 +262,311 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
     setLoading(true);
 
     try {
-      const snapshot = await getSystemSnapshot();
+      // 1. Fetch live DB records: departments, users, and system snapshot
+      const [departments, users, snapshot] = await Promise.all([
+        departmentsApi.getDepartments().catch(() => []),
+        usersApi.getUsers().catch(() => []),
+        getSystemSnapshot().catch(() => ({}))
+      ]);
+
+      // 2. CHECK FOR ACTIVE PENDING ACTION (Confirmation / Cancellation / Modification)
+      if (pendingAction && pendingAction.status === 'PENDING') {
+        // A. Natural Language Confirmation: "yes", "ok", "sure", "do it", "confirm", etc.
+        if (isConfirmationPhrase(textToSend)) {
+          setLoading(false);
+          await handleExecutePendingAction(pendingAction);
+          return;
+        }
+
+        // B. Natural Language Cancellation: "no", "cancel", "stop", "never mind", etc.
+        if (isCancellationPhrase(textToSend)) {
+          setLoading(false);
+          handleCancelPendingAction(pendingAction);
+          return;
+        }
+
+        // C. Target Modification before confirmation (e.g. "Actually send to Testing" or "Assign to Yashas")
+        const deptChange = resolveDepartment(textToSend, departments);
+        const userChange = resolveUser(textToSend, users);
+
+        if (deptChange || userChange.match) {
+          const updatedAction = {
+            ...pendingAction,
+            data: {
+              ...pendingAction.data,
+              ...(deptChange ? { department_id: deptChange.id } : {}),
+              ...(userChange.match ? { assigned_to: userChange.match.id } : {})
+            },
+            preview: {
+              ...pendingAction.preview,
+              ...(deptChange ? { departmentName: deptChange.name } : {}),
+              ...(userChange.match ? { assigneeName: userChange.match.full_name } : {})
+            }
+          };
+
+          setPendingAction(updatedAction);
+          setMessages(prev =>
+            prev.map(m => (m.action?.id === pendingAction.id ? { ...m, action: updatedAction } : m))
+          );
+
+          const modMsg = {
+            id: 'copilot-mod-' + Date.now(),
+            sender: 'copilot',
+            text: `Understood. I've updated the destination to **${deptChange ? deptChange.name : updatedAction.preview.departmentName}**${userChange.match ? ` and assigned to **${userChange.match.full_name}**` : ''}.\n\nWould you like me to proceed with this updated action?`,
+            action: updatedAction,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          setMessages(prev => [...prev, modMsg]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 3. AGENT INTENT CLASSIFICATION & CONTEXT GENERATION
+      const agentAnalysis = classifyIntentRuleBased({
+        message: textToSend,
+        departments,
+        users,
+        pendingAction
+      });
+
+      // CASE A: REPORT_ISSUE or CREATE_BUG
+      if (agentAnalysis.intent === 'REPORT_ISSUE' || agentAnalysis.intent === 'CREATE_BUG') {
+        const issue = agentAnalysis.issue;
+        const targetDept = resolveDepartment(issue.targetDeptName || 'Development', departments);
+        const targetUser = issue.targetPersonName ? resolveUser(issue.targetPersonName, users) : { match: null };
+
+        const newAction = {
+          id: 'act-' + Date.now(),
+          type: agentAnalysis.intent === 'CREATE_BUG' ? 'CREATE_BUG' : 'SEND_ISSUE',
+          status: 'PENDING',
+          data: {
+            title: issue.title,
+            description: issue.summary,
+            severity: issue.priority || 'HIGH',
+            department_id: targetDept?.id || null,
+            assigned_to: targetUser.match?.id || null
+          },
+          preview: {
+            title: issue.title,
+            category: issue.category,
+            priority: issue.priority || 'HIGH',
+            departmentName: targetDept?.name || 'Development',
+            assigneeName: targetUser.match?.full_name || null,
+            impact: issue.impact
+          }
+        };
+
+        setPendingAction(newAction);
+        setLastContextItem(newAction);
+
+        const responseText = [
+          `I understand the issue.\n`,
+          `**Issue:** ${issue.title}`,
+          `**Summary:** ${issue.summary}`,
+          `**Category:** ${issue.category}`,
+          `**Impact:** ${issue.impact}`,
+          `\n**Potential areas:**`,
+          ...issue.potentialAreas.map(a => `• ${a}`),
+          `\n**Priority:** ${issue.priority}`,
+          `**Recommended Department:** ${targetDept?.name || 'Development'}${targetUser.match ? `\n**Target Assignee:** ${targetUser.match.full_name}` : ''}`,
+          `\nWould you like me to send this issue to the **${targetDept?.name || 'Development'}** department?`
+        ].join('\n');
+
+        const copilotMsg = {
+          id: 'copilot-' + Date.now(),
+          sender: 'copilot',
+          text: responseText,
+          action: newAction,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setMessages(prev => [...prev, copilotMsg]);
+        setLoading(false);
+        return;
+      }
+
+      // CASE B: CREATE_TASK
+      if (agentAnalysis.intent === 'CREATE_TASK') {
+        const task = agentAnalysis.task;
+        const targetDept = task.targetDeptName ? resolveDepartment(task.targetDeptName, departments) : null;
+        const userResolution = task.targetPersonName ? resolveUser(task.targetPersonName, users) : { match: null, ambiguous: [] };
+
+        if (userResolution.ambiguous && userResolution.ambiguous.length > 1) {
+          const ambMsg = {
+            id: 'copilot-' + Date.now(),
+            sender: 'copilot',
+            text: `I found multiple team members matching "${task.targetPersonName}":\n${userResolution.ambiguous.map(u => `• **${u.full_name}** (${u.email})`).join('\n')}\n\nWhich one would you like to assign this task to?`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, ambMsg]);
+          setLoading(false);
+          return;
+        }
+
+        const newAction = {
+          id: 'act-' + Date.now(),
+          type: 'CREATE_TASK',
+          status: 'PENDING',
+          data: {
+            title: task.title,
+            description: task.description,
+            priority: task.priority || 'MEDIUM',
+            department_id: targetDept?.id || null,
+            assigned_to: userResolution.match?.id || null
+          },
+          preview: {
+            title: task.title,
+            priority: task.priority || 'MEDIUM',
+            departmentName: targetDept?.name || 'General',
+            assigneeName: userResolution.match?.full_name || 'Unassigned / Team Pool'
+          }
+        };
+
+        setPendingAction(newAction);
+        setLastContextItem(newAction);
+
+        const responseText = [
+          `I can create that deliverable for you.\n`,
+          `**Task:** ${task.title}`,
+          `**Priority:** ${task.priority}`,
+          `**Department:** ${targetDept?.name || 'General'}`,
+          `**Assignee:** ${userResolution.match?.full_name || 'Unassigned / Team Pool'}`,
+          `\nWould you like me to create and schedule this task?`
+        ].join('\n');
+
+        const copilotMsg = {
+          id: 'copilot-' + Date.now(),
+          sender: 'copilot',
+          text: responseText,
+          action: newAction,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setMessages(prev => [...prev, copilotMsg]);
+        setLoading(false);
+        return;
+      }
+
+      // CASE C: SEND_TO_DEPARTMENT (context-dependent)
+      if (agentAnalysis.intent === 'SEND_TO_DEPARTMENT') {
+        const resolvedDept = resolveDepartment(agentAnalysis.targetName, departments);
+        if (!resolvedDept) {
+          const notFoundMsg = {
+            id: 'copilot-' + Date.now(),
+            sender: 'copilot',
+            text: `I couldn't find a department matching "${agentAnalysis.targetName}". Available departments are: ${departments.map(d => `**${d.name}**`).join(', ')}.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, notFoundMsg]);
+          setLoading(false);
+          return;
+        }
+
+        if (!lastContextItem) {
+          const noContextMsg = {
+            id: 'copilot-' + Date.now(),
+            sender: 'copilot',
+            text: `What would you like me to send to the **${resolvedDept.name}** department? Please describe the issue or task you want to submit.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, noContextMsg]);
+          setLoading(false);
+          return;
+        }
+
+        const updatedAction = {
+          ...lastContextItem,
+          id: 'act-' + Date.now(),
+          status: 'PENDING',
+          data: {
+            ...lastContextItem.data,
+            department_id: resolvedDept.id
+          },
+          preview: {
+            ...lastContextItem.preview,
+            departmentName: resolvedDept.name
+          }
+        };
+
+        setPendingAction(updatedAction);
+        setLastContextItem(updatedAction);
+
+        const copilotMsg = {
+          id: 'copilot-' + Date.now(),
+          sender: 'copilot',
+          text: `I've prepared to send "${updatedAction.preview.title}" to the **${resolvedDept.name}** department.\n\nWould you like me to send it?`,
+          action: updatedAction,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setMessages(prev => [...prev, copilotMsg]);
+        setLoading(false);
+        return;
+      }
+
+      // CASE D: ASSIGN_TASK (context-dependent)
+      if (agentAnalysis.intent === 'ASSIGN_TASK') {
+        const userResolution = resolveUser(agentAnalysis.targetPersonName, users);
+
+        if (!userResolution.match) {
+          const notFoundMsg = {
+            id: 'copilot-' + Date.now(),
+            sender: 'copilot',
+            text: userResolution.ambiguous?.length > 1
+              ? `Multiple members matched "${agentAnalysis.targetPersonName}": ${userResolution.ambiguous.map(u => `**${u.full_name}**`).join(', ')}. Which one did you mean?`
+              : `I couldn't find a team member matching "${agentAnalysis.targetPersonName}". Please select from: ${users.slice(0, 8).map(u => u.full_name).join(', ')}.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, notFoundMsg]);
+          setLoading(false);
+          return;
+        }
+
+        if (!lastContextItem) {
+          const noContextMsg = {
+            id: 'copilot-' + Date.now(),
+            sender: 'copilot',
+            text: `What would you like me to assign to **${userResolution.match.full_name}**? Please provide the task title or issue details.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, noContextMsg]);
+          setLoading(false);
+          return;
+        }
+
+        const updatedAction = {
+          ...lastContextItem,
+          id: 'act-' + Date.now(),
+          status: 'PENDING',
+          data: {
+            ...lastContextItem.data,
+            assigned_to: userResolution.match.id
+          },
+          preview: {
+            ...lastContextItem.preview,
+            assigneeName: userResolution.match.full_name
+          }
+        };
+
+        setPendingAction(updatedAction);
+        setLastContextItem(updatedAction);
+
+        const copilotMsg = {
+          id: 'copilot-' + Date.now(),
+          sender: 'copilot',
+          text: `I've prepared to assign "${updatedAction.preview.title}" to **${userResolution.match.full_name}**.\n\nWould you like me to proceed with this assignment?`,
+          action: updatedAction,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setMessages(prev => [...prev, copilotMsg]);
+        setLoading(false);
+        return;
+      }
+
+      // CASE E: GENERAL_CHAT / INFORMATIONAL QUERY
       const history = messages.map(m => ({
         role: m.sender === 'user' ? 'user' : 'model',
         content: m.text
@@ -199,10 +589,11 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
 
       setMessages(prev => [...prev, copilotMsg]);
     } catch (err) {
+      console.error('Agent message error:', err);
       const errorMsg = {
         id: 'err-' + Date.now(),
         sender: 'copilot',
-        text: `⚠️ **AI Service Notice**: ${err.message || 'Unable to connect to Gemini API.'} Please check your API key configuration.`,
+        text: `⚠️ **AI Service Notice**: ${err.message || 'Unable to process request.'}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isError: true
       };
@@ -256,11 +647,13 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
   };
 
   const handleResetChat = () => {
+    setPendingAction(null);
+    setLastContextItem(null);
     setMessages([
       {
         id: 'welcome-reset',
         sender: 'copilot',
-        text: `Chat reset. I am ready with fresh workspace telemetry. What would you like to analyze next?`,
+        text: `Chat reset. I am ready with fresh workspace telemetry. What would you like to analyze or execute next?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
@@ -426,6 +819,16 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
                 <div className="break-words">
                   <MarkdownRenderer content={m.text} />
                 </div>
+
+                {/* Interactive Workplace Action Preview Card */}
+                {m.action && (
+                  <ActionConfirmationCard
+                    action={m.action}
+                    onConfirm={() => handleExecutePendingAction(m.action)}
+                    onCancel={() => handleCancelPendingAction(m.action)}
+                    isExecuting={executingActionId === m.action.id}
+                  />
+                )}
 
                 <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-neutral-500">
                   <span>{m.timestamp}</span>

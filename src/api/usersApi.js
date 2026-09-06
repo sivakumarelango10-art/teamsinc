@@ -1,5 +1,5 @@
-import { supabase, isDemoMode } from './supabase';
-import { getStored, setStored, STORAGE_KEYS, INITIAL_PROFILES } from './mockData';
+import { supabase, isDemoMode } from './supabase.js';
+import { getStored, setStored, STORAGE_KEYS, INITIAL_PROFILES } from './mockData.js';
 
 const FOUNDER_EMAIL = 'sivakumarelango10@gmail.com';
 

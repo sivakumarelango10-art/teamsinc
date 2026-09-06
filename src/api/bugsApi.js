@@ -1,8 +1,8 @@
-import { supabase } from './supabase';
-import { tasksApi, resolveProfileId } from './tasksApi';
-import { chatApi } from './chatApi';
-import { departmentsApi } from './departmentsApi';
-import { usersApi } from './usersApi';
+import { supabase } from './supabase.js';
+import { tasksApi, resolveProfileId } from './tasksApi.js';
+import { chatApi } from './chatApi.js';
+import { departmentsApi } from './departmentsApi.js';
+import { usersApi } from './usersApi.js';
 
 const STORAGE_BUGS_KEY = 'teamsync_bug_reports';
 

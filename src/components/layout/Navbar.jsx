@@ -51,10 +51,10 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
           <button
             type="button"
             onClick={onToggleCopilot}
-            className="px-2.5 py-1.5 rounded-xl text-neutral-200 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition flex items-center gap-2 text-xs font-bold cursor-pointer shadow-sm group"
+            className="px-2.5 py-1.5 rounded-xl text-neutral-200 hover:text-white bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 hover:border-purple-500/50 transition-all duration-250 flex items-center gap-2 text-xs font-bold cursor-pointer shadow-sm group hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] active:scale-95"
             title="Open TeamSync AI Copilot"
           >
-            <div className="w-4 h-4 rounded-full overflow-hidden shrink-0 border border-neutral-700 group-hover:border-purple-500 transition-colors">
+            <div className="w-4 h-4 rounded-full overflow-hidden shrink-0 border border-neutral-700 group-hover:border-purple-400 transition-colors duration-250">
               <img src="/ai-logo.png" alt="AI" className="w-full h-full object-cover" />
             </div>
             <span className="hidden md:inline">AI Copilot</span>
@@ -64,7 +64,7 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
         {/* Quick Team Chat Link */}
         <Link
           to="/chat"
-          className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition flex items-center gap-1.5 text-xs font-medium"
+          className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all duration-250 flex items-center gap-1.5 text-xs font-medium active:scale-95"
           title="Open Company Team Chat"
         >
           <MessageSquare className="w-4 h-4 text-white" />
@@ -74,11 +74,11 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
         {/* User Info & Avatar (Clickable to /profile) */}
         <Link
           to="/profile"
-          className="flex items-center gap-2.5 pl-2 border-l border-neutral-800 hover:opacity-85 transition cursor-pointer group"
+          className="flex items-center gap-2.5 pl-2 border-l border-neutral-800 hover:opacity-90 transition-all duration-250 cursor-pointer group active:scale-98"
           title="View My Profile"
         >
           <div className="relative">
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 border border-neutral-700 group-hover:border-neutral-500 flex items-center justify-center font-bold text-xs text-white overflow-hidden transition shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-neutral-900 border border-neutral-700 group-hover:border-neutral-500 flex items-center justify-center font-bold text-xs text-white overflow-hidden transition-all duration-250 shadow-sm group-hover:shadow-[0_0_12px_rgba(255,255,255,0.12)]">
               {profile?.avatar_url ? (
                 <img
                   src={profile.avatar_url}

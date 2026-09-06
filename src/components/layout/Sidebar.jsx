@@ -92,11 +92,11 @@ export const Sidebar = ({ isOpen, onClose }) => {
           <Link
             to="/profile"
             onClick={onClose}
-            className="block p-3.5 mx-3 my-3 rounded-2xl bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition cursor-pointer group shadow-sm"
+            className="block p-3.5 mx-3 my-3 rounded-2xl bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all duration-250 cursor-pointer group shadow-sm hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] active:scale-[0.98]"
             title="View and Edit Profile"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-700 text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 group-hover:border-neutral-500 transition shadow-inner">
+              <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-700 text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 group-hover:border-neutral-500 transition-all duration-250 shadow-inner">
                 {profile?.avatar_url ? (
                   <img
                     src={profile.avatar_url}
@@ -108,14 +108,14 @@ export const Sidebar = ({ isOpen, onClose }) => {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-white truncate group-hover:text-emerald-400 transition">
+                <p className="text-xs font-bold text-white truncate group-hover:text-emerald-400 transition-colors duration-200">
                   {profile?.full_name || 'Team Member'}
                 </p>
                 <p className="text-[11px] text-neutral-400 truncate">
                   {profile?.email}
                 </p>
               </div>
-              <ChevronRight className="w-4 h-4 text-neutral-600 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+              <ChevronRight className="w-4 h-4 text-neutral-600 group-hover:text-white group-hover:translate-x-1 transition-all duration-200 shrink-0" />
             </div>
             <div className="mt-2.5 pt-2 border-t border-neutral-800/80 flex items-center justify-between">
               <span className="text-[9px] uppercase font-bold tracking-wider text-neutral-400">
@@ -140,14 +140,14 @@ export const Sidebar = ({ isOpen, onClose }) => {
                   to={item.to}
                   onClick={onClose}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                    `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-[0.98] ${
                       isActive
-                        ? 'bg-white text-black shadow-sm font-bold'
-                        : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                        ? 'bg-white text-black shadow-md font-bold'
+                        : 'text-neutral-400 hover:text-white hover:bg-neutral-900 hover:translate-x-1'
                     }`
                   }
                 >
-                  <Icon className="w-4 h-4 shrink-0" />
+                  <Icon className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                   <span>{item.label}</span>
                 </NavLink>
               );
@@ -161,7 +161,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
             <button
               type="button"
               onClick={() => setIsReportBugModalOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-400 bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 rounded-xl transition cursor-pointer shadow-sm"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-400 bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 rounded-xl transition-all duration-200 cursor-pointer shadow-sm btn-danger-smooth"
             >
               <Bug className="w-3.5 h-3.5" />
               <span>Report a Bug</span>
@@ -170,7 +170,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
           <button
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl transition cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl transition-all duration-200 active:scale-[0.98] cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>

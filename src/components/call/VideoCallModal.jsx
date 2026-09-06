@@ -598,7 +598,7 @@ export const VideoCallModal = ({
           <button
             type="button"
             onClick={toggleAudio}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition shadow-md cursor-pointer ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-md cursor-pointer btn-icon-smooth ${
               isAudioMuted
                 ? 'bg-red-500 hover:bg-red-400 text-white'
                 : 'bg-neutral-850 hover:bg-neutral-750 text-white border border-neutral-700'
@@ -612,7 +612,7 @@ export const VideoCallModal = ({
           <button
             type="button"
             onClick={toggleVideo}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition shadow-md cursor-pointer ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-md cursor-pointer btn-icon-smooth ${
               isVideoOff
                 ? 'bg-red-500 hover:bg-red-400 text-white'
                 : 'bg-neutral-850 hover:bg-neutral-750 text-white border border-neutral-700'
@@ -626,7 +626,7 @@ export const VideoCallModal = ({
           <button
             type="button"
             onClick={toggleScreenShare}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition shadow-md cursor-pointer ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-md cursor-pointer btn-icon-smooth ${
               isScreenSharing
                 ? 'bg-emerald-500 hover:bg-emerald-400 text-black font-bold'
                 : 'bg-neutral-850 hover:bg-neutral-750 text-white border border-neutral-700'
@@ -640,7 +640,7 @@ export const VideoCallModal = ({
           <button
             type="button"
             onClick={isRecording ? handleStopRecording : handleStartRecording}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition shadow-md cursor-pointer ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-md cursor-pointer btn-icon-smooth ${
               isRecording
                 ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse ring-2 ring-red-400'
                 : 'bg-neutral-850 hover:bg-neutral-750 text-neutral-300 hover:text-white border border-neutral-700'
@@ -657,7 +657,7 @@ export const VideoCallModal = ({
               setIsReactionsOpen(prev => !prev);
               setIsEffectsMenuOpen(false);
             }}
-            className="w-11 h-11 rounded-full bg-neutral-850 hover:bg-neutral-750 text-neutral-300 hover:text-white border border-neutral-700 flex items-center justify-center transition shadow-md cursor-pointer"
+            className="w-11 h-11 rounded-full bg-neutral-850 hover:bg-neutral-750 text-neutral-300 hover:text-white border border-neutral-700 flex items-center justify-center shadow-md cursor-pointer btn-icon-smooth"
             title="Send reaction"
           >
             <Smile className="w-5 h-5" />
@@ -670,7 +670,7 @@ export const VideoCallModal = ({
               setIsEffectsMenuOpen(prev => !prev);
               setIsReactionsOpen(false);
             }}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition shadow-md cursor-pointer ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-md cursor-pointer btn-icon-smooth ${
               isEffectsMenuOpen || activeFilter !== 'none' || backgroundEffect !== 'none'
                 ? 'bg-emerald-500 text-black'
                 : 'bg-neutral-850 hover:bg-neutral-750 text-neutral-300 hover:text-white border border-neutral-700'
@@ -685,7 +685,7 @@ export const VideoCallModal = ({
             <button
               type="button"
               onClick={handleEndCallForEveryone}
-              className="px-5 h-11 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-2 transition-transform active:scale-95 shadow-xl shadow-red-950/60 cursor-pointer ml-2"
+              className="px-5 h-11 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-2 shadow-xl shadow-red-950/60 cursor-pointer ml-2 btn-danger-smooth"
               title="End call for everyone"
             >
               <PhoneOff className="w-5 h-5" />
@@ -695,7 +695,7 @@ export const VideoCallModal = ({
             <button
               type="button"
               onClick={handleLeaveOnly}
-              className="px-5 h-11 rounded-full bg-neutral-800 hover:bg-neutral-750 text-neutral-200 hover:text-white font-medium flex items-center gap-2 transition-transform active:scale-95 shadow-lg border border-neutral-700 cursor-pointer ml-2"
+              className="px-5 h-11 rounded-full bg-neutral-800 hover:bg-neutral-750 text-neutral-200 hover:text-white font-medium flex items-center gap-2 shadow-lg border border-neutral-700 cursor-pointer ml-2 btn-icon-smooth"
               title="Leave call"
             >
               <PhoneOff className="w-5 h-5 text-red-400" />

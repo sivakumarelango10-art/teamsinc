@@ -912,7 +912,7 @@ export const TeamChat = ({
             <button
               type="button"
               onClick={() => handleStartCall('video')}
-              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:border-neutral-600"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-500/50 btn-emerald-smooth"
               title="Start Group Video Call"
             >
               <Video className="w-4 h-4 text-emerald-400" />
@@ -922,7 +922,7 @@ export const TeamChat = ({
             <button
               type="button"
               onClick={() => handleStartCall('voice')}
-              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:border-neutral-600"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-500/50 btn-emerald-smooth"
               title="Start Group Voice Call"
             >
               <Phone className="w-4 h-4 text-emerald-400" />
@@ -932,7 +932,7 @@ export const TeamChat = ({
             <button
               type="button"
               onClick={() => setIsHistoryModalOpen(true)}
-              className="p-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-neutral-400 hover:text-white transition cursor-pointer shadow-sm"
+              className="p-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-neutral-400 hover:text-white cursor-pointer shadow-sm btn-icon-smooth"
               title="View Call Logs"
             >
               <Clock className="w-4 h-4" />
@@ -1220,7 +1220,7 @@ export const TeamChat = ({
                 <button
                   type="submit"
                   disabled={sending}
-                  className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 transition-all duration-150 active:scale-95 flex items-center justify-center shadow-lg cursor-pointer shrink-0"
+                  className="w-11 h-11 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-50 flex items-center justify-center shadow-lg cursor-pointer shrink-0 btn-shimmer btn-primary-smooth"
                   title="Send message"
                 >
                   <Send className="w-5 h-5" />
@@ -1233,10 +1233,10 @@ export const TeamChat = ({
                     setIsEmojiPickerOpen(false);
                     setIsRecordingVoice(true);
                   }}
-                  className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-emerald-500/60 hover:text-emerald-400 text-neutral-300 transition-all duration-150 active:scale-95 flex items-center justify-center cursor-pointer shrink-0 group shadow-md"
+                  className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-700 hover:border-emerald-500/60 hover:text-emerald-400 text-neutral-300 flex items-center justify-center cursor-pointer shrink-0 group shadow-md btn-icon-smooth"
                   title="Record voice message"
                 >
-                  <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  <Mic className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
                 </button>
               )}
             </form>

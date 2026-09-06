@@ -35,6 +35,9 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
   const { user, profile, role, isFounder, isAdmin, isFoundingAdvisor } = useAuth();
   const { onlineCount } = usePresence();
 
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isSlideActive, setIsSlideActive] = useState(false);
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([
@@ -51,13 +54,72 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Auto-scroll on new messages
+  // Ultra-smooth mount and slide coordination
+  useEffect(() => {
+    let timer;
+    let raf1, raf2;
+    if (isOpen) {
+      setShouldRender(true);
+      // Double RAF ensures the initial off-screen frame (translate-x-full & opacity-0)
+      // is rendered in the DOM before animating into open state
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          setIsSlideActive(true);
+        });
+      });
+    } else {
+      setIsSlideActive(false);
+      timer = setTimeout(() => {
+        setShouldRender(false);
+      }, 420);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+      if (raf1) cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [isOpen]);
+
+  // Handle ESC key to smoothly close Copilot
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Lock background scroll while Copilot is open
   useEffect(() => {
     if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      inputRef.current?.focus();
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
     }
-  }, [messages, isOpen]);
+  }, [isOpen]);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    if (isSlideActive) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isSlideActive]);
+
+  // Smoothly focus input without stealing frames from the slide animation
+  useEffect(() => {
+    if (isSlideActive) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [isSlideActive]);
 
   // Fetch real-time system snapshot to feed into AI
   const getSystemSnapshot = async () => {
@@ -234,36 +296,50 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
 
   const suggestions = getPromptSuggestions();
 
+  if (!shouldRender) return null;
+
   return (
     <div
-      className={`fixed inset-0 z-50 flex justify-end transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      className={`fixed inset-0 z-50 flex justify-end transition-opacity duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        isSlideActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
       }`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="TeamSync AI Copilot"
     >
-      {/* Backdrop */}
+      {/* Backdrop with smooth blur and fade */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity duration-300 ease-out ${
-          isOpen ? 'opacity-100' : 'opacity-0'
+        className={`fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isSlideActive ? 'opacity-100' : 'opacity-0'
         }`}
       />
 
       {/* Drawer Container */}
       <div
-        className={`relative w-full max-w-lg bg-neutral-950 border-l border-neutral-800 text-neutral-100 flex flex-col h-full shadow-2xl z-10 transform transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
+        className={`relative w-full max-w-lg bg-neutral-950/95 backdrop-blur-2xl border-l border-neutral-800/90 text-neutral-100 flex flex-col h-full ai-drawer-glow z-10 will-change-transform transform-gpu transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isSlideActive ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
+        {/* Animated Left Ambient Accent Laser Line */}
+        <div className="absolute top-0 left-0 bottom-0 w-[1.5px] bg-gradient-to-b from-purple-500/0 via-purple-500/70 via-indigo-500/50 to-cyan-400/0 pointer-events-none" />
+
         {/* Header */}
-        <div className="p-4 border-b border-neutral-850 flex items-center justify-between bg-black/60 backdrop-blur-md">
+        <div
+          className={`p-4 border-b border-neutral-850 flex items-center justify-between bg-black/70 backdrop-blur-md transition-all duration-500 delay-75 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            isSlideActive ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
+          }`}
+        >
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl overflow-hidden shadow-md shrink-0 border border-neutral-750 bg-black">
-              <img src="/ai-logo.png" alt="TeamSync AI" className="w-full h-full object-cover" />
+            <div className="relative w-9 h-9 rounded-xl overflow-hidden shadow-lg shrink-0 border border-neutral-750 bg-black p-0.5 group">
+              <span className="absolute -inset-0.5 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 opacity-60 blur-xs animate-pulse -z-10" />
+              <img src="/ai-logo.png" alt="TeamSync AI" className="w-full h-full object-cover rounded-lg" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <h2 className="text-sm font-bold text-white tracking-tight">TeamSync Copilot</h2>
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 font-bold uppercase">
+                <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-700/80 text-emerald-400 font-bold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                   Active
                 </span>
               </div>
@@ -273,20 +349,20 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={handleResetChat}
-              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition cursor-pointer"
+              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition-all duration-200 cursor-pointer hover:rotate-180"
               title="Reset conversation"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-3.5 h-3.5 transition-transform duration-300" />
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition cursor-pointer"
-              title="Close Copilot"
+              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95"
+              title="Close Copilot (Esc)"
             >
               <X className="w-4 h-4" />
             </button>
@@ -294,16 +370,20 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
         </div>
 
         {/* Quick Executive Briefing Bar */}
-        <div className="px-4 py-2.5 bg-neutral-900/60 border-b border-neutral-850 flex items-center justify-between gap-2">
+        <div
+          className={`px-4 py-2.5 bg-neutral-900/60 border-b border-neutral-850 flex items-center justify-between gap-2 transition-all duration-500 delay-100 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            isSlideActive ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
+          }`}
+        >
           <span className="text-[11px] text-neutral-300 flex items-center gap-1.5 font-medium">
-            <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-bounce-sm" />
             <span>Instant Workspace Intelligence</span>
           </span>
           <button
             type="button"
             onClick={handleGenerateBriefing}
             disabled={isBriefingLoading}
-            className="px-2.5 py-1 rounded-lg bg-white text-black hover:bg-neutral-200 text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+            className="px-2.5 py-1 rounded-lg bg-white text-black hover:bg-neutral-200 btn-shimmer btn-primary-smooth text-[11px] font-bold flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
           >
             {isBriefingLoading ? (
               <>
@@ -405,7 +485,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
                 key={idx}
                 onClick={() => handleSendMessage(s.prompt)}
                 disabled={loading}
-                className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 text-[11px] font-medium whitespace-nowrap transition cursor-pointer hover:border-neutral-700 disabled:opacity-50 shrink-0"
+                className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 text-[11px] font-medium whitespace-nowrap transition-all duration-200 cursor-pointer hover:border-purple-500/40 hover:text-white hover:scale-[1.02] active:scale-95 disabled:opacity-50 shrink-0"
               >
                 {s.label}
               </button>
@@ -428,12 +508,13 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Ask Copilot about tasks, departments, or system metrics...`}
             disabled={loading}
-            className="flex-1 px-3.5 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 transition"
+            className="flex-1 px-3.5 py-2.5 bg-neutral-900/90 border border-neutral-800 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-purple-500/60 focus:ring-1 focus:ring-purple-500/40 transition-all duration-200"
           />
           <button
             type="submit"
             disabled={!input.trim() || loading}
-            className="p-2.5 rounded-xl bg-white text-black hover:bg-neutral-200 disabled:opacity-40 transition font-bold cursor-pointer shadow-md"
+            className="p-2.5 rounded-xl bg-white text-black hover:bg-neutral-200 disabled:opacity-40 font-bold cursor-pointer shadow-md btn-shimmer btn-primary-smooth shrink-0"
+            title="Send prompt"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>

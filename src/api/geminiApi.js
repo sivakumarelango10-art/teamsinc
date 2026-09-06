@@ -52,14 +52,16 @@ export const getGeminiApiKey = (role = 'MEMBER') => {
 };
 
 // ─── Gemini AI Client-Side Rate Limiter & Sequential Queue ───────────────────
-// Enforces a strict sliding window (max 10 requests / 60 seconds per browser session)
+// Enforces a strict sliding window (max 14 requests / minute, max 1,000,000 tokens / minute)
 // and handles HTTP 429 / RESOURCE_EXHAUSTED with exponential backoff and jitter.
 
 export class GeminiRateLimiter {
-  constructor({ maxRequests = 10, windowMs = 60000 } = {}) {
-    this.maxRequests = maxRequests;
+  constructor({ maxRequests = 14, maxTokens = 1000000, windowMs = 60000 } = {}) {
+    this.maxRequests = maxRequests; // 14 RPM
+    this.maxTokens = maxTokens;     // 1,000,000 TPM
     this.windowMs = windowMs;
     this.requestTimestamps = [];
+    this.tokenRecords = []; // Array of { timestamp: number, tokens: number }
     this.queue = [];
     this.isProcessing = false;
     this.blockedUntil = 0; // Timestamp until which all requests must pause on 429
@@ -69,30 +71,56 @@ export class GeminiRateLimiter {
     this.requestTimestamps.push(Date.now());
   }
 
+  recordTokenUsage(tokens = 0) {
+    if (tokens > 0) {
+      this.tokenRecords.push({ timestamp: Date.now(), tokens: Number(tokens) });
+      this._cleanWindow();
+    }
+  }
+
   _cleanWindow() {
     const now = Date.now();
     const cutoff = now - this.windowMs;
     this.requestTimestamps = this.requestTimestamps.filter(t => t > cutoff);
+    this.tokenRecords = this.tokenRecords.filter(r => r.timestamp > cutoff);
   }
 
-  _getWaitTimeMs() {
+  getCurrentTokensInWindow() {
+    this._cleanWindow();
+    return this.tokenRecords.reduce((sum, r) => sum + r.tokens, 0);
+  }
+
+  _getWaitTimeMs(estimatedTokens = 0) {
     const now = Date.now();
 
-    // If active backoff is in effect
+    // If active backoff is in effect (from HTTP 429)
     if (this.blockedUntil > now) {
       return this.blockedUntil - now;
     }
 
     this._cleanWindow();
 
-    // Within sliding window capacity
-    if (this.requestTimestamps.length < this.maxRequests) {
-      return 0;
+    let waitTime = 0;
+
+    // 1. Check Requests Per Minute (RPM: 14 RPM)
+    if (this.requestTimestamps.length >= this.maxRequests) {
+      const oldestReq = this.requestTimestamps[0];
+      const reqWait = oldestReq + this.windowMs - now + 50;
+      waitTime = Math.max(waitTime, reqWait);
     }
 
-    // Delay until the oldest slot expires from the sliding window
-    const oldest = this.requestTimestamps[0];
-    const waitTime = oldest + this.windowMs - now + 50;
+    // 2. Check Tokens Per Minute (TPM: 1,000,000 TPM)
+    const currentTokens = this.tokenRecords.reduce((sum, r) => sum + r.tokens, 0);
+    if (currentTokens + estimatedTokens > this.maxTokens && this.tokenRecords.length > 0) {
+      let needed = (currentTokens + estimatedTokens) - this.maxTokens;
+      for (const record of this.tokenRecords) {
+        needed -= record.tokens;
+        const tokenWait = record.timestamp + this.windowMs - now + 50;
+        waitTime = Math.max(waitTime, tokenWait);
+        if (needed <= 0) break;
+      }
+    }
+
     return Math.max(waitTime, 0);
   }
 
@@ -109,9 +137,9 @@ export class GeminiRateLimiter {
     return delayMs;
   }
 
-  enqueue(taskFn) {
+  enqueue(taskFn, estimatedTokens = 0) {
     return new Promise((resolve, reject) => {
-      this.queue.push({ taskFn, resolve, reject, attempts: 0 });
+      this.queue.push({ taskFn, estimatedTokens, resolve, reject, attempts: 0 });
       this._processQueue();
     });
   }
@@ -121,7 +149,8 @@ export class GeminiRateLimiter {
     this.isProcessing = true;
 
     while (this.queue.length > 0) {
-      const waitTime = this._getWaitTimeMs();
+      const nextItem = this.queue[0];
+      const waitTime = this._getWaitTimeMs(nextItem?.estimatedTokens || 0);
       if (waitTime > 0) {
         await new Promise(r => setTimeout(r, waitTime));
       }
@@ -162,9 +191,12 @@ export class GeminiRateLimiter {
   getStatus() {
     this._cleanWindow();
     const now = Date.now();
+    const currentTokensInWindow = this.tokenRecords.reduce((sum, r) => sum + r.tokens, 0);
     return {
       currentRequestsInWindow: this.requestTimestamps.length,
       maxRequestsPerMinute: this.maxRequests,
+      currentTokensInWindow,
+      maxTokensPerMinute: this.maxTokens,
       queueLength: this.queue.length,
       isProcessing: this.isProcessing,
       isBlockedByBackoff: this.blockedUntil > now,
@@ -175,7 +207,8 @@ export class GeminiRateLimiter {
 }
 
 export const geminiRateLimiter = new GeminiRateLimiter({
-  maxRequests: 10,
+  maxRequests: 14,
+  maxTokens: 1000000,
   windowMs: 60000
 });
 
@@ -259,6 +292,12 @@ const _rawCallGeminiApi = async ({
 
       const data = await response.json();
       const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      // Record exact token usage reported by API or calculated fallback
+      const totalTokens = data.usageMetadata?.totalTokenCount ||
+        Math.ceil(((prompt?.length || 0) + (systemInstruction?.length || 0) + rawText.length) / 4);
+      geminiRateLimiter.recordTokenUsage(totalTokens);
+
       return rawText;
     } catch (err) {
       clearTimeout(timerId);
@@ -279,7 +318,10 @@ const _rawCallGeminiApi = async ({
 };
 
 export const callGeminiApi = (params) => {
-  return geminiRateLimiter.enqueue(() => _rawCallGeminiApi(params));
+  // Estimate tokens (~4 chars per token + 500 completion reserve) to evaluate against TPM quota
+  const promptLen = (params?.prompt?.length || 0) + (params?.systemInstruction?.length || 0);
+  const estimatedTokens = Math.max(100, Math.ceil(promptLen / 4) + 500);
+  return geminiRateLimiter.enqueue(() => _rawCallGeminiApi(params), estimatedTokens);
 };
 
 export const geminiApi = {

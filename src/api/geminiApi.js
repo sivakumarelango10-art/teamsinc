@@ -185,7 +185,7 @@ const _rawCallGeminiApi = async ({
   role = 'MEMBER',
   temperature = 0.4,
   responseJson = false,
-  timeoutMs = 7000
+  timeoutMs = 9000
 }) => {
   const apiKey = getGeminiApiKey(role);
   if (!apiKey) {
@@ -193,14 +193,16 @@ const _rawCallGeminiApi = async ({
   }
 
   // High-performance model cascade:
-  // 1. gemini-3.5-flash-lite: Ultra-fast sub-second to 1.8s response time
-  // 2. gemini-flash-lite-latest: High-speed production model (~1.5s)
-  // 3. gemini-3.5-flash: Powerful balanced model (~1.7s-4s)
-  // 4. gemini-3.6-flash: Robust high-reasoning fallback
+  // 1. gemini-3.8-flash: State-of-the-art multimodal reasoning with high execution velocity
+  // 2. gemini-flash-lite-latest: High-speed production model (~800ms fallback)
+  // 3. gemini-3.5-flash-lite: Ultra-fast sub-second fallback
+  // 4. gemini-3.7-flash: Advanced hybrid reasoning model
+  // 5. gemini-3.6-flash: Robust high-reasoning fallback
   const models = [
-    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
     'gemini-flash-lite-latest',
-    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.7-flash',
     'gemini-3.6-flash'
   ];
   let lastError = null;
@@ -567,11 +569,11 @@ Return STRICT JSON format:
     // Benchmark top active models
     const testKey = getGeminiApiKey('ADMIN') || getGeminiApiKey('FOUNDER');
     if (testKey) {
-      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.5-flash'];
+      const candidateModels = ['gemini-3.8-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite'];
       for (const model of candidateModels) {
         const start = Date.now();
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 4000);
+        const timer = setTimeout(() => controller.abort(), 6000);
         try {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${testKey}`, {
             method: 'POST',

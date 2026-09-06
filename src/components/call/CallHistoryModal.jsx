@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Phone, Video, Users, Calendar, Clock, Loader2, ArrowUpRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { callApi } from '../../api/callApi';
@@ -51,8 +52,13 @@ export const CallHistoryModal = ({ roomId = 'general', isOpen, onClose }) => {
     return true;
   });
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="w-full max-w-xl bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh] modal-enter">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/60">
@@ -182,7 +188,8 @@ export const CallHistoryModal = ({ roomId = 'general', isOpen, onClose }) => {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

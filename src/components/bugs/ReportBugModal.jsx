@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Bug,
@@ -106,8 +107,13 @@ export const ReportBugModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="w-full max-w-lg bg-neutral-950 border border-neutral-800 rounded-3xl shadow-2xl p-6 relative overflow-hidden flex flex-col max-h-[90vh] modal-enter">
         {/* Top accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-amber-500 to-red-600" />
@@ -300,7 +306,8 @@ export const ReportBugModal = ({ isOpen, onClose, onSuccess }) => {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

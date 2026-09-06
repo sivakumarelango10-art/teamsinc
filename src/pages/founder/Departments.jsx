@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { departmentsApi } from '../../api/departmentsApi';
 import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import { Building2, Plus, Edit2, Trash2, X, AlertCircle, UserPlus, Users, UserMinus, Bot } from 'lucide-react';
@@ -295,9 +296,14 @@ export const Departments = () => {
       )}
 
       {/* Create / Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-neutral-950 border border-neutral-800 rounded-3xl shadow-2xl p-6 relative">
+      {isModalOpen && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md bg-neutral-950 border border-neutral-800 rounded-3xl shadow-2xl p-6 relative modal-enter">
             <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-5 right-5 text-neutral-400 hover:text-white transition cursor-pointer"
@@ -362,7 +368,8 @@ export const Departments = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Department Members Management Modal */}

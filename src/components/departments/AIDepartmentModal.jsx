@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bot,
   X,
@@ -21,6 +22,16 @@ export const AIDepartmentModal = ({ isOpen, onClose, currentDepartments = [], on
   const [error, setError] = useState('');
   const [savingIds, setSavingIds] = useState(new Set());
   const [createdCount, setCreatedCount] = useState(0);
+
+  // Close modal on ESC key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -97,9 +108,14 @@ export const AIDepartmentModal = ({ isOpen, onClose, currentDepartments = [], on
     'Product Design, UX Research & Quality Assurance'
   ];
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-neutral-950 border border-neutral-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-neutral-950 border border-neutral-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] modal-enter">
         {/* Header */}
         <div className="p-6 border-b border-neutral-850 flex items-center justify-between bg-black/40">
           <div className="flex items-center gap-3">
@@ -273,7 +289,8 @@ export const AIDepartmentModal = ({ isOpen, onClose, currentDepartments = [], on
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { departmentsApi } from '../../api/departmentsApi';
 import { usersApi } from '../../api/usersApi';
 import { X, Search, Check, Users, Shield, Building2, Loader2, Info } from 'lucide-react';
@@ -78,9 +79,14 @@ export const DepartmentMembersModal = ({ department, onClose, onUpdated }) => {
     return nameMatch || emailMatch || roleMatch;
   });
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-neutral-950 border border-neutral-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-neutral-950 border border-neutral-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] modal-enter">
         {/* Header */}
         <div className="p-6 border-b border-neutral-850 flex items-center justify-between bg-black/40">
           <div className="flex items-center gap-3">
@@ -268,7 +274,8 @@ export const DepartmentMembersModal = ({ department, onClose, onUpdated }) => {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

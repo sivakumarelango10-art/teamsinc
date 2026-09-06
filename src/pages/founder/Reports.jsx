@@ -17,8 +17,8 @@ import { departmentsApi } from '../../api/departmentsApi';
 import { planningApi } from '../../api/planningApi';
 import { supabase } from '../../api/supabase';
 import { useRealtime } from '../../hooks/useRealtime';
-import { BarChart3, CheckCircle2, Clock, Users, Building2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { BarChart3, CheckCircle2, Clock, Users, Building2, AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { format, isPast, parseISO } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StatCard from '../../components/common/StatCard';
 
@@ -97,6 +97,31 @@ export const Reports = () => {
     name: d.name,
     allocatedMembers: todayAssignments.filter(a => a.department_id === d.id).length
   }));
+
+  // 5. Department Breakdown Metrics Table Data
+  const departmentTableData = departments.map(d => {
+    const deptTasks = tasks.filter(t => t.department_id === d.id);
+    const completed = deptTasks.filter(t => t.status === 'COMPLETED').length;
+    const inProgress = deptTasks.filter(t => t.status === 'IN_PROGRESS').length;
+    const todo = deptTasks.filter(t => t.status === 'TODO').length;
+    const rate = deptTasks.length > 0 ? Math.round((completed / deptTasks.length) * 100) : 0;
+    const headcount = todayAssignments.filter(a => a.department_id === d.id).length;
+    const overdue = deptTasks.filter(
+      t => t.deadline && isPast(parseISO(t.deadline)) && t.status !== 'COMPLETED'
+    ).length;
+
+    return {
+      id: d.id,
+      name: d.name,
+      headcount,
+      totalTasks: deptTasks.length,
+      inProgress,
+      completed,
+      todo,
+      rate,
+      overdue
+    };
+  });
 
   return (
     <div className="space-y-8">
@@ -224,6 +249,97 @@ export const Reports = () => {
               </PieChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </div>
+
+      {/* Operational Breakdown Table */}
+      <div className="bg-neutral-950 p-6 rounded-2xl border border-neutral-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-purple-400" />
+              <span>Department Operational Breakdown</span>
+            </h3>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              Granular status metrics, workforce density, and completion velocity across all departments
+            </p>
+          </div>
+          <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-900 px-2.5 py-1 rounded-lg border border-neutral-800 w-fit">
+            {departments.length} Active Departments
+          </span>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-neutral-800">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead className="bg-neutral-900/90 text-neutral-300 font-semibold border-b border-neutral-800">
+              <tr>
+                <th className="px-4 py-3">Department</th>
+                <th className="px-4 py-3 text-center">Staffed Today</th>
+                <th className="px-4 py-3 text-center">Total Tasks</th>
+                <th className="px-4 py-3 text-center">In Progress</th>
+                <th className="px-4 py-3 text-center">Completed</th>
+                <th className="px-4 py-3">Completion Rate</th>
+                <th className="px-4 py-3 text-right">Risk Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-800/80 text-neutral-200">
+              {departmentTableData.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-6 text-center text-neutral-500">
+                    No department data available.
+                  </td>
+                </tr>
+              ) : (
+                departmentTableData.map((dept) => (
+                  <tr key={dept.id} className="hover:bg-neutral-900/40 transition-colors">
+                    <td className="px-4 py-3 font-medium text-white">
+                      {dept.name}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-800 text-neutral-200 border border-neutral-700">
+                        {dept.headcount}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center font-mono">
+                      {dept.totalTasks}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-amber-400 font-medium font-mono">{dept.inProgress}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-emerald-400 font-medium font-mono">{dept.completed}</span>
+                    </td>
+                    <td className="px-4 py-3 min-w-[140px]">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-white rounded-full transition-all duration-300"
+                            style={{ width: `${dept.rate}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] font-semibold text-neutral-300 w-8 text-right font-mono">
+                          {dept.rate}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {dept.overdue > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-400 bg-red-950/40 border border-red-800/60 px-2 py-0.5 rounded-md">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>{dept.overdue} Overdue</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/30 border border-emerald-800/40 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>On Track</span>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

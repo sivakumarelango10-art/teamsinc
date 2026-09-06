@@ -46,7 +46,8 @@ export const VideoCallModal = ({
   roomTitle = 'TeamSync Company HQ',
   isAudioOnly = false,
   onLeaveCall,
-  onEndCall
+  onEndCall,
+  onHostEndedCall
 }) => {
   const [activeDrawer, setActiveDrawer] = useState(null); // 'chat' | 'files' | 'participants' | 'effects' | null
   const [isEffectsMenuOpen, setIsEffectsMenuOpen] = useState(false);
@@ -63,6 +64,17 @@ export const VideoCallModal = ({
   const recordingTimerRef = useRef(null);
 
   const containerRef = useRef(null);
+
+  // Check if current user is the host/caller who started the call session
+  const myEmail = (currentUser?.email || '')?.toLowerCase().trim();
+  const hostEmail = (callSession?.caller_email || '')?.toLowerCase().trim();
+  const myId = currentUser?.id;
+  const hostId = callSession?.caller_id;
+
+  const isHost = Boolean(
+    (hostEmail && myEmail && hostEmail === myEmail) ||
+    (hostId && myId && hostId === myId)
+  );
 
   // WebRTC Engine
   const {
@@ -93,17 +105,16 @@ export const VideoCallModal = ({
     roomId,
     currentUser,
     isAudioOnlyInitial: isAudioOnly,
+    hostEmail: callSession?.caller_email,
+    hostId: callSession?.caller_id,
     onCallEndedByHost: () => {
-      if (onLeaveCall) onLeaveCall();
+      if (onHostEndedCall) {
+        onHostEndedCall();
+      } else if (onLeaveCall) {
+        onLeaveCall();
+      }
     }
   });
-
-  // Check if current user is the host/caller who started the call session
-  const isHost = Boolean(
-    callSession?.caller_email &&
-    currentUser?.email &&
-    callSession.caller_email.toLowerCase() === currentUser.email.toLowerCase()
-  );
 
   // Call Duration Timer
   useEffect(() => {
@@ -219,6 +230,9 @@ export const VideoCallModal = ({
       }))
     ];
 
+    // Wait a brief 120ms tick to ensure the WebRTC and BroadcastChannel packets flush out over the network
+    await new Promise(r => setTimeout(r, 120));
+
     if (onEndCall) {
       await onEndCall(callSession?.id, {
         duration: callDuration,
@@ -228,7 +242,8 @@ export const VideoCallModal = ({
       try {
         await callApi.endCallSession(callSession?.id, {
           duration: callDuration,
-          participants: allParticipants
+          participants: allParticipants,
+          roomId
         });
       } catch (e) {
         console.warn('Error ending call session record:', e);
@@ -284,6 +299,10 @@ export const VideoCallModal = ({
               </span>
               <span>•</span>
               <span>{totalInCall} participant{totalInCall > 1 ? 's' : ''}</span>
+              <span>•</span>
+              <span className="text-amber-400/90 font-medium">
+                Host: {isHost ? 'You' : (callSession?.caller_name || 'Organizer')}
+              </span>
             </div>
           </div>
         </div>

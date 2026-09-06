@@ -291,6 +291,11 @@ export const TeamChat = ({
 
   const handleStartCall = async (callType = 'video') => {
     try {
+      // If a call is already active in this room, join the existing session
+      if (ongoingCall && ongoingCall.room_id === activeChannel && ongoingCall.status === 'ongoing') {
+        acceptCall(ongoingCall);
+        return;
+      }
       const channelTitle = activeChannel === 'leadership' ? 'Leadership Council' : (initialTitle || 'Team Chat');
       await startCall(callType, activeChannel, channelTitle);
     } catch (err) {

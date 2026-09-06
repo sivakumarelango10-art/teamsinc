@@ -9,6 +9,7 @@ import {
 import { format, parseISO, isToday, isYesterday, isThisYear } from 'date-fns';
 import VoiceNotePlayer from './VoiceNotePlayer';
 import WhatsAppCheck from './WhatsAppCheck';
+import MarkdownRenderer from '../common/MarkdownRenderer';
 
 const formatMessageTime = (isoString) => {
   if (!isoString) return '';
@@ -284,7 +285,7 @@ const ChatMessageItemComponent = ({
           {/* Text Message Content + Inline WhatsApp Timestamp */}
           {msg.content && msg.content !== 'Voice message' ? (
             <div className="text-[13px] text-neutral-100 leading-snug break-words">
-              <span>{msg.content}</span>
+              <MarkdownRenderer content={msg.content} className="inline-block" />
               <span
                 title={formatMessageFullDate(msg.created_at)}
                 className="inline-flex items-center gap-1 ml-2 float-right mt-0.5 text-[10px] text-neutral-400 select-none cursor-default"

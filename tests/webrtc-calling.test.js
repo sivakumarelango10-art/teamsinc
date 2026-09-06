@@ -227,4 +227,77 @@ describe('TeamSync WebRTC & Real-Time Call System Regression Tests', () => {
       assert.strictEqual(shouldTerminateSession({ roomId: 'leadership', callId: 'other-id' }), false);
     });
   });
+
+  describe('8. Host Identification, Host Departure, and Session Safety', () => {
+    function computeIsHost(currentUser, callSession) {
+      const myEmail = (currentUser?.email || '').trim().toLowerCase();
+      const myId = String(currentUser?.id || '');
+      const hostEmail = (callSession?.caller_email || '').trim().toLowerCase();
+      const hostId = String(callSession?.caller_id || '');
+
+      return Boolean(
+        (hostEmail && myEmail === hostEmail) ||
+        (hostId && myId === hostId) ||
+        (!callSession?.caller_email && !callSession?.caller_id)
+      );
+    }
+
+    it('Correctly designates the caller as Host using email or user id', () => {
+      const hostUser = { id: 'usr-100', email: 'Alice@TeamSync.io', full_name: 'Alice Host' };
+      const participantUser = { id: 'usr-200', email: 'bob@teamsync.io', full_name: 'Bob Participant' };
+      const session = {
+        id: '11111111-2222-3333-4444-555555555555',
+        caller_id: 'usr-100',
+        caller_email: 'alice@teamsync.io',
+        room_id: 'general'
+      };
+
+      assert.strictEqual(computeIsHost(hostUser, session), true, 'Host must be recognized as host');
+      assert.strictEqual(computeIsHost(participantUser, session), false, 'Participant must not be recognized as host');
+    });
+
+    it('Dispatches host termination when host disconnects or leaves room (USER_LEFT)', () => {
+      const hostEmail = 'alice@teamsync.io';
+      const hostId = 'usr-100';
+
+      function checkHostDeparture(leavingUser) {
+        const leavingEmail = (leavingUser?.email || '').trim().toLowerCase();
+        const leavingId = String(leavingUser?.id || '');
+        const isLeavingUserHost = Boolean(
+          (hostEmail && leavingEmail === hostEmail) ||
+          (hostId && leavingId === hostId)
+        );
+        return isLeavingUserHost;
+      }
+
+      // 1. Host departs -> should trigger full termination
+      assert.strictEqual(checkHostDeparture({ id: 'usr-100', email: 'alice@teamsync.io' }), true);
+      // 2. Regular participant departs -> should NOT trigger full termination
+      assert.strictEqual(checkHostDeparture({ id: 'usr-200', email: 'bob@teamsync.io' }), false);
+    });
+
+    it('Redirects to join ongoing call if room already has an ongoing session', () => {
+      const ongoingCall = {
+        id: 'session-active-1',
+        room_id: 'general',
+        status: 'ongoing',
+        caller_name: 'Alice'
+      };
+
+      let actionTaken = '';
+      function handleStartCall(channel, ongoing) {
+        if (ongoing && ongoing.room_id === channel && ongoing.status === 'ongoing') {
+          actionTaken = 'JOIN_EXISTING';
+          return;
+        }
+        actionTaken = 'CREATE_NEW';
+      }
+
+      handleStartCall('general', ongoingCall);
+      assert.strictEqual(actionTaken, 'JOIN_EXISTING', 'Must join existing call to avoid duplicate session');
+
+      handleStartCall('leadership', ongoingCall);
+      assert.strictEqual(actionTaken, 'CREATE_NEW', 'Must create new session if different room');
+    });
+  });
 });

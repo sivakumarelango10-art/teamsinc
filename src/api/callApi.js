@@ -100,8 +100,9 @@ export const callApi = {
             .from('call_history')
             .update(updateData)
             .eq('id', callId);
-        } else if (roomId) {
-          // If callId is not a valid UUID, close any ongoing call in that room
+        }
+        if (roomId) {
+          // Also close any ongoing call in that room to guarantee no orphan calls remain
           await supabase
             .from('call_history')
             .update(updateData)

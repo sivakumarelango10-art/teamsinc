@@ -37,7 +37,14 @@ const RTC_CONFIG = {
   iceCandidatePoolSize: 10
 };
 
-export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial = false, onCallEndedByHost }) => {
+export const useWebRTC = ({
+  roomId = 'general',
+  currentUser,
+  isAudioOnlyInitial = false,
+  onCallEndedByHost,
+  hostEmail,
+  hostId
+}) => {
   const [localStream, setLocalStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
   const [peers, setPeers] = useState({}); // { [peerId]: { id, name, email, role, stream, isAudioMuted, isVideoOff, isScreenSharing, isSpeaking } }
@@ -66,6 +73,10 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
   currentUserRef.current = currentUser;
   const onCallEndedByHostRef = useRef(onCallEndedByHost);
   onCallEndedByHostRef.current = onCallEndedByHost;
+  const hostEmailRef = useRef(hostEmail);
+  hostEmailRef.current = hostEmail;
+  const hostIdRef = useRef(hostId);
+  hostIdRef.current = hostId;
 
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
@@ -501,6 +512,19 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
           return next;
         });
 
+        // If the peer who left was the host who started the call, terminate call for all participants
+        const isLeavingUserHost = Boolean(
+          (hostEmailRef.current && senderUser?.email && hostEmailRef.current.toLowerCase() === senderUser.email.toLowerCase()) ||
+          (hostIdRef.current && senderUser?.id && hostIdRef.current === senderUser.id)
+        );
+
+        if (isLeavingUserHost) {
+          console.log('[WebRTC] Host left the room. Ending call for all participants.');
+          if (onCallEndedByHostRef.current) {
+            onCallEndedByHostRef.current(data);
+          }
+        }
+
       } else if (type === 'REACTION') {
         const newReaction = {
           id: 'rx-' + Date.now() + '-' + Math.random(),
@@ -517,8 +541,9 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
         setInCallFiles(prev => [...prev, data.file]);
 
       } else if (type === 'CALL_ENDED_BY_HOST') {
+        console.log('[WebRTC] Call ended by host signal received. Terminating session for all peers.');
         if (onCallEndedByHostRef.current) {
-          onCallEndedByHostRef.current();
+          onCallEndedByHostRef.current(data);
         }
       }
     } catch (err) {
@@ -1008,9 +1033,12 @@ export const useWebRTC = ({ roomId = 'general', currentUser, isAudioOnlyInitial 
   // Broadcast call ended by host to all peers
   const sendCallEnded = useCallback(() => {
     sendSignal({
-      type: 'CALL_ENDED_BY_HOST'
+      type: 'CALL_ENDED_BY_HOST',
+      roomId,
+      hostEmail: hostEmailRef.current || currentUserRef.current?.email || '',
+      hostId: hostIdRef.current || currentUserRef.current?.id || ''
     });
-  }, [sendSignal]);
+  }, [sendSignal, roomId]);
 
   return {
     localStream,

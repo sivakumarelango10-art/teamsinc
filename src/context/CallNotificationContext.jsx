@@ -22,7 +22,12 @@ export const CallNotificationProvider = ({ children }) => {
   const isChannelSubscribedRef = useRef(false);
   const pendingBroadcastsRef = useRef([]);
 
-  const currentUser = profile || user;
+  const currentUser = {
+    id: profile?.id || user?.id || 'local-user',
+    email: (profile?.email || user?.email || '').toLowerCase().trim(),
+    full_name: profile?.full_name || user?.user_metadata?.full_name || profile?.email?.split('@')[0] || user?.email?.split('@')[0] || 'Team Member',
+    role: profile?.role || 'MEMBER'
+  };
   incomingCallRef.current = incomingCall;
   activeCallSessionRef.current = activeCallSession;
 
@@ -221,20 +226,25 @@ export const CallNotificationProvider = ({ children }) => {
   const startCall = async (callType = 'video', roomId = 'general', roomTitle = 'TeamSync Company HQ') => {
     // Generate canonical UUID for call session
     const callId = generateCallId();
+    const callerId = currentUser.id;
+    const callerEmail = currentUser.email;
+    const callerName = currentUser.full_name;
+
     const sessionData = {
       id: callId,
       room_id: roomId,
       room_title: roomTitle,
       call_type: callType,
-      caller_name: currentUser?.full_name || currentUser?.name || 'Team Member',
-      caller_email: currentUser?.email || '',
+      caller_id: callerId,
+      caller_name: callerName,
+      caller_email: callerEmail,
       started_at: new Date().toISOString(),
       status: 'ongoing',
       participants: [{
-        id: currentUser?.id || 'local-user',
-        name: currentUser?.full_name || currentUser?.name || 'Team Member',
-        email: currentUser?.email || '',
-        role: currentUser?.role || 'MEMBER',
+        id: callerId,
+        name: callerName,
+        email: callerEmail,
+        role: currentUser.role,
         joined_at: new Date().toISOString()
       }]
     };
@@ -269,6 +279,13 @@ export const CallNotificationProvider = ({ children }) => {
   const leaveCall = () => {
     // Participant leaving only their local view
     setActiveCallSession(null);
+    clearIncomingRing();
+  };
+
+  const handleHostEndedCall = () => {
+    // When the host ends the call, terminate session and clear ongoing state for all participants
+    setActiveCallSession(null);
+    setOngoingCall(null);
     clearIncomingRing();
   };
 
@@ -375,6 +392,7 @@ export const CallNotificationProvider = ({ children }) => {
             isAudioOnly={activeCallSession.call_type === 'voice'}
             onLeaveCall={leaveCall}
             onEndCall={endCall}
+            onHostEndedCall={handleHostEndedCall}
           />
         </React.Suspense>
       )}

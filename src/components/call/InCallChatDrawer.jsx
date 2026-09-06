@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, MessageSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import MarkdownRenderer from '../common/MarkdownRenderer';
 
 export const InCallChatDrawer = ({ messages = [], onSendMessage, onClose, currentUserId }) => {
   const [text, setText] = useState('');
@@ -67,13 +68,13 @@ export const InCallChatDrawer = ({ messages = [], onSendMessage, onClose, curren
                   <span>{formatTime(m.createdAt)}</span>
                 </div>
                 <div
-                  className={`p-2.5 rounded-2xl max-w-[90%] break-words whitespace-pre-wrap ${
+                  className={`p-2.5 rounded-2xl max-w-[90%] break-words ${
                     isSelf
                       ? 'bg-emerald-600/20 border border-emerald-500/40 text-white rounded-tr-none'
                       : 'bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-tl-none'
                   }`}
                 >
-                  {m.text}
+                  <MarkdownRenderer content={m.text} />
                 </div>
               </div>
             );

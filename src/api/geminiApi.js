@@ -537,13 +537,14 @@ RESPONSE GUIDELINES:
   // ─── 4. Daily Morning Executive Briefing ──────────────────────────────────
   async generateDailyBriefing({ role = 'FOUNDER', userName = 'Leader', systemSnapshot = {} }) {
     const systemInstruction = `You are the TeamSync Executive AI Briefing Engine.
-Create a sharp, 3-section daily morning briefing for ${userName} (${role}).
-Format in markdown:
+Create a sharp, comprehensive executive daily briefing report for ${userName} (${role}).
+Format with rich GitHub markdown:
 1. 🎯 **Today's Strategic Focus** (Top 2-3 priorities today)
-2. ⚡ **Operational Pulse & Allocation** (Workforce deployment & key deadlines)
-3. ⚠️ **Immediate Attention Items** (Critical bugs, overdue tasks, or unassigned members)
+2. 📊 **Operational Metrics Summary Table** (Always include a clean Markdown table with columns: Department | Staffed Headcount | Active Tasks | Completion Rate)
+3. ⚡ **Workforce Deployment & Key Deliverables**
+4. ⚠️ **Immediate Attention Items** (Critical bugs, overdue tasks, or bottleneck risks)
 
-Keep it under 180 words. Be motivating, precise, and highly professional.`;
+Be motivating, analytical, precise, and highly professional. Ensure Markdown tables and bold headings are properly formatted.`;
 
     const userPrompt = `Generate today's daily briefing based on current workspace telemetry:
 ${JSON.stringify(systemSnapshot, null, 2)}`;

@@ -30,6 +30,7 @@ import { departmentsApi } from '../../api/departmentsApi';
 import { planningApi } from '../../api/planningApi';
 import { bugsApi } from '../../api/bugsApi';
 import { format, isPast, parseISO } from 'date-fns';
+import MarkdownRenderer from '../common/MarkdownRenderer';
 
 export const AICopilotDrawer = ({ isOpen, onClose }) => {
   const { user, profile, role, isFounder, isAdmin, isFoundingAdvisor } = useAuth();
@@ -413,7 +414,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
               )}
 
               <div
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs relative group ${
+                className={`max-w-[92%] sm:max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs relative group ${
                   m.sender === 'user'
                     ? 'bg-neutral-900 text-white border border-neutral-750 rounded-br-xs'
                     : m.isError
@@ -421,9 +422,9 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
                     : 'bg-neutral-900/70 border border-neutral-800/80 text-neutral-200 rounded-bl-xs leading-relaxed shadow-sm'
                 }`}
               >
-                {/* Markdown text rendering */}
-                <div className="whitespace-pre-wrap break-words prose prose-invert prose-xs max-w-none">
-                  {m.text}
+                {/* Markdown text & table rendering */}
+                <div className="break-words">
+                  <MarkdownRenderer content={m.text} />
                 </div>
 
                 <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-neutral-500">

@@ -31,28 +31,17 @@ app.use((req, res, next) => {
 // 3. Health Check Endpoints (GET /health & GET /api/health)
 const handleHealth = async (req, res) => {
   let dbStatus = 'ok';
-  let dbError = null;
-  let poolHost = null;
   try {
-    const { pool, query } = await import('./db.js');
-    poolHost = pool.options?.host || pool.options?.connectionString?.replace(/:[^:@]+@/, ':***@');
+    const { query } = await import('./db.js');
     await query('SELECT 1 as alive');
-  } catch (err) {
-    dbStatus = 'error';
-    dbError = err.message;
+  } catch {
+    dbStatus = 'degraded';
   }
 
   res.status(200).json({
     status: dbStatus === 'ok' ? 'ok' : 'degraded',
     service: 'TeamSync API Engine',
-    database: {
-      status: dbStatus,
-      error: dbError,
-      target: poolHost ? poolHost.split('@')[1] || poolHost : null,
-      envDirectSet: !!process.env.DIRECT_URL,
-      envDbSet: !!process.env.DATABASE_URL
-    },
-    version: '1.0.4',
+    database: dbStatus,
     timestamp: new Date().toISOString()
   });
 };
@@ -75,13 +64,16 @@ app.use('/api', (req, res) => {
 // 6. Global Error Handler
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
+  const isProd = process.env.NODE_ENV === 'production';
 
   // Safe logging: never log sensitive headers or passwords
   console.error(`[API Error] ${req.method} ${req.path} - ${statusCode}:`, err.message);
 
   res.status(statusCode).json({
     success: false,
-    error: err.message || 'An unexpected server error occurred.'
+    error: statusCode === 500 && isProd
+      ? 'An unexpected server error occurred.'
+      : err.message || 'Internal Server Error'
   });
 });
 

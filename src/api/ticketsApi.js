@@ -122,35 +122,49 @@ export const ticketsApi = {
   /**
    * 2. Get single ticket with comments, activities, and attachments
    */
-  async getTicket(ticketNumber) {
+  async getTicket(ticketNumber, signal = null) {
     try {
-      const res = await fetch(`${API_BASE}/tickets/${encodeURIComponent(ticketNumber)}`, {
-        headers: defaultHeaders
-      });
+      const fetchOpts = { headers: defaultHeaders };
+      if (signal) fetchOpts.signal = signal;
+      const res = await fetch(`${API_BASE}/tickets/${encodeURIComponent(ticketNumber)}`, fetchOpts);
       if (res.ok) {
         const data = await res.json();
         return data.ticket;
       }
     } catch (err) {
+      if (err.name === 'AbortError') throw err;
       console.warn('API getTicket note, falling back to Supabase:', err);
     }
 
     if (supabase) {
-      const { data: ticket, error } = await supabase
+      let queryBuilder = supabase
         .from('tickets')
         .select(`
           *,
           assignee:profiles!tickets_assigned_to_fkey(id, full_name, email, role)
         `)
-        .eq('ticket_number', ticketNumber)
-        .single();
+        .eq('ticket_number', ticketNumber);
+
+      if (signal) queryBuilder = queryBuilder.abortSignal(signal);
+
+      const { data: ticket, error } = await queryBuilder.single();
 
       if (error || !ticket) return null;
 
+      let commentsQuery = supabase.from('ticket_comments').select('*').eq('ticket_id', ticket.id).order('created_at', { ascending: true });
+      let activitiesQuery = supabase.from('ticket_activities').select('*').eq('ticket_id', ticket.id).order('created_at', { ascending: false }).limit(50);
+      let attachmentsQuery = supabase.from('ticket_attachments').select('*').eq('ticket_id', ticket.id).order('created_at', { ascending: true });
+
+      if (signal) {
+        commentsQuery = commentsQuery.abortSignal(signal);
+        activitiesQuery = activitiesQuery.abortSignal(signal);
+        attachmentsQuery = attachmentsQuery.abortSignal(signal);
+      }
+
       const [commentsRes, activitiesRes, attachmentsRes] = await Promise.all([
-        supabase.from('ticket_comments').select('*').eq('ticket_id', ticket.id).order('created_at', { ascending: true }),
-        supabase.from('ticket_activities').select('*').eq('ticket_id', ticket.id).order('created_at', { ascending: true }),
-        supabase.from('ticket_attachments').select('*').eq('ticket_id', ticket.id).order('created_at', { ascending: true })
+        commentsQuery,
+        activitiesQuery,
+        attachmentsQuery
       ]);
 
       return {

@@ -186,8 +186,13 @@ export const KalviLearnHub = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-950/60 border border-indigo-800/80 flex items-center justify-center text-indigo-400 shadow-inner">
-              <Layers className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-white overflow-hidden p-1 flex items-center justify-center shadow-md shrink-0 border border-neutral-700">
+              <img
+                src="/kalvium-logo.png"
+                alt="Kalvium"
+                className="w-full h-full object-contain"
+                loading="eager"
+              />
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight">
               KalviLearn Integration Hub
@@ -467,6 +472,7 @@ export const KalviLearnHub = () => {
       {activeTicketNumber && (
         <TicketDetailModal
           ticketNumber={activeTicketNumber}
+          initialTicket={tickets.find(t => t.ticketNumber === activeTicketNumber) || null}
           isOpen={!!activeTicketNumber}
           onClose={() => setActiveTicketNumber(null)}
           onUpdate={() => {

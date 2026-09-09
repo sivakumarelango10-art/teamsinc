@@ -186,23 +186,45 @@ export async function createTicket(data, idempotencyKey = null) {
     ) VALUES ($1, 'TICKET_CREATED', NULL, 'OPEN', 'KalviLearn System')
   `, [newRow.id]);
 
-  // 5. Insert Attachments if provided
-  if (Array.isArray(data.attachments) && data.attachments.length > 0) {
-    for (const att of data.attachments) {
-      if (att.fileUrl && att.fileName) {
+  // 5. Insert Attachments if provided (supports array, single object, or metadata URL)
+  try {
+    const rawAttachments = [];
+    if (Array.isArray(data.attachments) && data.attachments.length > 0) {
+      rawAttachments.push(...data.attachments);
+    } else if (data.attachment && typeof data.attachment === 'object') {
+      rawAttachments.push(data.attachment);
+    } else if (data.attachmentUrl && typeof data.attachmentUrl === 'string' && data.attachmentUrl.trim()) {
+      rawAttachments.push({
+        fileName: data.attachmentFileName || 'attachment.png',
+        fileUrl: data.attachmentUrl.trim(),
+        fileType: data.attachmentFileType || 'image/png',
+        fileSize: Number(data.attachmentFileSize) || 0
+      });
+    } else if (data.metadata?.attachmentUrl && typeof data.metadata.attachmentUrl === 'string' && data.metadata.attachmentUrl.startsWith('http')) {
+      rawAttachments.push({
+        fileName: 'attachment.png',
+        fileUrl: data.metadata.attachmentUrl.trim(),
+        fileType: 'image/png',
+        fileSize: 0
+      });
+    }
+
+    for (const att of rawAttachments) {
+      const fileUrl = att.fileUrl || att.url || att.dataUrl;
+      const fileName = att.fileName || att.name || 'attachment.png';
+      const fileType = att.fileType || att.type || (fileUrl?.startsWith('data:image/') ? fileUrl.substring(5, fileUrl.indexOf(';')) : 'image/png');
+      const fileSize = Number(att.fileSize || att.size || 0);
+
+      if (fileUrl && fileName) {
         await query(`
           INSERT INTO public.ticket_attachments (
             ticket_id, file_name, file_url, file_type, file_size
           ) VALUES ($1, $2, $3, $4, $5)
-        `, [
-          newRow.id,
-          att.fileName,
-          att.fileUrl,
-          att.fileType || 'image/png',
-          att.fileSize || 0
-        ]);
+        `, [newRow.id, fileName, fileUrl, fileType, fileSize]);
       }
     }
+  } catch (attErr) {
+    console.warn('[TicketService] Non-fatal attachment ingestion warning:', attErr.message);
   }
 
   const formatted = formatTicketResponse(newRow);
@@ -268,7 +290,8 @@ export async function getTicketByNumber(identifier) {
     query(`
       SELECT * FROM public.ticket_activities
       WHERE ticket_id = $1
-      ORDER BY created_at ASC;
+      ORDER BY created_at DESC
+      LIMIT 50;
     `, [ticket.id]),
 
     query(`

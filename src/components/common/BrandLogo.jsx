@@ -12,8 +12,8 @@ export const BrandLogo = ({ size = 'default', showText = true, className = '' })
     <div className={`flex items-center gap-2.5 ${className}`}>
       <div className={`${sizeMap[size] || sizeMap.default} rounded-lg bg-white overflow-hidden p-0.5 flex items-center justify-center shadow-md shrink-0`}>
         <img
-          src="/kalvium-logo.png"
-          alt="Kalvium Logo"
+          src="/logo.jpg"
+          alt="TeamSync Logo"
           className="w-full h-full object-contain"
           loading="eager"
         />

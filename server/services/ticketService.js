@@ -208,7 +208,7 @@ export async function createTicket(data, idempotencyKey = null) {
   const formatted = formatTicketResponse(newRow);
 
   // 6. Asynchronous Webhook Notification back to KalviLearn
-  dispatchWebhookEvent('TICKET_CREATED', {
+  await dispatchWebhookEvent('TICKET_CREATED', {
     ticketId: formatted.id,
     ticketNumber: formatted.ticketNumber,
     sourceReferenceId: formatted.sourceReferenceId,
@@ -503,7 +503,7 @@ export async function updateTicketStatus(ticketNumber, newStatus, { performedBy 
                            normalizedStatus === 'CLOSED' ? 'CLOSED' :
                            isReopened ? 'REOPENED' : 'STATUS_CHANGED';
 
-  dispatchWebhookEvent(webhookEventType, {
+  await dispatchWebhookEvent(webhookEventType, {
     ticketId: updatedTicket.id,
     ticketNumber: updatedTicket.ticketNumber,
     sourceReferenceId: updatedTicket.sourceReferenceId,
@@ -571,7 +571,7 @@ export async function assignTicket(ticketNumber, assigneeProfileId, { performedB
 
   const updatedTicket = await getTicketByNumber(currentTicket.id);
 
-  dispatchWebhookEvent('ASSIGNED', {
+  await dispatchWebhookEvent('ASSIGNED', {
     ticketId: updatedTicket.id,
     ticketNumber: updatedTicket.ticketNumber,
     sourceReferenceId: updatedTicket.sourceReferenceId,
@@ -629,7 +629,7 @@ export async function updateTicketPriority(ticketNumber, newPriority, { performe
 
   const updatedTicket = await getTicketByNumber(currentTicket.id);
 
-  dispatchWebhookEvent('PRIORITY_CHANGED', {
+  await dispatchWebhookEvent('PRIORITY_CHANGED', {
     ticketId: updatedTicket.id,
     ticketNumber: updatedTicket.ticketNumber,
     sourceReferenceId: updatedTicket.sourceReferenceId,
@@ -683,7 +683,7 @@ export async function addTicketComment(ticketNumber, { comment, authorId = null,
     authorName.toLowerCase().includes('kalvilearn');
 
   if (!isKalviLearnOrigin) {
-    dispatchWebhookEvent('COMMENT_CREATED', {
+    await dispatchWebhookEvent('COMMENT_CREATED', {
       ticketId: currentTicket.id,
       ticketNumber: currentTicket.ticketNumber,
       sourceReferenceId: currentTicket.sourceReferenceId,

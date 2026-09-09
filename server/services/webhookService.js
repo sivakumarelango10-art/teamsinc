@@ -199,19 +199,21 @@ export async function dispatchWebhookEvent(eventType, payload, customEventId = n
     console.error('[Webhook] Failed to persist initial webhook delivery record:', err.message);
   }
 
-  // 2. Perform outbound HTTP POST asynchronously
-  deliverWebhook({
-    deliveryId,
-    eventId,
-    eventType,
-    url,
-    payloadString,
-    signature: rawHexSignature,
-    timestamp,
-    attempt: 1
-  }).catch(err => {
-    console.warn('[Webhook] Async delivery attempt logged:', err.message);
-  });
+  // 2. Perform outbound HTTP POST (awaited to prevent premature serverless container freeze)
+  try {
+    await deliverWebhook({
+      deliveryId,
+      eventId,
+      eventType,
+      url,
+      payloadString,
+      signature: rawHexSignature,
+      timestamp,
+      attempt: 1
+    });
+  } catch (err) {
+    console.warn('[Webhook] Outbound delivery attempt warning:', err.message);
+  }
 
   return { eventId, status: 'QUEUED' };
 }
@@ -246,7 +248,6 @@ export async function deliverWebhook({ deliveryId, eventId, eventType, url, payl
     'X-TeamSync-Signature': signature,
     'X-TeamSync-Timestamp': String(timestamp),
     'X-TeamSync-Event-ID': eventId,
-    'X-TeamSync-Event-Id': eventId,
     'X-TeamSync-Event': eventType
   };
 

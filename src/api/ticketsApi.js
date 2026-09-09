@@ -91,6 +91,7 @@ export const ticketsApi = {
               email: row.reporter_email,
               role: row.reporter_role
             },
+            metadata: row.metadata || {},
             assignedTo: row.assigned_to,
             assignee: row.assignee ? {
               id: row.assignee.id,

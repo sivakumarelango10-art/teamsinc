@@ -349,7 +349,7 @@ export const TicketDetailModal = ({
       if (!isSilent) setLoading(false);
       setSecondaryLoading(false);
     }
-  }, [ticketNumber, ticket]);
+  }, [ticketNumber]);
 
   // Trigger load on open or ticket change
   useEffect(() => {
@@ -742,38 +742,44 @@ export const TicketDetailModal = ({
                   </div>
                 </div>
 
-                {/* Dedicated ATTACHMENTS Section */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
-                      <Paperclip className="w-4 h-4 text-indigo-400" />
-                      Attachments {ticket.attachments ? `(${ticket.attachments.length})` : ''}
-                    </h4>
-                  </div>
+                {/* Dedicated ATTACHMENTS Section - Strict Zero-Attachment Rule */}
+                {(() => {
+                  const hasLoadedAttachments = Array.isArray(ticket.attachments) && ticket.attachments.length > 0;
+                  const hasExpectedAttachment = !Array.isArray(ticket.attachments) && Boolean(ticket.metadata?.attachmentUrl || ticket.metadata?.attachment_url || ticket.attachmentUrl);
 
-                  {secondaryLoading && (!ticket.attachments || ticket.attachments.length === 0) ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="h-28 rounded-2xl bg-neutral-900/50 border border-neutral-800 animate-pulse flex items-center justify-center text-xs text-neutral-500">
-                        Checking attachments...
+                  if (!hasLoadedAttachments && !hasExpectedAttachment) {
+                    return null;
+                  }
+
+                  return (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+                          <Paperclip className="w-4 h-4 text-indigo-400" />
+                          ATTACHMENTS {hasLoadedAttachments ? `(${ticket.attachments.length})` : ''}
+                        </h4>
                       </div>
+
+                      {hasExpectedAttachment ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="h-28 rounded-2xl bg-neutral-900/50 border border-neutral-800 animate-pulse flex items-center justify-center text-xs text-neutral-500">
+                            Loading attachment...
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {ticket.attachments.map((att) => (
+                            <AttachmentCard
+                              key={att.id || att.fileUrl}
+                              attachment={att}
+                              onPreview={(selected) => setLightboxAttachment(selected)}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ) : !ticket.attachments || ticket.attachments.length === 0 ? (
-                    <div className="p-4 rounded-2xl bg-neutral-900/20 border border-neutral-850 text-xs text-neutral-500 flex items-center gap-2">
-                      <Paperclip className="w-4 h-4 opacity-40" />
-                      <span>No image attachments associated with this report.</span>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {ticket.attachments.map((att) => (
-                        <AttachmentCard
-                          key={att.id || att.fileUrl}
-                          attachment={att}
-                          onPreview={(selected) => setLightboxAttachment(selected)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  );
+                })()}
 
                 {/* Discussion Comments Thread */}
                 <div className="space-y-4 pt-4 border-t border-neutral-800">

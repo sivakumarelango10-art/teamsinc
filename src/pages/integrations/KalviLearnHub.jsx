@@ -188,7 +188,7 @@ export const KalviLearnHub = () => {
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-white overflow-hidden p-1 flex items-center justify-center shadow-md shrink-0 border border-neutral-700">
               <img
-                src="/kalvium-logo.png"
+                src="/kalvium-logo.svg"
                 alt="Kalvium"
                 className="w-full h-full object-contain"
                 loading="eager"
@@ -363,7 +363,8 @@ export const KalviLearnHub = () => {
               {/* Header Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-neutral-800 text-white border border-neutral-700">
+                  <span className="inline-flex items-center gap-1.5 font-mono text-xs font-black px-2 py-0.5 rounded bg-neutral-800 text-white border border-neutral-700">
+                    <img src="/kalvium-logo.svg" alt="" className="w-3.5 h-3.5 object-contain rounded-sm" />
                     {ticket.ticketNumber}
                   </span>
                   {getTypeBadge(ticket.type)}
@@ -478,6 +479,10 @@ export const KalviLearnHub = () => {
           onUpdate={() => {
             fetchStats();
             fetchTickets(true);
+          }}
+          onTicketUpdated={(updated) => {
+            setTickets(prev => prev.map(t => t.ticketNumber === updated.ticketNumber ? { ...t, ...updated } : t));
+            fetchStats();
           }}
         />
       )}

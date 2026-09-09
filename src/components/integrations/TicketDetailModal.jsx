@@ -274,7 +274,8 @@ export const TicketDetailModal = ({
   initialTicket = null,
   isOpen,
   onClose,
-  onUpdate
+  onUpdate,
+  onTicketUpdated
 }) => {
   const { profile } = useAuth();
 
@@ -424,6 +425,7 @@ export const TicketDetailModal = ({
 
       await loadTicketData(true);
       if (onUpdate) onUpdate();
+      if (onTicketUpdated) onTicketUpdated({ ...ticket, status: targetStatus, resolvedAt: updated?.resolvedAt, closedAt: updated?.closedAt });
     } catch (err) {
       setStatusError(err.message || 'Failed to update status.');
       await loadTicketData(true);
@@ -443,6 +445,7 @@ export const TicketDetailModal = ({
       );
       await loadTicketData(true);
       if (onUpdate) onUpdate();
+      if (onTicketUpdated) onTicketUpdated({ ...ticket, assignedTo: profileId });
     } catch (err) {
       console.error('Assignment error:', err);
     } finally {
@@ -461,6 +464,7 @@ export const TicketDetailModal = ({
       );
       await loadTicketData(true);
       if (onUpdate) onUpdate();
+      if (onTicketUpdated) onTicketUpdated({ ...ticket, priority: newPriority });
     } catch (err) {
       console.error('Priority change error:', err);
     } finally {
@@ -583,15 +587,16 @@ export const TicketDetailModal = ({
           {/* Top Header */}
           <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/50 shrink-0">
             <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-950/40 border border-red-800/60 text-red-400 text-xs font-bold shadow-sm">
+                <img src="/kalvium-logo.svg" alt="Kalvium" className="w-4 h-4 rounded-sm object-contain" />
+                <span>KalviLearn</span>
+              </div>
               <span className="font-mono text-xs font-black px-2.5 py-1 rounded-lg bg-neutral-800 text-white border border-neutral-700 tracking-wider">
                 {ticket?.ticketNumber || ticketNumber}
               </span>
               {ticket && getTypeBadge(ticket.type)}
               {ticket && getPriorityBadge(ticket.priority)}
               {ticket && getStatusBadge(ticket.status)}
-              <span className="text-xs text-neutral-500 font-semibold hidden sm:inline">
-                Source: <strong className="text-neutral-300">{ticket?.source || 'KALVILEARN'}</strong>
-              </span>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
@@ -617,8 +622,33 @@ export const TicketDetailModal = ({
 
           {/* Modal Content Body */}
           {loading && !ticket ? (
-            <div className="py-32 flex justify-center items-center">
-              <LoadingSpinner text="Loading ticket details..." />
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="space-y-2">
+                  <div className="h-7 w-3/4 bg-neutral-800/60 rounded-lg" />
+                  <div className="h-4 w-1/3 bg-neutral-850 rounded" />
+                </div>
+                <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+                  <div className="h-4 w-48 bg-neutral-800/60 rounded" />
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="h-8 bg-neutral-950 rounded-lg" />
+                    <div className="h-8 bg-neutral-950 rounded-lg" />
+                    <div className="h-8 bg-neutral-950 rounded-lg" />
+                    <div className="h-8 bg-neutral-950 rounded-lg" />
+                  </div>
+                </div>
+                <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+                  <div className="h-4 w-32 bg-neutral-800/60 rounded" />
+                  <div className="h-24 bg-neutral-950 rounded-xl" />
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+                  <div className="h-4 w-28 bg-neutral-800/60 rounded" />
+                  <div className="h-10 bg-neutral-950 rounded-xl" />
+                  <div className="h-10 bg-neutral-950 rounded-xl" />
+                </div>
+              </div>
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">

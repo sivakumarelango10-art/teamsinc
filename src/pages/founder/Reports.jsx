@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -66,62 +66,99 @@ export const Reports = () => {
     return <LoadingSpinner text="Computing workforce analytics..." size="large" />;
   }
 
-  // 1. Task Status Distribution
-  const completedCount = tasks.filter(t => t.status === 'COMPLETED').length;
-  const inProgressCount = tasks.filter(t => t.status === 'IN_PROGRESS').length;
-  const todoCount = tasks.filter(t => t.status === 'TODO').length;
-  const completionRate = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+  // 1. Task Status Distribution (Memoized)
+  const { completedCount, inProgressCount, todoCount, completionRate, statusData } = useMemo(() => {
+    let completed = 0;
+    let inProgress = 0;
+    let todo = 0;
 
-  const statusData = [
-    { name: 'Completed', value: completedCount, color: '#ffffff' },
-    { name: 'In Progress', value: inProgressCount, color: '#a3a3a3' },
-    { name: 'Pending (Todo)', value: todoCount, color: '#404040' }
-  ];
+    tasks.forEach(t => {
+      if (t.status === 'COMPLETED') completed++;
+      else if (t.status === 'IN_PROGRESS') inProgress++;
+      else if (t.status === 'TODO') todo++;
+    });
 
-  // 2. Tasks by Department
-  const tasksByDepartment = departments.map(d => ({
-    name: d.name,
-    tasks: tasks.filter(t => t.department_id === d.id).length
-  }));
-
-  // 3. Tasks by Member
-  const activeMembers = users.filter(u => u.role === 'MEMBER' && u.is_active);
-  const tasksByMember = activeMembers.map(m => ({
-    name: m.full_name.split(' ')[0],
-    completed: tasks.filter(t => t.assigned_to === m.id && t.status === 'COMPLETED').length,
-    active: tasks.filter(t => t.assigned_to === m.id && t.status !== 'COMPLETED').length
-  }));
-
-  // 4. Daily Workforce Allocation (Today)
-  const workforceByDept = departments.map(d => ({
-    name: d.name,
-    allocatedMembers: todayAssignments.filter(a => a.department_id === d.id).length
-  }));
-
-  // 5. Department Breakdown Metrics Table Data
-  const departmentTableData = departments.map(d => {
-    const deptTasks = tasks.filter(t => t.department_id === d.id);
-    const completed = deptTasks.filter(t => t.status === 'COMPLETED').length;
-    const inProgress = deptTasks.filter(t => t.status === 'IN_PROGRESS').length;
-    const todo = deptTasks.filter(t => t.status === 'TODO').length;
-    const rate = deptTasks.length > 0 ? Math.round((completed / deptTasks.length) * 100) : 0;
-    const headcount = todayAssignments.filter(a => a.department_id === d.id).length;
-    const overdue = deptTasks.filter(
-      t => t.deadline && isPast(parseISO(t.deadline)) && t.status !== 'COMPLETED'
-    ).length;
+    const rate = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
+    const data = [
+      { name: 'Completed', value: completed, color: '#ffffff' },
+      { name: 'In Progress', value: inProgress, color: '#a3a3a3' },
+      { name: 'Pending (Todo)', value: todo, color: '#404040' }
+    ];
 
     return {
-      id: d.id,
-      name: d.name,
-      headcount,
-      totalTasks: deptTasks.length,
-      inProgress,
-      completed,
-      todo,
-      rate,
-      overdue
+      completedCount: completed,
+      inProgressCount: inProgress,
+      todoCount: todo,
+      completionRate: rate,
+      statusData: data
     };
-  });
+  }, [tasks]);
+
+  // 2. Tasks by Department (Memoized)
+  const tasksByDepartment = useMemo(() => {
+    return departments.map(d => ({
+      name: d.name,
+      tasks: tasks.filter(t => t.department_id === d.id).length
+    }));
+  }, [departments, tasks]);
+
+  // 3. Tasks by Member (Memoized & capped to top 12 active contributors for 200-user scalability)
+  const tasksByMember = useMemo(() => {
+    const activeMembers = users.filter(u => u.role === 'MEMBER' && u.is_active);
+    const list = activeMembers.map(m => {
+      let completed = 0;
+      let active = 0;
+      tasks.forEach(t => {
+        if (t.assigned_to === m.id) {
+          if (t.status === 'COMPLETED') completed++;
+          else active++;
+        }
+      });
+      return {
+        name: m.full_name ? m.full_name.split(' ')[0] : 'Member',
+        completed,
+        active,
+        total: completed + active
+      };
+    });
+
+    return list.sort((a, b) => b.total - a.total).slice(0, 12);
+  }, [users, tasks]);
+
+  // 4. Daily Workforce Allocation (Today, Memoized)
+  const workforceByDept = useMemo(() => {
+    return departments.map(d => ({
+      name: d.name,
+      allocatedMembers: todayAssignments.filter(a => a.department_id === d.id).length
+    }));
+  }, [departments, todayAssignments]);
+
+  // 5. Department Breakdown Metrics Table Data (Memoized)
+  const departmentTableData = useMemo(() => {
+    return departments.map(d => {
+      const deptTasks = tasks.filter(t => t.department_id === d.id);
+      const completed = deptTasks.filter(t => t.status === 'COMPLETED').length;
+      const inProgress = deptTasks.filter(t => t.status === 'IN_PROGRESS').length;
+      const todo = deptTasks.filter(t => t.status === 'TODO').length;
+      const rate = deptTasks.length > 0 ? Math.round((completed / deptTasks.length) * 100) : 0;
+      const headcount = todayAssignments.filter(a => a.department_id === d.id).length;
+      const overdue = deptTasks.filter(
+        t => t.deadline && isPast(parseISO(t.deadline)) && t.status !== 'COMPLETED'
+      ).length;
+
+      return {
+        id: d.id,
+        name: d.name,
+        headcount,
+        totalTasks: deptTasks.length,
+        inProgress,
+        completed,
+        todo,
+        rate,
+        overdue
+      };
+    });
+  }, [departments, tasks, todayAssignments]);
 
   return (
     <div className="space-y-8">
@@ -205,7 +242,7 @@ export const Reports = () => {
         {/* Chart 3: Workload by Member */}
         <div className="bg-neutral-950 p-6 rounded-2xl border border-neutral-800">
           <h3 className="text-base font-bold text-white mb-1">Workload by Team Member</h3>
-          <p className="text-xs text-neutral-400 mb-6">Completed vs active tasks assigned to teammates</p>
+          <p className="text-xs text-neutral-400 mb-6">Top contributors: Completed vs active tasks assigned</p>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={tasksByMember} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>

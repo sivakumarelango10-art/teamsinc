@@ -36,6 +36,7 @@ const AdvisorTasks = lazy(() => import('../pages/advisor/AdvisorTasks'));
 
 const BugManagement = lazy(() => import('../pages/bugs/BugManagement'));
 const MyReportedBugs = lazy(() => import('../pages/bugs/MyReportedBugs'));
+const KalviLearnHub = lazy(() => import('../pages/integrations/KalviLearnHub'));
 const Profile = lazy(() => import('../pages/profile/Profile'));
 const NotFound = lazy(() => import('../pages/common/NotFound'));
 
@@ -145,6 +146,18 @@ export const AppRoutes = () => {
           <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
             <DashboardLayout title="Chats">
               <TeamChat />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* KalviLearn Integration Hub (All Authenticated Roles) */}
+      <Route
+        path="/integrations/kalvilearn"
+        element={
+          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
+            <DashboardLayout title="KalviLearn Hub">
+              <KalviLearnHub />
             </DashboardLayout>
           </ProtectedRoute>
         }

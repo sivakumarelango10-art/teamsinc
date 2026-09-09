@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Phone, Video, PhoneOff, ArrowRight } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { callApi, generateCallId, isValidUuid } from '../api/callApi';
@@ -204,7 +204,7 @@ export const CallNotificationProvider = ({ children }) => {
     }, 45000);
   };
 
-  const acceptCall = (call) => {
+  const acceptCall = useCallback((call) => {
     clearIncomingRing();
     const targetCall = call || incomingCall || ongoingCall;
     if (targetCall) {
@@ -212,18 +212,18 @@ export const CallNotificationProvider = ({ children }) => {
       notificationService.notifyCallAnswered(targetCall.id);
       setActiveCallSession(targetCall);
     }
-  };
+  }, [incomingCall, ongoingCall]);
 
-  const declineCall = () => {
+  const declineCall = useCallback(() => {
     if (incomingCall) {
       dismissedCallIdsRef.current.add(incomingCall.id);
       // Tell SW to close the ringing notification
       notificationService.notifyCallCancelled(incomingCall.id);
     }
     clearIncomingRing();
-  };
+  }, [incomingCall]);
 
-  const startCall = async (callType = 'video', roomId = 'general', roomTitle = 'TeamSync Company HQ') => {
+  const startCall = useCallback(async (callType = 'video', roomId = 'general', roomTitle = 'TeamSync Company HQ') => {
     // Generate canonical UUID for call session
     const callId = generateCallId();
     const callerId = currentUser.id;
@@ -274,23 +274,23 @@ export const CallNotificationProvider = ({ children }) => {
     });
 
     return sessionData;
-  };
+  }, [currentUser.id, currentUser.email, currentUser.full_name, currentUser.role]);
 
-  const leaveCall = () => {
+  const leaveCall = useCallback(() => {
     // Participant leaving only their local view
     setActiveCallSession(null);
     clearIncomingRing();
-  };
+  }, []);
 
-  const handleHostEndedCall = () => {
+  const handleHostEndedCall = useCallback(() => {
     // When the host ends the call, terminate session and clear ongoing state for all participants
     setActiveCallSession(null);
     setOngoingCall(null);
     clearIncomingRing();
-  };
+  }, []);
 
   // Host ends the call for everyone
-  const endCall = async (callId, { duration = 0, participants = [] } = {}) => {
+  const endCall = useCallback(async (callId, { duration = 0, participants = [] } = {}) => {
     const targetCallId = callId || activeCallSession?.id || ongoingCall?.id;
     const currentRoomId = activeCallSession?.room_id || ongoingCall?.room_id || 'general';
 
@@ -314,21 +314,30 @@ export const CallNotificationProvider = ({ children }) => {
     setOngoingCall(null);
     setActiveCallSession(null);
     clearIncomingRing();
-  };
+  }, [activeCallSession?.id, activeCallSession?.room_id, ongoingCall?.id, ongoingCall?.room_id]);
+
+  const contextValue = useMemo(() => ({
+    activeCallSession,
+    incomingCall,
+    ongoingCall,
+    startCall,
+    acceptCall,
+    declineCall,
+    leaveCall,
+    endCall
+  }), [
+    activeCallSession,
+    incomingCall,
+    ongoingCall,
+    startCall,
+    acceptCall,
+    declineCall,
+    leaveCall,
+    endCall
+  ]);
 
   return (
-    <CallNotificationContext.Provider
-      value={{
-        activeCallSession,
-        incomingCall,
-        ongoingCall,
-        startCall,
-        acceptCall,
-        declineCall,
-        leaveCall,
-        endCall
-      }}
-    >
+    <CallNotificationContext.Provider value={contextValue}>
       {children}
 
       {/* Global Incoming Call Ringing Modal (Renders on any route) */}

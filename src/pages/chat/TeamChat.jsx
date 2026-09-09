@@ -159,17 +159,19 @@ export const TeamChat = ({
   }, []);
 
   // Smart Scroll detection: Only auto-scroll if already near bottom or user forced
-  const isNearBottom = () => {
+  const isNearBottom = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return true;
     return el.scrollHeight - el.scrollTop - el.clientHeight < 140;
-  };
+  }, []);
 
-  const scrollToBottom = (smooth = true, force = false) => {
-    if (force || isNearBottom()) {
-      messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
-    }
-  };
+  const scrollToBottom = useCallback((smooth = true, force = false) => {
+    requestAnimationFrame(() => {
+      if (force || isNearBottom()) {
+        messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+      }
+    });
+  }, [isNearBottom]);
 
   const loadMessages = async (targetChannel = activeChannel) => {
     try {
@@ -664,7 +666,7 @@ export const TeamChat = ({
     inputRef.current?.focus();
   };
 
-  const handleDeleteMessage = async (msgId) => {
+  const handleDeleteMessage = useCallback(async (msgId) => {
     try {
       await chatApi.deleteMessage(msgId);
       setMessages(prev => prev.filter(m => m.id !== msgId));
@@ -676,7 +678,7 @@ export const TeamChat = ({
     } catch (err) {
       console.error('Failed to delete message:', err);
     }
-  };
+  }, [activeChannel]);
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';

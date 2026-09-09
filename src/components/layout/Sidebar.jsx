@@ -13,7 +13,8 @@ import {
   Shield,
   Bug,
   User,
-  ChevronRight
+  ChevronRight,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import BrandLogo from '../common/BrandLogo';
@@ -27,6 +28,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     if (isFounder) {
       return [
         { to: '/founder/dashboard', label: 'Founder Dashboard', icon: LayoutDashboard },
+        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/founder/bugs', label: 'Bug Reports', icon: Bug },
         { to: '/founder/users', label: 'User Management', icon: Users },
@@ -39,6 +41,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else if (isAdmin) {
       return [
         { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
+        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/admin/bugs', label: 'Bug Reports', icon: Bug },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
@@ -49,6 +52,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else if (isFoundingAdvisor) {
       return [
         { to: '/founding-advisor/dashboard', label: 'Overview', icon: LayoutDashboard },
+        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Leadership Chat', icon: Shield },
         { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare },
         { to: '/profile', label: 'My Profile', icon: User }
@@ -56,6 +60,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     } else {
       return [
         { to: '/member/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
+        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Team Chat', icon: MessageSquare },
         { to: '/member/tasks', label: 'My Tasks', icon: CheckSquare },
         { to: '/member/daily-plan', label: 'My Daily Plan', icon: Calendar },

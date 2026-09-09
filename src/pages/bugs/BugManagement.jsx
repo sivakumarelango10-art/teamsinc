@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Bug,
   AlertTriangle,
@@ -15,7 +15,9 @@ import {
   Eye,
   RefreshCw,
   Image as ImageIcon,
-  Bot
+  Bot,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { bugsApi } from '../../api/bugsApi';
@@ -91,23 +93,55 @@ export const BugManagement = () => {
     }
   };
 
-  // Metrics
-  const totalCount = bugs.length;
-  const openCount = bugs.filter(b => b.status === 'OPEN').length;
-  const inProgressCount = bugs.filter(b => b.status === 'IN_PROGRESS').length;
-  const criticalCount = bugs.filter(b => b.severity === 'CRITICAL' && b.status !== 'RESOLVED' && b.status !== 'CLOSED').length;
-  const resolvedCount = bugs.filter(b => b.status === 'RESOLVED' || b.status === 'CLOSED').length;
+  // Metrics (Single-pass memoized calculation)
+  const { totalCount, openCount, inProgressCount, criticalCount, resolvedCount } = useMemo(() => {
+    let open = 0;
+    let inProgress = 0;
+    let critical = 0;
+    let resolved = 0;
 
-  const filteredBugs = bugs.filter(b => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
+    bugs.forEach(b => {
+      if (b.status === 'OPEN') open++;
+      else if (b.status === 'IN_PROGRESS') inProgress++;
+      else if (b.status === 'RESOLVED' || b.status === 'CLOSED') resolved++;
+
+      if (b.severity === 'CRITICAL' && b.status !== 'RESOLVED' && b.status !== 'CLOSED') {
+        critical++;
+      }
+    });
+
+    return {
+      totalCount: bugs.length,
+      openCount: open,
+      inProgressCount: inProgress,
+      criticalCount: critical,
+      resolvedCount: resolved
+    };
+  }, [bugs]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const bugsPerPage = 10;
+
+  const filteredBugs = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return bugs;
+    return bugs.filter(b => (
       b.title.toLowerCase().includes(q) ||
-      b.description.toLowerCase().includes(q) ||
+      (b.description && b.description.toLowerCase().includes(q)) ||
       (b.reporter_name && b.reporter_name.toLowerCase().includes(q)) ||
       (b.reporter_email && b.reporter_email.toLowerCase().includes(q))
-    );
-  });
+    ));
+  }, [bugs, searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, severityFilter]);
+
+  const totalPages = Math.ceil(filteredBugs.length / bugsPerPage) || 1;
+  const paginatedBugs = useMemo(() => {
+    const start = (currentPage - 1) * bugsPerPage;
+    return filteredBugs.slice(start, start + bugsPerPage);
+  }, [filteredBugs, currentPage, bugsPerPage]);
 
   const getSeverityBadge = (sev) => {
     switch (sev) {
@@ -245,7 +279,7 @@ export const BugManagement = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredBugs.map((bug) => (
+          {paginatedBugs.map((bug) => (
             <div
               key={bug.id}
               className="p-4 sm:p-5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition shadow-lg space-y-3"
@@ -363,6 +397,40 @@ export const BugManagement = () => {
               </div>
             </div>
           ))}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-400 mt-4">
+              <span>
+                Showing <strong className="text-white">{(currentPage - 1) * bugsPerPage + 1}</strong> to <strong className="text-white">{Math.min(currentPage * bugsPerPage, filteredBugs.length)}</strong> of <strong className="text-white">{filteredBugs.length}</strong> bugs
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <span className="px-3 py-1 font-semibold text-white bg-neutral-900 border border-neutral-800 rounded-lg">
+                  {currentPage} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  className="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+                  title="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

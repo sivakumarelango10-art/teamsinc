@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { tasksApi } from '../../api/tasksApi';
 import { usersApi } from '../../api/usersApi';
 import { departmentsApi } from '../../api/departmentsApi';
@@ -10,7 +10,7 @@ import TaskForm from '../../components/tasks/TaskForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import EmptyState from '../../components/common/EmptyState';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { CheckSquare, Plus, Search } from 'lucide-react';
+import { CheckSquare, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const Tasks = () => {
   const { user } = useAuth();
@@ -110,18 +110,35 @@ export const Tasks = () => {
     }
   };
 
-  const filteredTasks = tasks.filter((t) => {
-    const matchesSearch =
-      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
+  const [currentPage, setCurrentPage] = useState(1);
+  const tasksPerPage = 12;
 
-    const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
-    const matchesPriority = priorityFilter === 'ALL' || t.priority === priorityFilter;
-    const matchesDept = deptFilter === 'ALL' || t.department_id === deptFilter;
-    const matchesAssignee = assigneeFilter === 'ALL' || t.assigned_to === assigneeFilter;
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return tasks.filter((t) => {
+      const matchesSearch = !q ||
+        t.title.toLowerCase().includes(q) ||
+        (t.description && t.description.toLowerCase().includes(q));
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesDept && matchesAssignee;
-  });
+      const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+      const matchesPriority = priorityFilter === 'ALL' || t.priority === priorityFilter;
+      const matchesDept = deptFilter === 'ALL' || t.department_id === deptFilter;
+      const matchesAssignee = assigneeFilter === 'ALL' || t.assigned_to === assigneeFilter;
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesDept && matchesAssignee;
+    });
+  }, [tasks, searchQuery, statusFilter, priorityFilter, deptFilter, assigneeFilter]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, priorityFilter, deptFilter, assigneeFilter]);
+
+  const totalPages = Math.ceil(filteredTasks.length / tasksPerPage) || 1;
+  const paginatedTasks = useMemo(() => {
+    const start = (currentPage - 1) * tasksPerPage;
+    return filteredTasks.slice(start, start + tasksPerPage);
+  }, [filteredTasks, currentPage, tasksPerPage]);
 
   return (
     <div className="space-y-6">
@@ -238,22 +255,58 @@ export const Tasks = () => {
           }}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredTasks.map((t) => (
-            <TaskCard
-              key={t.id}
-              task={t}
-              canManage={true}
-              canUpdateStatus={true}
-              onStatusChange={handleStatusChange}
-              onEdit={(task) => {
-                setEditingTask(task);
-                setIsFormOpen(true);
-              }}
-              onDelete={(task) => setDeleteConfirmTask(task)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {paginatedTasks.map((t) => (
+              <TaskCard
+                key={t.id}
+                task={t}
+                canManage={true}
+                canUpdateStatus={true}
+                onStatusChange={handleStatusChange}
+                onEdit={(task) => {
+                  setEditingTask(task);
+                  setIsFormOpen(true);
+                }}
+                onDelete={(task) => setDeleteConfirmTask(task)}
+              />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-400 mt-4">
+              <span>
+                Showing <strong className="text-white">{(currentPage - 1) * tasksPerPage + 1}</strong> to <strong className="text-white">{Math.min(currentPage * tasksPerPage, filteredTasks.length)}</strong> of <strong className="text-white">{filteredTasks.length}</strong> tasks
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <span className="px-3 py-1 font-semibold text-white bg-neutral-900 border border-neutral-800 rounded-lg">
+                  {currentPage} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  className="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+                  title="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Task Form Modal */}

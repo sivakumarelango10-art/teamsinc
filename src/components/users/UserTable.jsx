@@ -1,5 +1,5 @@
-import React from 'react';
-import { Shield, ShieldAlert, User, Edit, Power, Trash2, Award } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Shield, ShieldAlert, User, Edit, Power, Trash2, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePresence } from '../../context/PresenceContext';
 
 export const UserRoleBadge = ({ role }) => {
@@ -48,9 +48,24 @@ export const UserTable = ({
   const { isUserOnline } = usePresence();
   const isFounderAccount = (email) => email.toLowerCase() === 'sivakumarelango10@gmail.com';
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  // Reset to first page when filtering changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [users.length]);
+
+  const totalPages = Math.ceil(users.length / pageSize) || 1;
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return users.slice(start, start + pageSize);
+  }, [users, currentPage, pageSize]);
+
   return (
-    <div className="overflow-x-auto rounded-2xl border border-neutral-800 bg-neutral-950">
-      <table className="w-full text-left text-sm text-neutral-300">
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-950 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm text-neutral-300">
         <thead className="bg-black text-xs font-semibold uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
           <tr>
             <th className="px-6 py-4">User</th>
@@ -61,7 +76,7 @@ export const UserTable = ({
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-850">
-          {users.map((u) => {
+          {paginatedUsers.map((u) => {
             const isTargetFounder = isFounderAccount(u.email);
             const isSelf = u.id === currentUserId;
             const isOnline = isUserOnline(u.email);
@@ -180,6 +195,62 @@ export const UserTable = ({
           })}
         </tbody>
       </table>
+      </div>
+
+      {/* Pagination & Display Controls */}
+      <div className="p-3.5 bg-black border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-400">
+        <div className="flex items-center gap-2">
+          <span>Rows per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="bg-neutral-900 border border-neutral-800 text-white rounded-lg px-2 py-1 outline-none cursor-pointer"
+          >
+            <option value={15}>15</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span className="text-neutral-500 ml-1">
+            {users.length > 0 ? (
+              <>Showing <strong className="text-neutral-200">{(currentPage - 1) * pageSize + 1}</strong> to <strong className="text-neutral-200">{Math.min(currentPage * pageSize, users.length)}</strong> of <strong className="text-neutral-200">{users.length}</strong> members</>
+            ) : (
+              '0 members'
+            )}
+          </span>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              className="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+              title="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="px-3 py-1 font-semibold text-white bg-neutral-900 border border-neutral-800 rounded-lg">
+              {currentPage} / {totalPages}
+            </span>
+
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              className="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+              title="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

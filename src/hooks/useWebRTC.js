@@ -37,6 +37,9 @@ const RTC_CONFIG = {
   iceCandidatePoolSize: 10
 };
 
+// Maximum participants in P2P mesh topology to guarantee 60 FPS hardware performance
+export const MAX_MESH_PARTICIPANTS = 8;
+
 export const useWebRTC = ({
   roomId = 'general',
   currentUser,
@@ -218,6 +221,12 @@ export const useWebRTC = ({
   const createPeerConnection = useCallback((remotePeerId, remoteUser) => {
     if (peerConnectionsRef.current[remotePeerId]) {
       return peerConnectionsRef.current[remotePeerId];
+    }
+
+    // Protect client device hardware by preventing uncontrolled mesh connection explosion
+    if (Object.keys(peerConnectionsRef.current).length >= MAX_MESH_PARTICIPANTS) {
+      console.warn(`[WebRTC] Mesh connection capacity limit reached (${MAX_MESH_PARTICIPANTS} peers). Skipping excess peer:`, remotePeerId);
+      return null;
     }
 
     const pc = new RTCPeerConnection(RTC_CONFIG);

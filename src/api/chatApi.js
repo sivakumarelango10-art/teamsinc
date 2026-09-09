@@ -183,9 +183,11 @@ export const chatApi = {
 
     try {
       const storageKey = `${STORAGE_CHAT_KEY}_${channel || 'general'}`;
-      const current = await this.getMessages(100, null, channel || 'general');
+      const current = await this.getMessages(200, null, channel || 'general');
       current.push(newMessage);
-      localStorage.setItem(storageKey, JSON.stringify(current));
+      // Keep bounded sliding window of latest 200 messages to protect browser storage quota
+      const bounded = current.slice(-200);
+      localStorage.setItem(storageKey, JSON.stringify(bounded));
     } catch {}
 
     return newMessage;

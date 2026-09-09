@@ -1,8 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+function apiMiddlewarePlugin() {
+  return {
+    name: 'teamsync-api-middleware',
+    async configureServer(server) {
+      const { app } = await import('./server/app.js');
+      server.middlewares.use((req, res, next) => {
+        if (req.url && (req.url.startsWith('/api') || req.url === '/api')) {
+          return app(req, res, next);
+        }
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), apiMiddlewarePlugin()],
   server: {
     port: 5173,
     host: true

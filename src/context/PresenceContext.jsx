@@ -49,26 +49,23 @@ export const PresenceProvider = ({ children }) => {
         }
       });
 
+      let syncDebounceTimer = null;
+      const schedulePresenceSync = () => {
+        if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = setTimeout(() => {
+          if (!channel) return;
+          try {
+            const state = channel.presenceState();
+            const activeKeys = Object.keys(state).map(k => k.toLowerCase());
+            setOnlineEmails(new Set([currentEmail, ...activeKeys]));
+          } catch {}
+        }, 150);
+      };
+
       channel
-        .on('presence', { event: 'sync' }, () => {
-          const state = channel.presenceState();
-          const activeKeys = Object.keys(state).map(k => k.toLowerCase());
-          setOnlineEmails(new Set([currentEmail, ...activeKeys]));
-        })
-        .on('presence', { event: 'join' }, ({ key }) => {
-          if (key) {
-            setOnlineEmails(prev => new Set([...prev, key.toLowerCase()]));
-          }
-        })
-        .on('presence', { event: 'leave' }, ({ key }) => {
-          if (key && key.toLowerCase() !== currentEmail) {
-            setOnlineEmails(prev => {
-              const next = new Set(prev);
-              next.delete(key.toLowerCase());
-              return next;
-            });
-          }
-        })
+        .on('presence', { event: 'sync' }, schedulePresenceSync)
+        .on('presence', { event: 'join' }, schedulePresenceSync)
+        .on('presence', { event: 'leave' }, schedulePresenceSync)
         .subscribe(async (status) => {
           if (status === 'SUBSCRIBED') {
             await channel.track({
@@ -105,6 +102,7 @@ export const PresenceProvider = ({ children }) => {
       window.addEventListener('beforeunload', handleUnload);
 
       return () => {
+        if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
         clearInterval(heartbeatTimer);
         window.removeEventListener('beforeunload', handleUnload);
         if (bc) {

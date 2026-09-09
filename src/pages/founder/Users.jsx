@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { usersApi } from '../../api/usersApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
@@ -126,22 +126,25 @@ export const Users = () => {
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch =
-      u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredUsers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return users.filter((u) => {
+      const matchesSearch = !q ||
+        (u.full_name && u.full_name.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q));
 
-    const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+      const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
 
-    const isOnline = isUserOnline(u.email);
-    const matchesStatus =
-      statusFilter === 'ALL' ||
-      (statusFilter === 'ACTIVE' && isOnline && u.is_active) ||
-      (statusFilter === 'OFFLINE' && !isOnline && u.is_active) ||
-      (statusFilter === 'DEACTIVATED' && !u.is_active);
+      const isOnline = isUserOnline(u.email);
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' && isOnline && u.is_active) ||
+        (statusFilter === 'OFFLINE' && !isOnline && u.is_active) ||
+        (statusFilter === 'DEACTIVATED' && !u.is_active);
 
-    return matchesSearch && matchesRole && matchesStatus;
-  });
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [users, searchQuery, roleFilter, statusFilter, isUserOnline]);
 
   return (
     <div className="space-y-6">

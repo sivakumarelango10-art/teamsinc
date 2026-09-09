@@ -192,14 +192,21 @@ router.patch('/:identifier/priority', requireApiKey, async (req, res, next) => {
  */
 router.post('/:identifier/comments', requireApiKey, async (req, res, next) => {
   try {
-    const { comment, authorName, authorRole, authorId, authorEmail, origin } = req.body;
+    const commentText = req.body.comment || req.body.content || req.body.text;
+    const authorObj = req.body.author || {};
+    const authorName = req.body.authorName || authorObj.name || 'KalviLearn User';
+    const authorRole = req.body.authorRole || authorObj.role || null;
+    const authorId = req.body.authorId || authorObj.id || null;
+    const authorEmail = req.body.authorEmail || authorObj.email || null;
+    const origin = req.body.origin || (req.authenticatedClient?.source === 'KALVILEARN' ? 'KALVILEARN' : null);
+
     const result = await ticketService.addTicketComment(req.params.identifier, {
-      comment,
-      authorName: authorName || 'KalviLearn User',
-      authorRole: authorRole || null,
-      authorId: authorId || null,
-      authorEmail: authorEmail || null,
-      origin: origin || (req.authenticatedClient?.source === 'KALVILEARN' ? 'KALVILEARN' : null)
+      comment: commentText,
+      authorName,
+      authorRole,
+      authorId,
+      authorEmail,
+      origin
     });
 
     return res.status(201).json({

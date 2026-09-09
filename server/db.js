@@ -3,6 +3,8 @@ import fs from 'fs';
 
 const { Pool } = pg;
 
+const DEFAULT_SUPABASE_URL = 'postgresql://postgres.tuhkdblelsgjmcxiwyid:Y18mDguasYjVj5ue@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres';
+
 // Read .env directly if process.env is not yet populated
 let connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
@@ -19,14 +21,17 @@ if (!connectionString && fs.existsSync('.env')) {
   }
 }
 
+// Fallback to live Supabase connection for serverless/hosted environments
+connectionString = connectionString || DEFAULT_SUPABASE_URL;
+
 export const pool = new Pool({
-  connectionString: connectionString || 'postgresql://postgres:postgres@localhost:5432/postgres',
+  connectionString,
   ssl: connectionString?.includes('supabase') || connectionString?.includes('pooler')
     ? { rejectUnauthorized: false }
     : false,
-  max: 20,
+  max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 15000,
+  connectionTimeoutMillis: 10000,
 });
 
 export const query = (text, params) => pool.query(text, params);

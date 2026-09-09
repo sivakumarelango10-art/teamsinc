@@ -46,6 +46,7 @@ describe('TeamSync ➔ KalviLearn Production Integration Verification Suite', ()
     if (server) {
       await new Promise((resolve) => server.close(resolve));
     }
+    await pool.end();
   });
 
   // ───────────────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import fs from 'fs';
 
 // Read API key from env or .env file
 function getConfiguredApiKey() {
-  let key = process.env.TEAMSYNC_API_KEY;
+  let key = process.env.TEAMSYNC_API_KEY ? process.env.TEAMSYNC_API_KEY.trim().replace(/^["']|["']$/g, '') : null;
   if (!key && fs.existsSync('.env')) {
     const content = fs.readFileSync('.env', 'utf-8');
     for (const line of content.split('\n')) {

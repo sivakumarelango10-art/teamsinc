@@ -13,8 +13,10 @@ export function resetWebhookTransportHook() {
 }
 
 export function getConfiguredWebhookConfig() {
-  let url = process.env.KALVILEARN_WEBHOOK_URL;
-  let secret = process.env.KALVILEARN_WEBHOOK_SECRET || process.env.TEAMSYNC_WEBHOOK_SECRET;
+  let url = process.env.KALVILEARN_WEBHOOK_URL ? process.env.KALVILEARN_WEBHOOK_URL.trim().replace(/^["']|["']$/g, '') : null;
+  let secret = (process.env.KALVILEARN_WEBHOOK_SECRET || process.env.TEAMSYNC_WEBHOOK_SECRET)
+    ? (process.env.KALVILEARN_WEBHOOK_SECRET || process.env.TEAMSYNC_WEBHOOK_SECRET).trim().replace(/^["']|["']$/g, '')
+    : null;
 
   if ((!url || !secret) && fs.existsSync('.env')) {
     const content = fs.readFileSync('.env', 'utf-8');

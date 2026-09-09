@@ -52,7 +52,7 @@ const handleHealth = async (req, res) => {
       envDirectSet: !!process.env.DIRECT_URL,
       envDbSet: !!process.env.DATABASE_URL
     },
-    version: '1.0.3',
+    version: '1.0.4',
     timestamp: new Date().toISOString()
   });
 };

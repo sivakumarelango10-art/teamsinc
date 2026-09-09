@@ -5,24 +5,29 @@ const { Pool } = pg;
 
 const DEFAULT_SUPABASE_URL = 'postgresql://postgres.tuhkdblelsgjmcxiwyid:Y18mDguasYjVj5ue@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres';
 
-// Read .env directly if process.env is not yet populated
-let connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
+function cleanString(str) {
+  if (!str || typeof str !== 'string') return null;
+  return str.trim().replace(/^["']|["']$/g, '');
+}
 
-if (!connectionString && fs.existsSync('.env')) {
+// Read .env directly if process.env is not yet populated
+let rawConn = cleanString(process.env.DIRECT_URL) || cleanString(process.env.DATABASE_URL);
+
+if (!rawConn && fs.existsSync('.env')) {
   const envContent = fs.readFileSync('.env', 'utf-8');
   for (const line of envContent.split('\n')) {
     const trimmed = line.trim();
     if (trimmed.startsWith('DIRECT_URL=')) {
-      connectionString = trimmed.replace(/^DIRECT_URL=/, '').replace(/^["']|["']$/g, '');
+      rawConn = cleanString(trimmed.replace(/^DIRECT_URL=/, ''));
       break;
-    } else if (trimmed.startsWith('DATABASE_URL=') && !connectionString) {
-      connectionString = trimmed.replace(/^DATABASE_URL=/, '').replace(/^["']|["']$/g, '');
+    } else if (trimmed.startsWith('DATABASE_URL=') && !rawConn) {
+      rawConn = cleanString(trimmed.replace(/^DATABASE_URL=/, ''));
     }
   }
 }
 
 // Fallback to live Supabase connection for serverless/hosted environments
-connectionString = connectionString || DEFAULT_SUPABASE_URL;
+const connectionString = rawConn || DEFAULT_SUPABASE_URL;
 
 export const pool = new Pool({
   connectionString,

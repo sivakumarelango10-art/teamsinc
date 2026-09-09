@@ -32,8 +32,10 @@ app.use((req, res, next) => {
 const handleHealth = async (req, res) => {
   let dbStatus = 'ok';
   let dbError = null;
+  let poolHost = null;
   try {
-    const { query } = await import('./db.js');
+    const { pool, query } = await import('./db.js');
+    poolHost = pool.options?.host || pool.options?.connectionString?.replace(/:[^:@]+@/, ':***@');
     await query('SELECT 1 as alive');
   } catch (err) {
     dbStatus = 'error';
@@ -43,8 +45,14 @@ const handleHealth = async (req, res) => {
   res.status(200).json({
     status: dbStatus === 'ok' ? 'ok' : 'degraded',
     service: 'TeamSync API Engine',
-    database: { status: dbStatus, error: dbError },
-    version: '1.0.2',
+    database: {
+      status: dbStatus,
+      error: dbError,
+      target: poolHost ? poolHost.split('@')[1] || poolHost : null,
+      envDirectSet: !!process.env.DIRECT_URL,
+      envDbSet: !!process.env.DATABASE_URL
+    },
+    version: '1.0.3',
     timestamp: new Date().toISOString()
   });
 };

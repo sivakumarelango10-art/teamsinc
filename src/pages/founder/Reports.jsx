@@ -62,10 +62,6 @@ export const Reports = () => {
     { channelPrefix: 'reports_realtime' }
   );
 
-  if (loading) {
-    return <LoadingSpinner text="Computing workforce analytics..." size="large" />;
-  }
-
   // 1. Task Status Distribution (Memoized)
   const { completedCount, inProgressCount, todoCount, completionRate, statusData } = useMemo(() => {
     let completed = 0;
@@ -159,6 +155,10 @@ export const Reports = () => {
       };
     });
   }, [departments, tasks, todayAssignments]);
+
+  if (loading) {
+    return <LoadingSpinner text="Computing workforce analytics..." size="large" />;
+  }
 
   return (
     <div className="space-y-8">

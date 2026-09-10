@@ -353,7 +353,7 @@ export const ticketsApi = {
       critical: 0,
       byType: { BUG: 0, FEATURE: 0, FEEDBACK: 0, ISSUE: 0, IMPROVEMENT: 0, OTHER: 0 }
     };
-  }
+  },
   /**
    * 8. Delete a ticket permanently (Founder / Admin only)
    */

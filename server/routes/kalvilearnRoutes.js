@@ -4,6 +4,7 @@ import { integrationRateLimiter } from '../middleware/rateLimiter.js';
 import { validateFeedbackPayload } from '../middleware/validate.js';
 import ticketService from '../services/ticketService.js';
 import { verifyWebhookSignature } from '../services/webhookService.js';
+import { deleteTicket } from '../services/ticketService.js';
 import fs from 'fs';
 
 const router = express.Router();
@@ -228,7 +229,46 @@ router.get('/stats', requireApiKey, async (req, res, next) => {
 });
 
 /**
- * 9. Webhook Receiver Simulation / Test Endpoint
+ * 9. Delete Ticket (Founder / Admin only — hard delete)
+ * DELETE /api/v1/integrations/kalvilearn/tickets/:ticketNumber
+ */
+router.delete('/tickets/:ticketNumber', requireApiKey, async (req, res, next) => {
+  try {
+    // Only Founder and Admin are allowed to permanently delete reports
+    const callerRole = req.authenticatedClient?.role || req.headers['x-teamsync-role'];
+    const isWorkspace = req.headers['x-teamsync-source'] === 'WORKSPACE';
+    const isAuthorized = isWorkspace || callerRole === 'FOUNDER' || callerRole === 'ADMIN';
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden: Only Founders and Admins can permanently delete reports.'
+      });
+    }
+
+    const performedByName = req.body?.performedByName || req.headers['x-performed-by'] || 'Admin';
+
+    const result = await deleteTicket(req.params.ticketNumber, {
+      performedByName
+    });
+
+    return res.status(200).json({
+      success: true,
+      deleted: true,
+      ticketNumber: result.ticketNumber,
+      id: result.id,
+      message: `Report ${result.ticketNumber} has been permanently deleted.`
+    });
+  } catch (err) {
+    if (err.statusCode === 404) {
+      return res.status(404).json({ success: false, error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * 10. Webhook Receiver Simulation / Test Endpoint
  * POST /api/v1/webhooks/kalvilearn/ticket-updated
  */
 router.post('/webhook-simulation', async (req, res) => {

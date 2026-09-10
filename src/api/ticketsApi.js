@@ -354,6 +354,46 @@ export const ticketsApi = {
       byType: { BUG: 0, FEATURE: 0, FEEDBACK: 0, ISSUE: 0, IMPROVEMENT: 0, OTHER: 0 }
     };
   }
+  /**
+   * 8. Delete a ticket permanently (Founder / Admin only)
+   */
+  async deleteTicket(ticketNumber, performedByName = 'Admin') {
+    try {
+      const res = await fetch(`${API_BASE}/tickets/${encodeURIComponent(ticketNumber)}`, {
+        method: 'DELETE',
+        headers: {
+          ...defaultHeaders,
+          'x-performed-by': performedByName
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete ticket.');
+      }
+      return data;
+    } catch (err) {
+      // Direct Supabase fallback (workspace internal delete)
+      if (supabase) {
+        const { data: ticketRow } = await supabase
+          .from('tickets')
+          .select('id, ticket_number')
+          .eq('ticket_number', ticketNumber)
+          .single();
+
+        if (ticketRow) {
+          const { error } = await supabase
+            .from('tickets')
+            .delete()
+            .eq('id', ticketRow.id);
+
+          if (error) throw new Error(error.message || 'Failed to delete ticket via Supabase.');
+          return { deleted: true, ticketNumber, id: ticketRow.id };
+        }
+      }
+      throw err;
+    }
+  }
 };
 
 export default ticketsApi;

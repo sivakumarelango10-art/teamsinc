@@ -17,7 +17,9 @@ import {
   RefreshCw,
   ExternalLink,
   Shield,
-  Eye
+  Eye,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ticketsApi } from '../../api/ticketsApi';
@@ -68,6 +70,35 @@ export const KalviLearnHub = () => {
 
   // Modal state
   const [activeTicketNumber, setActiveTicketNumber] = useState(null);
+
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { ticketNumber, title }
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const handleDeleteClick = (e, ticket) => {
+    e.stopPropagation();
+    setDeleteError(null);
+    setDeleteConfirm({ ticketNumber: ticket.ticketNumber, title: ticket.title });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await ticketsApi.deleteTicket(deleteConfirm.ticketNumber);
+      setDeleteConfirm(null);
+      setTickets(prev => prev.filter(t => t.ticketNumber !== deleteConfirm.ticketNumber));
+      fetchStats();
+      fetchTickets(true);
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
 
   // Debounce search query
   useEffect(() => {
@@ -429,6 +460,18 @@ export const KalviLearnHub = () => {
                   >
                     <Eye className="w-4 h-4" />
                   </button>
+
+                  {/* Delete — Founder / Admin only */}
+                  {(isFounder || isAdmin) && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteClick(e, ticket)}
+                      className="p-1.5 rounded-lg bg-red-950/30 hover:bg-red-900/60 text-red-500 hover:text-red-300 border border-red-900/50 hover:border-red-700 transition"
+                      title="Delete Report Permanently"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -485,6 +528,90 @@ export const KalviLearnHub = () => {
             fetchStats();
           }}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+          onClick={() => { if (!deleting) setDeleteConfirm(null); }}
+        >
+          <div
+            className="w-full max-w-md bg-neutral-950 border border-red-900/60 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 p-5 border-b border-neutral-800 bg-red-950/20">
+              <div className="w-10 h-10 rounded-xl bg-red-950/60 border border-red-800/60 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-white">Delete Report Permanently?</h2>
+                <p className="text-[11px] text-red-400 mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                You are about to permanently delete the following report and all its associated
+                comments, activities, and attachments:
+              </p>
+
+              <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-800 space-y-1">
+                <p className="text-[11px] font-mono font-black text-red-400">{deleteConfirm.ticketNumber}</p>
+                <p className="text-xs font-semibold text-white line-clamp-2">{deleteConfirm.title}</p>
+              </div>
+
+              {deleteError && (
+                <div className="p-3 rounded-lg bg-red-950/40 border border-red-800/60 text-[11px] text-red-300 font-medium">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-950/20 border border-amber-800/30">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <p className="text-[11px] text-amber-300">
+                  A webhook notification will be sent to KalviLearn upon deletion.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-700 hover:bg-red-600 text-white text-xs font-black transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {deleting ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Permanently
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

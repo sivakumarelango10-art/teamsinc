@@ -853,6 +853,55 @@ export async function updateTicketLabels(ticketNumber, labels, { performedBy = n
 }
 
 /**
+ * 11. Delete a Ticket (Founder / Admin only — hard delete)
+ * Cascades to ticket_comments, ticket_activities, ticket_attachments (FK ON DELETE CASCADE).
+ */
+export async function deleteTicket(ticketNumber, { performedBy = null, performedByName = 'Admin' } = {}) {
+  const currentTicket = await getTicketByNumber(ticketNumber);
+  if (!currentTicket) {
+    const err = new Error(`Ticket "${ticketNumber}" not found.`);
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Record deletion activity before cascade-deleting (best-effort)
+  try {
+    await query(`
+      INSERT INTO public.ticket_activities (
+        ticket_id, action, from_value, to_value, performed_by, performed_by_name
+      ) VALUES ($1, 'DELETED', $2, NULL, $3, $4);
+    `, [currentTicket.id, currentTicket.status, performedBy, performedByName]);
+  } catch (_) {
+    // Non-fatal — the delete proceeds regardless
+  }
+
+  // Hard delete — FK ON DELETE CASCADE removes comments, activities, attachments
+  await query(`DELETE FROM public.tickets WHERE id = $1;`, [currentTicket.id]);
+
+  // Best-effort webhook notification to KalviLearn
+  try {
+    await dispatchWebhookEvent('TICKET_DELETED', {
+      ticket: {
+        id: currentTicket.id,
+        ticketNumber: currentTicket.ticketNumber,
+        externalReferenceId: currentTicket.externalReferenceId,
+        sourceReferenceId: currentTicket.sourceReferenceId,
+        status: currentTicket.status,
+        type: currentTicket.type,
+        title: currentTicket.title
+      },
+      deletedBy: performedByName,
+      deletedAt: new Date().toISOString()
+    });
+  } catch (_) {
+    // Non-fatal — webhook failure does not roll back delete
+  }
+
+  return { deleted: true, ticketNumber: currentTicket.ticketNumber, id: currentTicket.id };
+}
+
+
+/**
  * 10. Real Database Live Statistics Aggregation
  */
 export async function getTicketStats() {
@@ -911,5 +960,6 @@ export default {
   addTicketAttachment,
   updateTicketLabels,
   getTicketStats,
+  deleteTicket,
   ALLOWED_STATUS_TRANSITIONS
 };

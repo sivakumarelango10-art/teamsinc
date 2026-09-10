@@ -243,7 +243,14 @@ router.post('/webhook-simulation', async (req, res) => {
       }
     }
   }
-  secret = secret || 'ts_whsec_kalvilearn_39a1b2c4d5e6';
+
+  // No hardcoded fallback — missing secret is a server misconfiguration, not a valid default
+  if (!secret) {
+    return res.status(503).json({
+      success: false,
+      error: 'Service Misconfiguration: KALVILEARN_WEBHOOK_SECRET is not set. Contact the administrator.'
+    });
+  }
 
   const sig = req.headers['x-teamsync-signature'];
   const rawBody = JSON.stringify(req.body);

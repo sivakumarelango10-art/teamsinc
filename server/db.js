@@ -3,8 +3,6 @@ import fs from 'fs';
 
 const { Pool } = pg;
 
-const DEFAULT_SUPABASE_URL = 'postgresql://postgres.tuhkdblelsgjmcxiwyid:Y18mDguasYjVj5ue@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres';
-
 function cleanString(str) {
   if (!str || typeof str !== 'string') return null;
   return str.trim().replace(/^["']|["']$/g, '');
@@ -26,8 +24,12 @@ if (!rawConn && fs.existsSync('.env')) {
   }
 }
 
-// Fallback to live Supabase connection for serverless/hosted environments
-const connectionString = rawConn || DEFAULT_SUPABASE_URL;
+if (!rawConn) {
+  // No hardcoded fallback — a missing connection string is a deployment misconfiguration
+  console.error('[TeamSync] FATAL: No database connection string found. Set DIRECT_URL or DATABASE_URL environment variable.');
+}
+
+const connectionString = rawConn || '';
 
 export const pool = new Pool({
   connectionString,

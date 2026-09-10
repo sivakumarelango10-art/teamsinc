@@ -332,6 +332,61 @@ export async function getTicketByNumber(identifier) {
 }
 
 /**
+ * 2b. Lightweight ticket fetch for pre-update validation only.
+ * Returns essential fields (id, status, priority, assignee) without fetching
+ * comments, activities, or attachments — eliminates the N+1 pattern in mutation
+ * operations (updateTicketStatus, assignTicket, updateTicketPriority).
+ */
+async function getTicketForUpdate(identifier) {
+  const sql = `
+    SELECT
+      t.id,
+      t.ticket_number,
+      t.source,
+      t.external_reference_id,
+      t.status,
+      t.priority,
+      t.assigned_to,
+      t.type,
+      t.title,
+      t.created_at,
+      p.id    AS assignee_id,
+      p.full_name AS assignee_name,
+      p.email AS assignee_email,
+      p.role  AS assignee_role
+    FROM public.tickets t
+    LEFT JOIN public.profiles p ON t.assigned_to = p.id
+    WHERE t.ticket_number = $1
+       OR t.external_reference_id = $1
+       OR (t.id::text = $1)
+    LIMIT 1;
+  `;
+  const res = await query(sql, [identifier]);
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0];
+  return {
+    id: row.id,
+    ticketNumber: row.ticket_number,
+    source: row.source,
+    externalReferenceId: row.external_reference_id,
+    sourceReferenceId: row.external_reference_id,
+    status: row.status,
+    priority: row.priority,
+    assignedTo: row.assigned_to || null,
+    type: row.type,
+    title: row.title,
+    createdAt: row.created_at,
+    assignee: row.assignee_id ? {
+      id: row.assignee_id,
+      fullName: row.assignee_name,
+      name: row.assignee_name,
+      email: row.assignee_email,
+      role: row.assignee_role
+    } : null
+  };
+}
+
+/**
  * 3. List and Filter Tickets with Pagination and Full-Text Search
  */
 export async function listTickets({
@@ -461,7 +516,8 @@ export async function listTickets({
  * 4. Update Ticket Status with Lifecycle State Machine Enforcement
  */
 export async function updateTicketStatus(ticketNumber, newStatus, { performedBy = null, performedByName = 'Team Member' } = {}) {
-  const currentTicket = await getTicketByNumber(ticketNumber);
+  // Use lightweight fetch for pre-update validation (avoids N+1: no comments/activities/attachments)
+  const currentTicket = await getTicketForUpdate(ticketNumber);
   if (!currentTicket) {
     const err = new Error(`Ticket "${ticketNumber}" not found.`);
     err.statusCode = 404;
@@ -472,7 +528,8 @@ export async function updateTicketStatus(ticketNumber, newStatus, { performedBy 
   const currentStatus = currentTicket.status;
 
   if (currentStatus === normalizedStatus) {
-    return currentTicket; // No-op idempotent
+    // No-op: return the full ticket so callers get complete data
+    return getTicketByNumber(currentTicket.id);
   }
 
   const allowedTransitions = ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
@@ -552,7 +609,8 @@ export async function updateTicketStatus(ticketNumber, newStatus, { performedBy 
  * 5. Assign Ticket to Team Member
  */
 export async function assignTicket(ticketNumber, assigneeProfileId, { performedBy = null, performedByName = 'Team Member' } = {}) {
-  const currentTicket = await getTicketByNumber(ticketNumber);
+  // Use lightweight fetch for pre-update validation (avoids N+1)
+  const currentTicket = await getTicketForUpdate(ticketNumber);
   if (!currentTicket) {
     const err = new Error(`Ticket "${ticketNumber}" not found.`);
     err.statusCode = 404;
@@ -620,7 +678,8 @@ export async function assignTicket(ticketNumber, assigneeProfileId, { performedB
  * 6. Update Ticket Priority
  */
 export async function updateTicketPriority(ticketNumber, newPriority, { performedBy = null, performedByName = 'Team Member' } = {}) {
-  const currentTicket = await getTicketByNumber(ticketNumber);
+  // Use lightweight fetch for pre-update validation (avoids N+1)
+  const currentTicket = await getTicketForUpdate(ticketNumber);
   if (!currentTicket) {
     const err = new Error(`Ticket "${ticketNumber}" not found.`);
     err.statusCode = 404;
@@ -674,7 +733,8 @@ export async function updateTicketPriority(ticketNumber, newPriority, { performe
  * 7. Add Comment to Ticket
  */
 export async function addTicketComment(ticketNumber, { comment, authorId = null, authorName = 'Team Member', authorRole = null, authorEmail = null, origin = null }) {
-  const currentTicket = await getTicketByNumber(ticketNumber);
+  // Use lightweight fetch for pre-update validation (avoids N+1; comments fetched after insert if needed)
+  const currentTicket = await getTicketForUpdate(ticketNumber);
   if (!currentTicket) {
     const err = new Error(`Ticket "${ticketNumber}" not found.`);
     err.statusCode = 404;

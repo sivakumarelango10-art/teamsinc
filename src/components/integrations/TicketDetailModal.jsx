@@ -32,8 +32,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../common/LoadingSpinner';
 
-// Module-level cache for active team members to eliminate duplicate lookups
+// Module-level cache for active team members to eliminate duplicate lookups (with 5-min TTL)
 let cachedProfiles = null;
+let cachedProfilesTimestamp = 0;
+const PROFILES_CACHE_TTL = 5 * 60 * 1000;
 
 // Helper: Format bytes into human-readable string
 function formatBytes(bytes) {
@@ -324,8 +326,9 @@ export const TicketDetailModal = ({
         setTicket(data);
       }
 
-      // 2. Fetch or reuse cached team members
-      if (cachedProfiles && cachedProfiles.length > 0) {
+      // 2. Fetch or reuse cached team members (with 5-minute TTL)
+      const isCacheValid = cachedProfiles && cachedProfiles.length > 0 && (Date.now() - cachedProfilesTimestamp < PROFILES_CACHE_TTL);
+      if (isCacheValid) {
         setTeamMembers(cachedProfiles);
       } else {
         const { supabase } = await import('../../api/supabase');
@@ -337,6 +340,7 @@ export const TicketDetailModal = ({
             .order('full_name');
           if (profiles) {
             cachedProfiles = profiles;
+            cachedProfilesTimestamp = Date.now();
             setTeamMembers(profiles);
           }
         }
@@ -425,7 +429,7 @@ export const TicketDetailModal = ({
 
       await loadTicketData(true);
       if (onUpdate) onUpdate();
-      if (onTicketUpdated) onTicketUpdated({ ...ticket, status: targetStatus, resolvedAt: updated?.resolvedAt, closedAt: updated?.closedAt });
+      if (onTicketUpdated) onTicketUpdated(updated || { ...ticket, status: targetStatus, resolvedAt: updated?.resolvedAt, closedAt: updated?.closedAt });
     } catch (err) {
       setStatusError(err.message || 'Failed to update status.');
       await loadTicketData(true);
@@ -438,14 +442,14 @@ export const TicketDetailModal = ({
   const handleAssign = async (profileId) => {
     try {
       setActionLoading(true);
-      await ticketsApi.assignTicket(
+      const updated = await ticketsApi.assignTicket(
         ticket.ticketNumber,
         profileId || null,
         profile?.full_name || 'Team Member'
       );
       await loadTicketData(true);
       if (onUpdate) onUpdate();
-      if (onTicketUpdated) onTicketUpdated({ ...ticket, assignedTo: profileId });
+      if (onTicketUpdated) onTicketUpdated(updated || { ...ticket, assignedTo: profileId });
     } catch (err) {
       console.error('Assignment error:', err);
     } finally {
@@ -457,14 +461,14 @@ export const TicketDetailModal = ({
   const handlePriorityChange = async (newPriority) => {
     try {
       setActionLoading(true);
-      await ticketsApi.updatePriority(
+      const updated = await ticketsApi.updatePriority(
         ticket.ticketNumber,
         newPriority,
         profile?.full_name || 'Team Member'
       );
       await loadTicketData(true);
       if (onUpdate) onUpdate();
-      if (onTicketUpdated) onTicketUpdated({ ...ticket, priority: newPriority });
+      if (onTicketUpdated) onTicketUpdated(updated || { ...ticket, priority: newPriority });
     } catch (err) {
       console.error('Priority change error:', err);
     } finally {

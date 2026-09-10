@@ -133,9 +133,9 @@ describe('TeamSync ➔ KalviLearn Production Integration Verification Suite', ()
           category: 'BUG',
           priority: 'HIGH',
           reporter: {
-            userId: 'usr_kavya_101',
-            name: 'Kavya Ramesh',
-            email: 'kavya.ramesh@kalvium.community'
+            userId: 'usr_synthetic_student_001',
+            name: 'Synthetic Test Student',
+            email: 'synthetic.student@kalvilearn.test'
           },
           portal: 'STUDENT',
           metadata: {
@@ -213,7 +213,7 @@ describe('TeamSync ➔ KalviLearn Production Integration Verification Suite', ()
           title: 'Duplicate submission attempt',
           description: 'Retrying the same sourceReferenceId should return existing ticket.',
           category: 'BUG',
-          reporter: { name: 'Kavya Ramesh', email: 'kavya.ramesh@kalvium.community' }
+          reporter: { name: 'Synthetic Test Student', email: 'synthetic.student@kalvilearn.test' }
         })
       });
 

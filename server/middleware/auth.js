@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'fs';
 
-// Read API key from env or .env file
+// Read API key from env or .env file (no hardcoded fallback — missing key is a misconfiguration)
 function getConfiguredApiKey() {
   let key = process.env.TEAMSYNC_API_KEY ? process.env.TEAMSYNC_API_KEY.trim().replace(/^["']|["']$/g, '') : null;
   if (!key && fs.existsSync('.env')) {
@@ -14,7 +14,10 @@ function getConfiguredApiKey() {
       }
     }
   }
-  return key || 'ts_live_kalvilearn_sec_99a8b1c4e2d3f7';
+  if (!key) {
+    console.error('[TeamSync] CRITICAL: TEAMSYNC_API_KEY environment variable is not set. All API requests will be rejected.');
+  }
+  return key || null;
 }
 
 /**
@@ -54,6 +57,14 @@ export function requireApiKey(req, res, next) {
     return res.status(401).json({
       success: false,
       error: 'Unauthorized: Missing API key. Provide either x-api-key or Authorization: Bearer <key>.'
+    });
+  }
+
+  // Misconfiguration guard: if no API key is configured, reject all requests
+  if (!configuredKey) {
+    return res.status(503).json({
+      success: false,
+      error: 'Service Misconfiguration: TEAMSYNC_API_KEY is not set on the server. Contact the administrator.'
     });
   }
 

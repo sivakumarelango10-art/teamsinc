@@ -32,9 +32,16 @@ export function getConfiguredWebhookConfig() {
     }
   }
 
+  if (!url) {
+    console.warn('[TeamSync] WARNING: KALVILEARN_WEBHOOK_URL is not configured. Webhook dispatch will be skipped.');
+  }
+  if (!secret) {
+    console.error('[TeamSync] CRITICAL: KALVILEARN_WEBHOOK_SECRET / TEAMSYNC_WEBHOOK_SECRET is not set. Webhook signatures cannot be computed.');
+  }
+
   return {
-    url: url || 'https://kalvilearn.vercel.app/api/integrations/teamsync/webhooks',
-    secret: secret || 'ts_whsec_kalvilearn_39a1b2c4d5e6'
+    url: url || null,
+    secret: secret || null
   };
 }
 
@@ -147,6 +154,12 @@ export function calculateBackoffMs(attempt) {
  */
 export async function dispatchWebhookEvent(eventType, payload, customEventId = null) {
   const { url, secret } = getConfiguredWebhookConfig();
+
+  // Skip dispatch if webhook is not fully configured — do not throw, callers use .catch(() => {})
+  if (!url || !secret) {
+    console.warn(`[Webhook] Skipping dispatch for event "${eventType}": webhook URL or secret not configured.`);
+    return { skipped: true, reason: 'missing_config' };
+  }
 
   // Stable event ID across retries
   const eventId = customEventId || `evt_${eventType.toLowerCase()}_${Date.now()}_${crypto.randomUUID().substring(0, 8)}`;

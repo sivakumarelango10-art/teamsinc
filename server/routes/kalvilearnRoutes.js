@@ -1,10 +1,11 @@
 import express from 'express';
 import { requireApiKey } from '../middleware/auth.js';
-import { integrationRateLimiter } from '../middleware/rateLimiter.js';
+import { integrationRateLimiter, exportRateLimiter } from '../middleware/rateLimiter.js';
 import { validateFeedbackPayload } from '../middleware/validate.js';
 import ticketService from '../services/ticketService.js';
 import { verifyWebhookSignature } from '../services/webhookService.js';
 import { deleteTicket } from '../services/ticketService.js';
+import { exportIntegrationData } from '../services/exportService.js';
 import fs from 'fs';
 
 const router = express.Router();
@@ -310,5 +311,54 @@ router.post('/webhook-simulation', async (req, res) => {
     event: req.body.event
   });
 });
+
+/**
+ * 11. Export Integration Data (PDF, DOCX, CSV)
+ * POST /api/v1/integrations/kalvilearn/export
+ * GET /api/v1/integrations/kalvilearn/export
+ */
+const handleExport = async (req, res, next) => {
+  try {
+    const format = req.body?.format || req.query?.format || 'pdf';
+    const resource = req.body?.resource || req.query?.resource || 'tickets';
+    const filters = req.body?.filters || {
+      type: req.query?.type,
+      status: req.query?.status,
+      priority: req.query?.priority,
+      portal: req.query?.portal,
+      module: req.query?.module,
+      assignedTo: req.query?.assignedTo,
+      search: req.query?.search,
+      createdFrom: req.query?.createdFrom,
+      createdTo: req.query?.createdTo
+    };
+
+    const caller = {
+      role: req.authenticatedClient?.role || req.headers['x-teamsync-role'] || 'MEMBER',
+      userId: req.authenticatedClient?.userId || req.headers['x-teamsync-user-id'] || null,
+      source: req.authenticatedClient?.source || req.headers['x-teamsync-source'] || 'WORKSPACE'
+    };
+
+    const result = await exportIntegrationData({ format, resource, filters, caller });
+
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.setHeader('X-Export-Count', result.recordCount);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Count');
+
+    return res.status(200).send(result.buffer);
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        error: err.message
+      });
+    }
+    next(err);
+  }
+};
+
+router.post('/export', exportRateLimiter.middleware(), requireApiKey, handleExport);
+router.get('/export', exportRateLimiter.middleware(), requireApiKey, handleExport);
 
 export default router;

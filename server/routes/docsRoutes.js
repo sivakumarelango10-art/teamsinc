@@ -173,6 +173,44 @@ export const openApiSpec = {
           '422': { description: 'Invalid lifecycle status transition' }
         }
       }
+    },
+    '/integrations/kalvilearn/export': {
+      post: {
+        summary: 'Export integration tickets, students, mentors, tasks, or analytics in PDF, DOCX, or CSV',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['format', 'resource'],
+                properties: {
+                  format: { type: 'string', enum: ['pdf', 'docx', 'csv'], example: 'pdf' },
+                  resource: { type: 'string', enum: ['tickets', 'students', 'mentors', 'tasks', 'analytics'], example: 'tickets' },
+                  filters: {
+                    type: 'object',
+                    properties: {
+                      type: { type: 'string' },
+                      status: { type: 'string' },
+                      priority: { type: 'string' },
+                      portal: { type: 'string' },
+                      search: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          '200': { description: 'Generated binary export file (PDF, DOCX, or CSV)' },
+          '400': { description: 'Invalid export format or resource' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden: Insufficient privileges' },
+          '404': { description: 'No data available for export' },
+          '429': { description: 'Export rate limit exceeded' }
+        }
+      }
     }
   }
 };

@@ -291,6 +291,33 @@ export const TicketDetailModal = ({
   const [actionLoading, setActionLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
 
+  // Quick Export State
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportNotice, setExportNotice] = useState('');
+
+  const handleQuickExport = async (format) => {
+    try {
+      setIsExporting(true);
+      setExportMenuOpen(false);
+      setExportNotice(`Exporting ${format.toUpperCase()}...`);
+      await ticketsApi.exportData({
+        format,
+        resource: 'tickets',
+        filters: { ticketNumber: ticket?.ticketNumber || ticketNumber },
+        userRole: profile?.role || 'MEMBER',
+        userId: profile?.id || null
+      });
+      setExportNotice('Downloaded!');
+      setTimeout(() => setExportNotice(''), 3000);
+    } catch (err) {
+      console.error('Failed to export ticket:', err);
+      setStatusError(err.message || 'Failed to export ticket.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Lightbox Preview State
   const [lightboxAttachment, setLightboxAttachment] = useState(null);
 
@@ -604,6 +631,55 @@ export const TicketDetailModal = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {/* Quick Export Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                  disabled={isExporting}
+                  className="px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+                  title="Export this report as PDF, DOCS, or CSV"
+                >
+                  <Download className={`w-3.5 h-3.5 ${isExporting ? 'animate-bounce text-indigo-400' : 'text-neutral-400'}`} />
+                  <span className="hidden sm:inline">{exportNotice || (isExporting ? 'Exporting...' : 'Export')}</span>
+                </button>
+
+                {exportMenuOpen && (
+                  <div
+                    className="absolute right-0 mt-1.5 w-48 rounded-xl bg-neutral-900 border border-neutral-800 shadow-2xl py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-3 py-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800 mb-1">
+                      Export Report
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickExport('pdf')}
+                      className="w-full text-left px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center justify-between transition cursor-pointer"
+                    >
+                      <span>PDF Document</span>
+                      <span className="text-[10px] font-mono text-rose-400 font-bold">.pdf</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickExport('docx')}
+                      className="w-full text-left px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center justify-between transition cursor-pointer"
+                    >
+                      <span>DOCS / Word</span>
+                      <span className="text-[10px] font-mono text-blue-400 font-bold">.docx</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickExport('csv')}
+                      className="w-full text-left px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center justify-between transition cursor-pointer"
+                    >
+                      <span>CSV Spreadsheet</span>
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold">.csv</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => loadTicketData(false)}

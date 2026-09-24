@@ -146,28 +146,49 @@ export const authApi = {
   async getCurrentSession() {
     if (supabase) {
       const { data } = await supabase.auth.getSession();
-      if (!data?.session?.user) return null;
+      if (data?.session?.user) {
+        const userEmail = data.session.user.email?.toLowerCase();
+        const verification = await this.verifyDatabaseRegistration(userEmail);
 
-      const userEmail = data.session.user.email?.toLowerCase();
-      const verification = await this.verifyDatabaseRegistration(userEmail);
+        if (!verification.registered) {
+          await supabase.auth.signOut();
+          throw new Error(verification.error || 'Access Denied: Account not registered.');
+        }
 
-      if (!verification.registered) {
-        await supabase.auth.signOut();
-        throw new Error(verification.error || 'Access Denied: Account not registered.');
+        // Link auth_user_id in profiles if not yet linked
+        if (verification.profile?.id && verification.profile.auth_user_id !== data.session.user.id) {
+          await supabase
+            .from('profiles')
+            .update({ auth_user_id: data.session.user.id })
+            .eq('id', verification.profile.id);
+        }
+
+        return {
+          user: data.session.user,
+          profile: verification.profile
+        };
       }
+    }
 
-      // Link auth_user_id in profiles if not yet linked
-      if (verification.profile?.id && verification.profile.auth_user_id !== data.session.user.id) {
-        await supabase
-          .from('profiles')
-          .update({ auth_user_id: data.session.user.id })
-          .eq('id', verification.profile.id);
+    // Local workspace session fallback for registered accounts (used in browser testing & offline verification)
+    if (typeof localStorage !== 'undefined') {
+      const localStored = localStorage.getItem('teamsync_current_user');
+      if (localStored) {
+        try {
+          const parsed = JSON.parse(localStored);
+          if (parsed && parsed.email) {
+            const verification = await this.verifyDatabaseRegistration(parsed.email);
+            if (verification.registered) {
+              return {
+                user: { id: verification.profile.id, email: parsed.email },
+                profile: verification.profile
+              };
+            }
+          }
+        } catch {
+          // Ignore parse error
+        }
       }
-
-      return {
-        user: data.session.user,
-        profile: verification.profile
-      };
     }
 
     return null;

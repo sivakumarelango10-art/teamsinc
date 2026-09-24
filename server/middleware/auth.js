@@ -48,7 +48,9 @@ export function requireApiKey(req, res, next) {
   if (workspaceSource === 'WORKSPACE') {
     req.authenticatedClient = {
       source: 'TEAMSYNC_WORKSPACE',
-      authMethod: 'INTERNAL_SESSION'
+      authMethod: 'INTERNAL_SESSION',
+      role: req.headers['x-teamsync-role'] || 'MEMBER',
+      userId: req.headers['x-teamsync-user-id'] || null
     };
     return next();
   }
@@ -81,7 +83,8 @@ export function requireApiKey(req, res, next) {
 
   req.authenticatedClient = {
     source: 'KALVILEARN',
-    authMethod: 'API_KEY'
+    authMethod: 'API_KEY',
+    role: 'ADMIN'
   };
 
   next();

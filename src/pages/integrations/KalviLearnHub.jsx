@@ -19,7 +19,8 @@ import {
   Shield,
   Eye,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ticketsApi } from '../../api/ticketsApi';
@@ -27,6 +28,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import TicketDetailModal from '../../components/integrations/TicketDetailModal';
+import ExportModal from '../../components/integrations/ExportModal';
 
 const REPORT_TYPE_TABS = [
   { key: 'ALL', label: 'All Reports', icon: Inbox },
@@ -67,9 +69,11 @@ export const KalviLearnHub = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [fetchError, setFetchError] = useState(null);
 
   // Modal state
   const [activeTicketNumber, setActiveTicketNumber] = useState(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { ticketNumber, title }
@@ -123,6 +127,7 @@ export const KalviLearnHub = () => {
   const fetchTickets = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
+      setFetchError(null);
       const res = await ticketsApi.getTickets({
         type: selectedTypeTab,
         status: statusFilter,
@@ -140,6 +145,7 @@ export const KalviLearnHub = () => {
       }
     } catch (err) {
       console.error('Failed to load tickets:', err);
+      setFetchError(err.message || 'Failed to load tickets. Please check your network connection.');
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -235,6 +241,16 @@ export const KalviLearnHub = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setIsExportModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow-md hover:shadow-lg active:scale-95"
+            title="Export reports in PDF, DOCS, or CSV"
+          >
+            <Download className="w-4 h-4 text-black" />
+            <span>Export</span>
+          </button>
+
           <button
             type="button"
             onClick={() => { fetchStats(); fetchTickets(false); }}
@@ -373,6 +389,19 @@ export const KalviLearnHub = () => {
         <div className="py-24 flex justify-center items-center">
           <LoadingSpinner text="Loading KalviLearn tickets..." />
         </div>
+      ) : fetchError ? (
+        <div className="py-16 text-center rounded-2xl bg-red-950/20 border border-red-900/40 p-8 space-y-3">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto opacity-90" />
+          <h3 className="text-sm font-bold text-white">Unable to Load Reports</h3>
+          <p className="text-xs text-red-300 max-w-md mx-auto">{fetchError}</p>
+          <button
+            type="button"
+            onClick={() => { fetchStats(); fetchTickets(false); }}
+            className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
+          >
+            Retry Connection
+          </button>
+        </div>
       ) : tickets.length === 0 ? (
         <div className="py-20 text-center rounded-2xl bg-neutral-900/30 border border-neutral-800 p-8 space-y-2">
           <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-2 opacity-80" />
@@ -455,10 +484,33 @@ export const KalviLearnHub = () => {
                       e.stopPropagation();
                       setActiveTicketNumber(ticket.ticketNumber);
                     }}
-                    className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition"
+                    className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition cursor-pointer"
                     title="View Ticket Details"
                   >
                     <Eye className="w-4 h-4" />
+                  </button>
+
+                  {/* Quick Export PDF */}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await ticketsApi.exportData({
+                          format: 'pdf',
+                          resource: 'tickets',
+                          filters: { ticketNumber: ticket.ticketNumber },
+                          userRole: role,
+                          userId: profile?.id
+                        });
+                      } catch (err) {
+                        console.error('Quick export failed:', err);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition cursor-pointer"
+                    title="Quick Export PDF Report"
+                  >
+                    <Download className="w-4 h-4" />
                   </button>
 
                   {/* Delete — Founder / Admin only */}
@@ -613,6 +665,20 @@ export const KalviLearnHub = () => {
           </div>
         </div>
       )}
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        activeFilters={{
+          type: selectedTypeTab,
+          status: statusFilter,
+          priority: priorityFilter,
+          portal: portalFilter,
+          search: debouncedSearch
+        }}
+        activeTicketCount={totalCount}
+      />
     </div>
   );
 };

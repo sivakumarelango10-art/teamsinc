@@ -393,6 +393,70 @@ export const ticketsApi = {
       }
       throw err;
     }
+  },
+
+  /**
+   * 9. Export Integration Data (PDF, DOCX, CSV)
+   */
+  async exportData({ format = 'pdf', resource = 'tickets', filters = {}, userRole = 'MEMBER', userId = null }) {
+    const headers = {
+      ...defaultHeaders,
+      'x-teamsync-role': userRole || 'MEMBER'
+    };
+    if (userId) {
+      headers['x-teamsync-user-id'] = userId;
+    }
+
+    const res = await fetch(`${API_BASE}/export`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ format, resource, filters })
+    });
+
+    if (!res.ok) {
+      let errMsg = 'Failed to generate export.';
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.error) errMsg = errJson.error;
+      } catch {
+        if (res.status === 404) errMsg = 'There is no data available for this export.';
+        else if (res.status === 403) errMsg = "You don't have permission to export this data.";
+        else if (res.status === 429) errMsg = 'Rate limit exceeded. Please wait a moment before exporting again.';
+        else errMsg = `Export request failed (HTTP ${res.status}).`;
+      }
+      const error = new Error(errMsg);
+      error.statusCode = res.status;
+      throw error;
+    }
+
+    const blob = await res.blob();
+    let filename = `TeamSync-KalviLearn-${resource}-${new Date().toISOString().slice(0, 10)}.${format === 'docs' ? 'docx' : format}`;
+    const disposition = res.headers.get('content-disposition');
+    if (disposition && disposition.includes('filename=')) {
+      const match = disposition.match(/filename="?([^";]+)"?/);
+      if (match && match[1]) filename = match[1].trim();
+    }
+
+    // Trigger browser download
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 200);
+    }
+
+    return {
+      success: true,
+      filename,
+      size: blob.size
+    };
   }
 };
 

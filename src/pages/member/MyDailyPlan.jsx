@@ -6,6 +6,7 @@ import { useRealtime } from '../../hooks/useRealtime';
 import { Calendar, Building2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import Avatar from '../../components/common/Avatar';
 
 export const MyDailyPlan = () => {
   const { user, profile } = useAuth();
@@ -133,9 +134,12 @@ export const MyDailyPlan = () => {
                         key={tm.id}
                         className="flex items-center gap-2 p-2 rounded-xl bg-black border border-neutral-800 text-xs"
                       >
-                        <div className="w-6 h-6 rounded bg-neutral-900 text-white border border-neutral-800 flex items-center justify-center font-bold text-[10px]">
-                          {tm.user?.full_name?.charAt(0) || 'U'}
-                        </div>
+                        <Avatar
+                          src={tm.user?.avatar_url}
+                          name={tm.user?.full_name}
+                          size="w-6 h-6 text-[10px]"
+                          rounded="rounded"
+                        />
                         <span className="font-semibold text-neutral-200">{tm.user?.full_name}</span>
                       </div>
                     ))}
@@ -201,9 +205,12 @@ export const MyDailyPlan = () => {
                         key={tm.id}
                         className="flex items-center gap-2 p-2 rounded-xl bg-black border border-neutral-800 text-xs"
                       >
-                        <div className="w-6 h-6 rounded bg-neutral-900 text-white border border-neutral-800 flex items-center justify-center font-bold text-[10px]">
-                          {tm.user?.full_name?.charAt(0) || 'U'}
-                        </div>
+                        <Avatar
+                          src={tm.user?.avatar_url}
+                          name={tm.user?.full_name}
+                          size="w-6 h-6 text-[10px]"
+                          rounded="rounded"
+                        />
                         <span className="font-semibold text-neutral-200">{tm.user?.full_name}</span>
                       </div>
                     ))}

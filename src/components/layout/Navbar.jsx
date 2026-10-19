@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Menu, Calendar, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../../hooks/useAuth';
+import Avatar from '../common/Avatar';
 
 const LiveClock = React.memo(() => {
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
@@ -77,23 +78,16 @@ export const Navbar = ({ onToggleSidebar, onToggleCopilot, title = 'Dashboard' }
           className="flex items-center gap-2.5 pl-2 border-l border-neutral-800 hover:opacity-90 transition-all duration-250 cursor-pointer group active:scale-98"
           title="View My Profile"
         >
-          <div className="relative">
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 border border-neutral-700 group-hover:border-neutral-500 flex items-center justify-center font-bold text-xs text-white overflow-hidden transition-all duration-250 shadow-sm group-hover:shadow-[0_0_12px_rgba(255,255,255,0.12)]">
-              {profile?.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt={profile.full_name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span>{profile?.full_name?.charAt(0) || 'U'}</span>
-              )}
-            </div>
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black"
-              title="Active now"
-            />
-          </div>
+          <Avatar
+            src={profile?.avatar_url}
+            name={profile?.full_name}
+            size="w-8 h-8 text-xs"
+            rounded="rounded-xl"
+            showStatus={true}
+            status="online"
+            statusSize="xs"
+            className="group-hover:shadow-[0_0_12px_rgba(255,255,255,0.12)] transition-all duration-250"
+          />
           <div className="hidden md:block text-left">
             <p className="text-xs font-semibold text-neutral-200 line-clamp-1 group-hover:text-white transition">
               {profile?.full_name || 'Team Member'}

@@ -48,8 +48,8 @@ export const tasksApi = {
         .from('tasks')
         .select(`
           *,
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role),
-          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role),
+          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role, avatar_url),
+          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role, avatar_url),
           department:departments(id, name)
         `)
         .order('created_at', { ascending: false });
@@ -120,8 +120,8 @@ export const tasksApi = {
         .from('tasks')
         .select(`
           *,
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role),
-          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role),
+          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role, avatar_url),
+          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role, avatar_url),
           department:departments(id, name)
         `)
         .eq('id', id)
@@ -155,8 +155,8 @@ export const tasksApi = {
         }])
         .select(`
           *,
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role),
-          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role),
+          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role, avatar_url),
+          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role, avatar_url),
           department:departments(id, name)
         `)
         .single();
@@ -199,8 +199,8 @@ export const tasksApi = {
         .eq('id', id)
         .select(`
           *,
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role),
-          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role),
+          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email, role, avatar_url),
+          creator:profiles!tasks_assigned_by_fkey(id, full_name, email, role, avatar_url),
           department:departments(id, name)
         `)
         .single();

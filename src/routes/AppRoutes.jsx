@@ -59,11 +59,22 @@ export const AppRoutes = () => {
     return <Navigate to="/member/dashboard" replace />;
   };
 
+  const getUserDirectoryRedirect = () => {
+    if (!user || !profile) return <Navigate to="/login" replace />;
+    if (profile.role === 'FOUNDER') return <Navigate to="/founder/users" replace />;
+    if (profile.role === 'ADMIN') return <Navigate to="/admin/users" replace />;
+    if (profile.role === 'FOUNDING_ADVISOR') return <Navigate to="/founding-advisor/users" replace />;
+    return <Navigate to="/member/users" replace />;
+  };
+
   return (
     <Suspense fallback={<PageLoadingFallback />}>
       <Routes>
       {/* Root Route Redirect */}
       <Route path="/" element={getDefaultRedirect()} />
+
+      {/* Top-Level User Directory Redirect for all roles */}
+      <Route path="/users" element={getUserDirectoryRedirect()} />
 
       {/* Public Route */}
       <Route
@@ -100,6 +111,7 @@ export const AppRoutes = () => {
       >
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="bugs" element={<BugManagement />} />
+        <Route path="users" element={<Users />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="assign-task" element={<AssignTask />} />
         <Route path="daily-planning" element={<DailyPlanning />} />
@@ -117,6 +129,7 @@ export const AppRoutes = () => {
         }
       >
         <Route path="dashboard" element={<AdvisorDashboard />} />
+        <Route path="users" element={<Users />} />
         <Route path="tasks" element={<AdvisorTasks />} />
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="*" element={<NotFound />} />
@@ -132,6 +145,7 @@ export const AppRoutes = () => {
         }
       >
         <Route path="dashboard" element={<MemberDashboard />} />
+        <Route path="users" element={<Users />} />
         <Route path="tasks" element={<MyTasks />} />
         <Route path="daily-plan" element={<MyDailyPlan />} />
         <Route path="bugs" element={<MyReportedBugs />} />

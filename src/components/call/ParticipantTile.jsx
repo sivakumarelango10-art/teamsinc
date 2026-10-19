@@ -17,6 +17,7 @@ const ParticipantTileComponent = ({
   name = 'Participant',
   email = '',
   role = 'MEMBER',
+  avatarUrl = '',
   isLocal = false,
   isAudioMuted = false,
   isVideoOff = false,
@@ -135,10 +136,19 @@ const ParticipantTileComponent = ({
         ) : (
           /* Avatar placeholder when camera is off */
           <div className="flex flex-col items-center justify-center gap-3 p-4 select-none">
-            <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center font-bold text-2xl md:text-3xl text-white transition-transform ${
+            <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center font-bold text-2xl md:text-3xl text-white transition-transform overflow-hidden ${
               isSpeaking ? 'scale-105 ring-4 ring-emerald-500 animate-pulse' : 'ring-2 ring-neutral-700'
             } bg-gradient-to-br from-neutral-800 to-neutral-900 shadow-xl`}>
-              <span>{initial}</span>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              ) : null}
+              <span className={avatarUrl ? 'hidden' : 'inline'}>{initial}</span>
               {isSpeaking && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 ring-2 ring-black" />
               )}

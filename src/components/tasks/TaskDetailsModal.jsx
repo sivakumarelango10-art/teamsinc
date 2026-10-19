@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import TaskStatusBadge from './TaskStatusBadge';
+import Avatar from '../common/Avatar';
 
 export const TaskDetailsModal = ({ task, isOpen, onClose }) => {
   if (!isOpen || !task) return null;
@@ -82,9 +83,12 @@ export const TaskDetailsModal = ({ task, isOpen, onClose }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             {/* Assignee */}
             <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-neutral-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                {task.assignee?.full_name?.charAt(0) || 'U'}
-              </div>
+              <Avatar
+                src={task.assignee?.avatar_url}
+                name={task.assignee?.full_name}
+                size="sm"
+                rounded="rounded-lg"
+              />
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">Assigned To</div>
                 <div className="text-xs font-semibold text-white truncate">

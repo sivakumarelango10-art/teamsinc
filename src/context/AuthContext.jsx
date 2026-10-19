@@ -58,11 +58,24 @@ export const AuthProvider = ({ children }) => {
             return;
           }
 
+          const googleAvatar = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture;
+          const profileUpdates = {};
+
           // Link auth_user_id in profiles if not yet linked
           if (verification.profile?.id && verification.profile.auth_user_id !== session.user.id) {
+            profileUpdates.auth_user_id = session.user.id;
+          }
+
+          // Sync Google avatar if profile does not yet have an avatar
+          if (googleAvatar && (!verification.profile?.avatar_url || verification.profile.avatar_url.trim() === '')) {
+            profileUpdates.avatar_url = googleAvatar;
+            verification.profile.avatar_url = googleAvatar;
+          }
+
+          if (Object.keys(profileUpdates).length > 0 && verification.profile?.id) {
             await supabase
               .from('profiles')
-              .update({ auth_user_id: session.user.id })
+              .update(profileUpdates)
               .eq('id', verification.profile.id);
           }
 

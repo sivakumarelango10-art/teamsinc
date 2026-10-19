@@ -1,5 +1,6 @@
 import React from 'react';
 import { Building2, X } from 'lucide-react';
+import Avatar from '../common/Avatar';
 
 export const DepartmentAllocation = ({
   departments = [],
@@ -46,9 +47,12 @@ export const DepartmentAllocation = ({
                       className="flex items-center justify-between p-2 rounded-xl bg-neutral-900/60 border border-neutral-800 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-6 h-6 rounded bg-neutral-800 text-white border border-neutral-700 flex items-center justify-center font-bold text-[10px]">
-                          {asgn.user?.full_name?.charAt(0) || 'U'}
-                        </div>
+                        <Avatar
+                          src={asgn.user?.avatar_url}
+                          name={asgn.user?.full_name}
+                          size="w-6 h-6 text-[10px]"
+                          rounded="rounded"
+                        />
                         <div className="min-w-0">
                           <p className="font-semibold text-neutral-200 truncate">
                             {asgn.user?.full_name || 'Team Member'}

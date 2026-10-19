@@ -13,6 +13,32 @@ export const invalidateUsersCache = () => {
   usersCacheTime = 0;
 };
 
+async function assertCanManageUsers() {
+  if (supabase) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        if (user.email.toLowerCase() === FOUNDER_EMAIL) return;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('email', user.email.toLowerCase())
+          .maybeSingle();
+
+        if (profile && profile.role !== 'ADMIN' && profile.role !== 'FOUNDER') {
+          const error = new Error('Forbidden: Members have read-only access to user management.');
+          error.status = 403;
+          error.statusCode = 403;
+          throw error;
+        }
+      }
+    } catch (err) {
+      if (err.status === 403 || err.statusCode === 403) throw err;
+    }
+  }
+}
+
 export const usersApi = {
   async getUsers(forceRefresh = false) {
     if (!forceRefresh && usersCache && (Date.now() - usersCacheTime < CACHE_TTL_MS)) {
@@ -58,6 +84,8 @@ export const usersApi = {
   },
 
   async createUser(userData) {
+    await assertCanManageUsers();
+
     const cleanEmail = userData.email.trim().toLowerCase();
     const isFounderEmail = cleanEmail === FOUNDER_EMAIL;
     const role = isFounderEmail ? 'FOUNDER' : (userData.role || 'MEMBER');
@@ -101,6 +129,8 @@ export const usersApi = {
   },
 
   async updateUser(id, updates) {
+    await assertCanManageUsers();
+
     if (supabase) {
       // Protect Founder from being altered maliciously
       const { data: target } = await supabase
@@ -171,6 +201,8 @@ export const usersApi = {
   },
 
   async deleteUser(id) {
+    await assertCanManageUsers();
+
     if (supabase) {
       const { data: target } = await supabase
         .from('profiles')

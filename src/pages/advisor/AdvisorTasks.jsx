@@ -21,6 +21,7 @@ import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import TaskStatusBadge from '../../components/tasks/TaskStatusBadge';
 import TaskDetailsModal from '../../components/tasks/TaskDetailsModal';
+import Avatar from '../../components/common/Avatar';
 import { format, parseISO, isPast } from 'date-fns';
 
 export const AdvisorTasks = () => {
@@ -352,9 +353,12 @@ export const AdvisorTasks = () => {
                     {/* Assigned To */}
                     <td className="px-5 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-neutral-900 border border-neutral-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                          {task.assignee?.full_name?.charAt(0) || 'U'}
-                        </div>
+                        <Avatar
+                          src={task.assignee?.avatar_url}
+                          name={task.assignee?.full_name}
+                          size="sm"
+                          rounded="rounded-lg"
+                        />
                         <div>
                           <div className="font-semibold text-neutral-200">
                             {task.assignee?.full_name || 'Unassigned'}

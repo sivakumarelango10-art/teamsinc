@@ -31,6 +31,7 @@ import { ticketsApi } from '../../api/ticketsApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../common/LoadingSpinner';
+import Avatar from '../common/Avatar';
 
 // Module-level cache for active team members to eliminate duplicate lookups (with 5-min TTL)
 let cachedProfiles = null;
@@ -1116,9 +1117,12 @@ export const TicketDetailModal = ({
 
                   {ticket.assignee && (
                     <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 text-xs flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-neutral-800 flex items-center justify-center font-bold text-white shrink-0">
-                        {ticket.assignee.fullName?.charAt(0) || 'U'}
-                      </div>
+                      <Avatar
+                        src={ticket.assignee.avatar_url || ticket.assignee.avatarUrl}
+                        name={ticket.assignee.fullName}
+                        size="w-8 h-8 text-xs"
+                        rounded="rounded-lg"
+                      />
                       <div className="truncate min-w-0">
                         <p className="font-bold text-white truncate">{ticket.assignee.fullName}</p>
                         <p className="text-[11px] text-neutral-400 truncate">{ticket.assignee.email}</p>

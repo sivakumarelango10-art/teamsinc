@@ -214,7 +214,13 @@ export const DailyTaskAllocation = ({
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-neutral-800 to-neutral-700 border border-neutral-700 flex items-center justify-center font-bold text-white text-xs shrink-0 overflow-hidden shadow-inner">
                     {member.avatar_url ? (
-                      <img src={member.avatar_url} alt="" className="w-full h-full object-cover" />
+                      <img
+                        src={member.avatar_url}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
                     ) : (
                       member.full_name?.charAt(0).toUpperCase() || 'U'
                     )}

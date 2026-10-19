@@ -31,6 +31,16 @@ export const Profile = () => {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setAvatarUrl(profile.avatar_url || '');
+      if (!selectedFile) {
+        setAvatarPreview(profile.avatar_url || null);
+      }
+    }
+  }, [profile, selectedFile]);
+
+  useEffect(() => {
     const userId = profile?.id || user?.id;
     if (userId) {
       departmentsApi.getUserDepartments(userId)
@@ -175,7 +185,9 @@ export const Profile = () => {
                 <img
                   src={avatarPreview}
                   alt={fullName}
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
+                  onError={() => setAvatarPreview(null)}
                 />
               ) : (
                 <span>{fullName?.charAt(0) || 'U'}</span>

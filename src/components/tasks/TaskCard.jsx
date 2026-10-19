@@ -2,6 +2,7 @@ import React from 'react';
 import { Calendar, Building2, Edit2, Trash2, CheckCircle } from 'lucide-react';
 import { TaskStatusBadge, TaskPriorityBadge } from './TaskStatusBadge';
 import { format, parseISO, isPast } from 'date-fns';
+import Avatar from '../common/Avatar';
 
 const TaskCardComponent = ({
   task,
@@ -67,9 +68,12 @@ const TaskCardComponent = ({
         {/* Assignee & Deadline */}
         <div className="flex items-center justify-between text-xs text-neutral-400">
           <div className="flex items-center gap-1.5" title={`Assigned to: ${task.assignee?.full_name || 'Unassigned'}`}>
-            <div className="w-5 h-5 rounded bg-neutral-900 border border-neutral-800 flex items-center justify-center text-[10px] font-bold text-white">
-              {task.assignee?.full_name?.charAt(0) || 'U'}
-            </div>
+            <Avatar
+              src={task.assignee?.avatar_url}
+              name={task.assignee?.full_name}
+              size="xs"
+              rounded="rounded"
+            />
             <span className="truncate max-w-[120px] text-neutral-300 font-medium">
               {task.assignee?.full_name || 'Unassigned'}
             </span>

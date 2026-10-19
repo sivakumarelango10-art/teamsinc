@@ -5,22 +5,26 @@ import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import UserTable from '../../components/users/UserTable';
 import UserForm from '../../components/users/UserForm';
 import ConfirmModal from '../../components/common/ConfirmModal';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { Users as UsersIcon, UserPlus, Search, Filter } from 'lucide-react';
+import { Users as UsersIcon, UserPlus, Search, Filter, AlertTriangle, RotateCw } from 'lucide-react';
 import { usePresence } from '../../context/PresenceContext';
-import { supabase } from '../../api/supabase';
 
 export const Users = () => {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, profile, role, isFounder, isAdmin } = useAuth();
   const { isUserOnline, onlineCount } = usePresence();
+
+  // Determine administrative permission strictly from trusted context
+  const canManageUsers = Boolean(
+    isFounder || isAdmin || profile?.role === 'FOUNDER' || profile?.role === 'ADMIN'
+  );
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  // Modals state
+  // Modals state (Restricted to Administrators & Founders)
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
@@ -30,10 +34,12 @@ export const Users = () => {
   const loadUsers = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
+      setError(null);
       const list = await usersApi.getUsers();
       setUsers(list || []);
     } catch (err) {
       console.error('Failed to load users:', err);
+      setError(err.message || 'Failed to fetch team members. Please check connection and try again.');
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -51,6 +57,11 @@ export const Users = () => {
   );
 
   const handleRoleChange = async (userId, newRole) => {
+    if (!canManageUsers) {
+      setFeedback({ type: 'error', text: 'Forbidden: Members have read-only access to user management.' });
+      return;
+    }
+
     const prevUsers = [...users];
     // Optimistic instant feedback
     setUsers(curr => curr.map(u => (u.id === userId ? { ...u, role: newRole } : u)));
@@ -74,19 +85,34 @@ export const Users = () => {
   };
 
   const handleCreateOrEditUser = async (formData) => {
-    if (editingUser) {
-      await usersApi.updateUser(editingUser.id, formData);
-      setFeedback({ type: 'success', text: `Updated user ${formData.full_name}` });
-    } else {
-      await usersApi.createUser(formData);
-      setFeedback({ type: 'success', text: `Created new user ${formData.full_name}` });
+    if (!canManageUsers) {
+      setFeedback({ type: 'error', text: 'Forbidden: Members have read-only access to user management.' });
+      return;
     }
-    broadcastRealtimeEvent('teamsync_bc_profiles');
-    await loadUsers(true);
-    setEditingUser(null);
+
+    try {
+      if (editingUser) {
+        await usersApi.updateUser(editingUser.id, formData);
+        setFeedback({ type: 'success', text: `Updated user ${formData.full_name}` });
+      } else {
+        await usersApi.createUser(formData);
+        setFeedback({ type: 'success', text: `Created new user ${formData.full_name}` });
+      }
+      broadcastRealtimeEvent('teamsync_bc_profiles');
+      await loadUsers(true);
+      setEditingUser(null);
+      setIsFormOpen(false);
+    } catch (err) {
+      setFeedback({ type: 'error', text: err.message || 'Operation failed.' });
+    }
   };
 
   const handleToggleStatus = async (targetUser) => {
+    if (!canManageUsers) {
+      setFeedback({ type: 'error', text: 'Forbidden: Members have read-only access to user management.' });
+      return;
+    }
+
     const nextStatus = !targetUser.is_active;
     const prevUsers = [...users];
     setUsers(curr => curr.map(u => (u.id === targetUser.id ? { ...u, is_active: nextStatus } : u)));
@@ -106,7 +132,7 @@ export const Users = () => {
   };
 
   const handleDeleteUser = async () => {
-    if (!deleteConfirmUser) return;
+    if (!canManageUsers || !deleteConfirmUser) return;
     const target = deleteConfirmUser;
     setDeleteConfirmUser(null);
     const prevUsers = [...users];
@@ -153,35 +179,75 @@ export const Users = () => {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-              <UsersIcon className="w-7 h-7 text-white" />
-              User Management
+              <UsersIcon className="w-7 h-7 text-white" aria-hidden="true" />
+              <span>User Management</span>
             </h1>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-900/60 bg-neutral-900 text-emerald-400 flex items-center gap-1.5 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              {onlineCount} Online Now
+            <span
+              className="text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-900/60 bg-neutral-900 text-emerald-400 flex items-center gap-1.5 shadow-sm"
+              title="Real-time online presence"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+              <span>{onlineCount} Online Now</span>
             </span>
           </div>
           <p className="text-xs md:text-sm text-neutral-400 mt-1">
-            Provision team members, assign administrative capabilities, and monitor real-time user presence.
+            {canManageUsers
+              ? 'Provision team members, assign administrative capabilities, and monitor real-time user presence.'
+              : 'Browse verified team members, review roles, and monitor real-time user presence.'}
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingUser(null);
-            setIsFormOpen(true);
-          }}
-          className="px-4 py-2.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 self-start md:self-auto cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4 text-black" />
-          <span>Add New User</span>
-        </button>
+        {/* Add New User Button (Strictly for Administrators and Founders) */}
+        {canManageUsers && (
+          <button
+            onClick={() => {
+              setEditingUser(null);
+              setIsFormOpen(true);
+            }}
+            className="px-4 py-2.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 rounded-xl transition shadow-md flex items-center gap-2 self-start md:self-auto cursor-pointer active:scale-95"
+            title="Add New User"
+          >
+            <UserPlus className="w-4 h-4 text-black" aria-hidden="true" />
+            <span>Add New User</span>
+          </button>
+        )}
       </div>
 
+      {/* Recoverable Error Banner */}
+      {error && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-red-950/40 border border-red-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-red-200"
+        >
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" aria-hidden="true" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => loadUsers(false)}
+            className="px-3.5 py-1.5 bg-red-900/60 hover:bg-red-800 text-red-100 border border-red-700/80 rounded-xl text-xs font-semibold cursor-pointer transition flex items-center gap-1.5 shrink-0"
+          >
+            <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
+      {/* Action Feedback Banner */}
       {feedback.text && (
-        <div className="p-3.5 rounded-xl text-xs flex items-center justify-between bg-neutral-900 border border-neutral-700 text-white">
+        <div
+          role="status"
+          className={`p-3.5 rounded-xl text-xs flex items-center justify-between border ${
+            feedback.type === 'error'
+              ? 'bg-red-950/50 border-red-800 text-red-200'
+              : 'bg-neutral-900 border-neutral-700 text-white'
+          }`}
+        >
           <span>{feedback.text}</span>
-          <button onClick={() => setFeedback({ type: '', text: '' })} className="underline ml-4 text-neutral-400 hover:text-white">
+          <button
+            onClick={() => setFeedback({ type: '', text: '' })}
+            className="underline ml-4 text-neutral-400 hover:text-white cursor-pointer"
+          >
             Dismiss
           </button>
         </div>
@@ -190,23 +256,25 @@ export const Users = () => {
       {/* Search & Filter Controls */}
       <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" aria-hidden="true" />
           <input
             type="text"
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-3.5 py-2 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 text-xs focus:outline-none focus:border-white transition"
+            aria-label="Search users by name or email"
           />
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-neutral-500" />
+            <Filter className="w-3.5 h-3.5 text-neutral-500" aria-hidden="true" />
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
+              className="px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition cursor-pointer"
+              aria-label="Filter by role"
             >
               <option value="ALL">All Roles</option>
               <option value="FOUNDER">Founders</option>
@@ -219,7 +287,8 @@ export const Users = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition"
+            className="px-3 py-2 bg-black border border-neutral-800 rounded-xl text-neutral-200 text-xs focus:outline-none focus:border-white transition cursor-pointer"
+            aria-label="Filter by status"
           >
             <option value="ALL">All Statuses</option>
             <option value="ACTIVE">Active (Online Now)</option>
@@ -230,42 +299,44 @@ export const Users = () => {
       </div>
 
       {/* Users Table */}
-      {loading ? (
-        <LoadingSpinner text="Fetching registered team members..." />
-      ) : (
-        <UserTable
-          users={filteredUsers}
-          onEdit={(u) => {
-            setEditingUser(u);
-            setIsFormOpen(true);
-          }}
-          onRoleChange={handleRoleChange}
-          onToggleStatus={handleToggleStatus}
-          onDelete={(u) => setDeleteConfirmUser(u)}
-          currentUserId={currentUser?.id}
-        />
+      <UserTable
+        users={filteredUsers}
+        loading={loading}
+        canManageUsers={canManageUsers}
+        onEdit={canManageUsers ? (u) => {
+          setEditingUser(u);
+          setIsFormOpen(true);
+        } : undefined}
+        onRoleChange={canManageUsers ? handleRoleChange : undefined}
+        onToggleStatus={canManageUsers ? handleToggleStatus : undefined}
+        onDelete={canManageUsers ? (u) => setDeleteConfirmUser(u) : undefined}
+        currentUserId={currentUser?.id}
+      />
+
+      {/* Administrative Modals (Rendered ONLY for authorized Administrators and Founders) */}
+      {canManageUsers && (
+        <>
+          <UserForm
+            isOpen={isFormOpen}
+            onClose={() => {
+              setIsFormOpen(false);
+              setEditingUser(null);
+            }}
+            onSubmit={handleCreateOrEditUser}
+            initialData={editingUser}
+          />
+
+          <ConfirmModal
+            isOpen={Boolean(deleteConfirmUser)}
+            title="Delete User Account"
+            message={`Are you sure you want to permanently delete "${deleteConfirmUser?.full_name}" (${deleteConfirmUser?.email})? This action cannot be reversed.`}
+            confirmText="Delete Account"
+            loading={actionLoading}
+            onConfirm={handleDeleteUser}
+            onCancel={() => setDeleteConfirmUser(null)}
+          />
+        </>
       )}
-
-      {/* Modals */}
-      <UserForm
-        isOpen={isFormOpen}
-        onClose={() => {
-          setIsFormOpen(false);
-          setEditingUser(null);
-        }}
-        onSubmit={handleCreateOrEditUser}
-        initialData={editingUser}
-      />
-
-      <ConfirmModal
-        isOpen={Boolean(deleteConfirmUser)}
-        title="Delete User Account"
-        message={`Are you sure you want to permanently delete "${deleteConfirmUser?.full_name}" (${deleteConfirmUser?.email})? This action cannot be reversed.`}
-        confirmText="Delete Account"
-        loading={actionLoading}
-        onConfirm={handleDeleteUser}
-        onCancel={() => setDeleteConfirmUser(null)}
-      />
     </div>
   );
 };

@@ -198,7 +198,13 @@ export const DepartmentMembersModal = ({ department, onClose, onUpdated }) => {
                     {/* User Avatar */}
                     <div className="w-9 h-9 rounded-xl bg-neutral-800 border border-neutral-700 flex items-center justify-center text-white font-bold text-xs shrink-0 overflow-hidden">
                       {user.avatar_url ? (
-                        <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+                        <img
+                          src={user.avatar_url}
+                          alt={user.full_name}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
                       ) : (
                         user.full_name?.charAt(0)?.toUpperCase() || 'U'
                       )}

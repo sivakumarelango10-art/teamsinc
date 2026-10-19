@@ -2,6 +2,7 @@ import express from 'express';
 import kalvilearnRoutes from './routes/kalvilearnRoutes.js';
 import ticketsRoutes from './routes/ticketsRoutes.js';
 import docsRoutes from './routes/docsRoutes.js';
+import usersRoutes from './routes/usersRoutes.js';
 
 export const app = express();
 
@@ -20,7 +21,7 @@ app.use((req, res, next) => {
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, Idempotency-Key, X-TeamSync-Signature, X-TeamSync-Timestamp, X-Source, X-Source-Reference');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, Idempotency-Key, X-TeamSync-Signature, X-TeamSync-Timestamp, X-Source, X-Source-Reference, X-TeamSync-User-Id, X-TeamSync-User-Email, X-User-Id, X-User-Email');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -49,6 +50,7 @@ app.get('/health', handleHealth);
 app.get('/api/health', handleHealth);
 
 // 4. Mount API Routes
+app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/tickets', ticketsRoutes);
 app.use('/api/v1/integrations/kalvilearn', kalvilearnRoutes);
 app.use('/api', docsRoutes);

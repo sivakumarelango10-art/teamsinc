@@ -25,6 +25,7 @@ CREATE TABLE public.profiles (
     email TEXT UNIQUE NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR')) DEFAULT 'MEMBER',
     is_active BOOLEAN NOT NULL DEFAULT true,
+    avatar_url TEXT,
     last_seen_at TIMESTAMPTZ DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -132,14 +133,20 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
     reg_profile public.profiles%ROWTYPE;
+    google_avatar TEXT;
 BEGIN
+    google_avatar := COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture');
+
     -- Check if email exists in registered profiles
     SELECT * INTO reg_profile FROM public.profiles WHERE LOWER(email) = LOWER(NEW.email);
 
     -- Special Exception: If profile is marked as FOUNDER or no profile yet for designated founder
     IF reg_profile.id IS NOT NULL AND reg_profile.role = 'FOUNDER' THEN
         UPDATE public.profiles
-        SET auth_user_id = NEW.id, is_active = true
+        SET auth_user_id = NEW.id,
+            is_active = true,
+            avatar_url = COALESCE(profiles.avatar_url, google_avatar),
+            updated_at = now()
         WHERE id = reg_profile.id;
         RETURN NEW;
     END IF;
@@ -153,9 +160,11 @@ BEGIN
         RAISE EXCEPTION 'Access Denied: Account % has been deactivated by the Founder.', NEW.email;
     END IF;
 
-    -- Link auth_user_id to the pre-registered profile
+    -- Link auth_user_id and avatar to the pre-registered profile
     UPDATE public.profiles
-    SET auth_user_id = NEW.id
+    SET auth_user_id = NEW.id,
+        avatar_url = COALESCE(profiles.avatar_url, google_avatar),
+        updated_at = now()
     WHERE id = reg_profile.id;
 
     RETURN NEW;
@@ -244,16 +253,19 @@ END $$;
 
 -- PROFILES POLICIES
 DROP POLICY IF EXISTS "Anyone authenticated can view active profiles" ON public.profiles;
-CREATE POLICY "Anyone authenticated can view active profiles"
+DROP POLICY IF EXISTS "Anyone authenticated can view profiles" ON public.profiles;
+CREATE POLICY "Anyone authenticated can view profiles"
     ON public.profiles FOR SELECT
     TO authenticated
-    USING (is_active = true OR auth_user_id = auth.uid() OR public.is_founder());
+    USING (true);
 
 DROP POLICY IF EXISTS "Founder can manage all profiles" ON public.profiles;
-CREATE POLICY "Founder can manage all profiles"
+DROP POLICY IF EXISTS "Admins and Founders can manage profiles" ON public.profiles;
+CREATE POLICY "Admins and Founders can manage profiles"
     ON public.profiles FOR ALL
     TO authenticated
-    USING (public.is_founder());
+    USING (public.is_admin_or_founder())
+    WITH CHECK (public.is_admin_or_founder());
 
 -- Drop insecure anonymous select policy (Replaced by check_email_registered RPC)
 DROP POLICY IF EXISTS "Public can check email registration" ON public.profiles;

@@ -38,6 +38,7 @@ const VoiceNotePlayerComponent = ({
   const [totalDuration, setTotalDuration] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [hasError, setHasError] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const audioRef = useRef(null);
   const waveformRef = useRef(null);
@@ -152,8 +153,14 @@ const VoiceNotePlayerComponent = ({
       {/* Avatar with Micro Mic Badge (WhatsApp Demo Style) */}
       <div className="relative shrink-0 self-center">
         <div className="w-8 h-8 rounded-full bg-emerald-950/80 border border-emerald-800/80 flex items-center justify-center font-bold text-xs text-emerald-300 overflow-hidden shadow-sm">
-          {senderAvatar ? (
-            <img src={senderAvatar} alt="Sender" className="w-full h-full object-cover" />
+          {senderAvatar && !avatarError ? (
+            <img
+              src={senderAvatar}
+              alt="Sender"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+              onError={() => setAvatarError(true)}
+            />
           ) : (
             <span>{senderInitial}</span>
           )}

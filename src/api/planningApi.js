@@ -29,7 +29,7 @@ export const planningApi = {
           plan_id,
           user_id,
           department_id,
-          user:profiles!daily_assignments_user_id_fkey(id, full_name, email, role, is_active),
+          user:profiles!daily_assignments_user_id_fkey(id, full_name, email, role, is_active, avatar_url),
           department:departments!daily_assignments_department_id_fkey(id, name, description)
         `)
         .eq('plan_id', plan.id);

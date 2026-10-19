@@ -5,10 +5,10 @@ describe('TeamSync Security & Authorization Engine Tests', () => {
 
   describe('1. Role Access & Channel Isolation', () => {
     const roles = {
-      FOUNDER: { canGeneral: true, canLeadership: true, canManageUsers: true, canEditTaskMeta: true },
-      ADMIN: { canGeneral: true, canLeadership: true, canManageUsers: false, canEditTaskMeta: true },
-      FOUNDING_ADVISOR: { canGeneral: false, canLeadership: true, canManageUsers: false, canEditTaskMeta: false },
-      MEMBER: { canGeneral: true, canLeadership: false, canManageUsers: false, canEditTaskMeta: false }
+      FOUNDER: { canGeneral: true, canLeadership: true, canManageUsers: true, canViewUserDirectory: true, canEditTaskMeta: true },
+      ADMIN: { canGeneral: true, canLeadership: true, canManageUsers: true, canViewUserDirectory: true, canEditTaskMeta: true },
+      FOUNDING_ADVISOR: { canGeneral: false, canLeadership: true, canManageUsers: false, canViewUserDirectory: true, canEditTaskMeta: false },
+      MEMBER: { canGeneral: true, canLeadership: false, canManageUsers: false, canViewUserDirectory: true, canEditTaskMeta: false }
     };
 
     it('Founding Advisor is strictly locked to leadership channel and excluded from general chat', () => {
@@ -28,6 +28,15 @@ describe('TeamSync Security & Authorization Engine Tests', () => {
       assert.strictEqual(roles.ADMIN.canEditTaskMeta, true);
       assert.strictEqual(roles.MEMBER.canEditTaskMeta, false);
       assert.strictEqual(roles.FOUNDING_ADVISOR.canEditTaskMeta, false);
+    });
+
+    it('Founder and Admin have user management mutation rights, while Members have read-only access', () => {
+      assert.strictEqual(roles.FOUNDER.canManageUsers, true);
+      assert.strictEqual(roles.ADMIN.canManageUsers, true);
+      assert.strictEqual(roles.MEMBER.canManageUsers, false);
+      assert.strictEqual(roles.FOUNDING_ADVISOR.canManageUsers, false);
+      assert.strictEqual(roles.MEMBER.canViewUserDirectory, true);
+      assert.strictEqual(roles.ADMIN.canViewUserDirectory, true);
     });
   });
 

@@ -249,7 +249,13 @@ export const Departments = () => {
                           <div className="flex items-center gap-2 min-w-0">
                             <div className="w-6 h-6 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center text-[10px] font-bold text-white shrink-0 overflow-hidden">
                               {m.avatar_url ? (
-                                <img src={m.avatar_url} alt={m.full_name} className="w-full h-full object-cover" />
+                                <img
+                                  src={m.avatar_url}
+                                  alt={m.full_name}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
                               ) : (
                                 m.full_name?.charAt(0)?.toUpperCase() || 'U'
                               )}

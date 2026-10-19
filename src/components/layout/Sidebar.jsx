@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import BrandLogo from '../common/BrandLogo';
 import ReportBugModal from '../bugs/ReportBugModal';
+import Avatar from '../common/Avatar';
 
 export const Sidebar = ({ isOpen, onClose }) => {
   const { profile, role, isFounder, isAdmin, isFoundingAdvisor, logout } = useAuth();
@@ -44,6 +45,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/admin/bugs', label: 'Bug Reports', icon: Bug },
+        { to: '/admin/users', label: 'User Management', icon: Users },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
         { to: '/admin/assign-task', label: 'Assign New Task', icon: PlusCircle },
         { to: '/admin/daily-planning', label: 'Daily Task Allocation', icon: Calendar },
@@ -54,6 +56,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         { to: '/founding-advisor/dashboard', label: 'Overview', icon: LayoutDashboard },
         { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Leadership Chat', icon: Shield },
+        { to: '/founding-advisor/users', label: 'User Management', icon: Users },
         { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare },
         { to: '/profile', label: 'My Profile', icon: User }
       ];
@@ -62,6 +65,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         { to: '/member/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
         { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Team Chat', icon: MessageSquare },
+        { to: '/member/users', label: 'User Management', icon: Users },
         { to: '/member/tasks', label: 'My Tasks', icon: CheckSquare },
         { to: '/member/daily-plan', label: 'My Daily Plan', icon: Calendar },
         { to: '/member/bugs', label: 'My Reported Bugs', icon: Bug },
@@ -101,17 +105,13 @@ export const Sidebar = ({ isOpen, onClose }) => {
             title="View and Edit Profile"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-700 text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 group-hover:border-neutral-500 transition-all duration-250 shadow-inner">
-                {profile?.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt={profile.full_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span>{profile?.full_name?.charAt(0) || 'U'}</span>
-                )}
-              </div>
+              <Avatar
+                src={profile?.avatar_url}
+                name={profile?.full_name}
+                size="lg"
+                rounded="rounded-xl"
+                className="group-hover:border-neutral-500 transition-all duration-250 shadow-inner"
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-white truncate group-hover:text-emerald-400 transition-colors duration-200">
                   {profile?.full_name || 'Team Member'}

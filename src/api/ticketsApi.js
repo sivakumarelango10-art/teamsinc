@@ -43,7 +43,7 @@ export const ticketsApi = {
           .from('tickets')
           .select(`
             *,
-            assignee:profiles!tickets_assigned_to_fkey(id, full_name, email, role)
+            assignee:profiles!tickets_assigned_to_fkey(id, full_name, email, role, avatar_url)
           `, { count: 'exact' })
           .order('created_at', { ascending: false });
 
@@ -142,7 +142,7 @@ export const ticketsApi = {
         .from('tickets')
         .select(`
           *,
-          assignee:profiles!tickets_assigned_to_fkey(id, full_name, email, role)
+          assignee:profiles!tickets_assigned_to_fkey(id, full_name, email, role, avatar_url)
         `)
         .eq('ticket_number', ticketNumber);
 

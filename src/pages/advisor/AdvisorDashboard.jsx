@@ -22,6 +22,7 @@ import { useRealtime } from '../../hooks/useRealtime';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import TaskStatusBadge from '../../components/tasks/TaskStatusBadge';
 import TaskDetailsModal from '../../components/tasks/TaskDetailsModal';
+import Avatar from '../../components/common/Avatar';
 import { format, parseISO, isPast } from 'date-fns';
 
 export const AdvisorDashboard = () => {
@@ -279,9 +280,12 @@ export const AdvisorDashboard = () => {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-neutral-900 border border-neutral-700 flex items-center justify-center font-bold text-[10px] text-white shrink-0">
-                            {task.assignee?.full_name?.charAt(0) || 'U'}
-                          </div>
+                          <Avatar
+                            src={task.assignee?.avatar_url}
+                            name={task.assignee?.full_name}
+                            size="w-6 h-6 text-[10px]"
+                            rounded="rounded-md"
+                          />
                           <span className="text-neutral-200">{task.assignee?.full_name || 'Unassigned'}</span>
                         </div>
                       </td>

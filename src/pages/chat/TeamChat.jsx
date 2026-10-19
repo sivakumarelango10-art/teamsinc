@@ -13,6 +13,8 @@ import VoiceRecorderBar from '../../components/chat/VoiceRecorderBar';
 import ChatMessageItem from '../../components/chat/ChatMessageItem';
 import ActiveCallBanner from '../../components/call/ActiveCallBanner';
 import CallHistoryModal from '../../components/call/CallHistoryModal';
+import Avatar from '../../components/common/Avatar';
+import { usersApi } from '../../api/usersApi';
 import {
   Plus,
   Smile,
@@ -79,6 +81,20 @@ export const TeamChat = ({
 }) => {
   const { user, profile, isFounder, isAdmin, isFoundingAdvisor, isLeadership } = useAuth();
   const { isUserOnline, onlineCount } = usePresence();
+
+  const [usersList, setUsersList] = useState([]);
+  useEffect(() => {
+    usersApi.getUsers().then(list => setUsersList(list || [])).catch(() => {});
+  }, []);
+
+  const usersMap = React.useMemo(() => {
+    const map = {};
+    usersList.forEach(u => {
+      if (u.id) map[u.id] = u;
+      if (u.email) map[u.email.toLowerCase()] = u;
+    });
+    return map;
+  }, [usersList]);
 
   // Role channel permissions (Founding Advisor can ONLY access Leadership chat)
   const isAdvisor = profile?.role === 'FOUNDING_ADVISOR' || Boolean(isFoundingAdvisor);
@@ -735,9 +751,12 @@ export const TeamChat = ({
             {/* Top Header with Close / Hide Toggle Button */}
             <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-2xl bg-neutral-900 border border-neutral-750 flex items-center justify-center font-bold text-xs text-white shadow-sm">
-                  {profile?.full_name?.charAt(0) || 'U'}
-                </div>
+                <Avatar
+                  src={profile?.avatar_url}
+                  name={profile?.full_name}
+                  size="md"
+                  rounded="rounded-2xl"
+                />
                 <div>
                   <h2 className="text-base font-bold text-white tracking-tight">Chats</h2>
                   <p className="text-[11px] text-neutral-400">Team & Leadership</p>
@@ -1025,7 +1044,10 @@ export const TeamChat = ({
                     </div>
                   )}
                   <ChatMessageItem
-                    msg={msg}
+                    msg={(() => {
+                      const senderAvatar = msg.sender_avatar_url || usersMap[msg.sender_id]?.avatar_url || usersMap[msg.sender_email?.toLowerCase()]?.avatar_url;
+                      return senderAvatar && !msg.sender_avatar_url ? { ...msg, sender_avatar_url: senderAvatar } : msg;
+                    })()}
                     isSelf={isSelf}
                     isOnline={isOnline}
                     canDelete={canDelete}

@@ -935,8 +935,19 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
               </div>
 
               {m.sender === 'user' && (
-                <div className="w-6 h-6 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-300 shrink-0 mt-0.5 font-bold text-[10px]">
-                  {profile?.full_name?.charAt(0) || 'U'}
+                <div className="w-6 h-6 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-300 shrink-0 mt-0.5 font-bold text-[10px] overflow-hidden">
+                  {profile?.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  ) : null}
+                  <span className={profile?.avatar_url ? 'hidden' : 'inline'}>
+                    {profile?.full_name?.charAt(0) || 'U'}
+                  </span>
                 </div>
               )}
             </div>

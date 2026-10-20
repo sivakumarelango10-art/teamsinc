@@ -270,16 +270,57 @@ CREATE POLICY "Admins and Founders can manage profiles"
 -- Drop insecure anonymous select policy (Replaced by check_email_registered RPC)
 DROP POLICY IF EXISTS "Public can check email registration" ON public.profiles;
 
--- Allow authenticated users to update their own non-privileged profile columns
+-- Allow authenticated users to update their own profile columns
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
     ON public.profiles FOR UPDATE
     TO authenticated
-    USING (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
+    USING (
+        (auth_user_id IS NOT NULL AND auth_user_id = auth.uid()) 
+        OR (auth.jwt()->>'email' IS NOT NULL AND LOWER(email) = LOWER(auth.jwt()->>'email'))
+    )
     WITH CHECK (
-        (auth_user_id = auth.uid() OR LOWER(email) = LOWER(auth.jwt()->>'email'))
-        AND role = (SELECT role FROM public.profiles WHERE id = profiles.id)
+        (auth_user_id IS NOT NULL AND auth_user_id = auth.uid()) 
+        OR (auth.jwt()->>'email' IS NOT NULL AND LOWER(email) = LOWER(auth.jwt()->>'email'))
     );
+
+-- Enforce field immutability (role, email, id) via trigger
+CREATE OR REPLACE FUNCTION public.protect_profile_immutable_fields()
+RETURNS trigger AS $$
+BEGIN
+    IF NEW.id IS DISTINCT FROM OLD.id THEN
+        RAISE EXCEPTION 'Profile ID is immutable.';
+    END IF;
+
+    IF NOT public.is_admin_or_founder() THEN
+        IF NEW.role IS DISTINCT FROM OLD.role THEN
+            RAISE EXCEPTION 'Access Denied: You cannot modify your own assigned role.';
+        END IF;
+        IF NEW.is_active IS DISTINCT FROM OLD.is_active THEN
+            RAISE EXCEPTION 'Access Denied: You cannot modify your own account status.';
+        END IF;
+        IF NEW.email IS DISTINCT FROM OLD.email THEN
+            RAISE EXCEPTION 'Access Denied: Email address cannot be modified.';
+        END IF;
+    END IF;
+
+    IF LOWER(OLD.email) = 'sivakumarelango10@gmail.com' THEN
+        IF NEW.role IS DISTINCT FROM 'FOUNDER' THEN
+            RAISE EXCEPTION 'The primary Founder role cannot be modified.';
+        END IF;
+        IF NEW.is_active = false THEN
+            RAISE EXCEPTION 'The primary Founder account cannot be deactivated.';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_immutable_fields ON public.profiles;
+CREATE TRIGGER trg_protect_profile_immutable_fields
+BEFORE UPDATE ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION public.protect_profile_immutable_fields();
 
 -- DEPARTMENTS POLICIES
 DROP POLICY IF EXISTS "All authenticated view departments" ON public.departments;

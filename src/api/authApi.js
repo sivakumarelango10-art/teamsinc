@@ -207,28 +207,52 @@ export const authApi = {
     return null;
   },
 
-  // Upload Avatar to Supabase Storage
-  async uploadAvatar(file) {
+  // Upload Avatar to Supabase Storage with user-specific isolation
+  async uploadAvatar(file, userId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     if (!file) throw new Error('No image file selected');
 
-    const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filePath = `avatars/${Date.now()}_${cleanName}`;
+    // Resolve user ID for tenant isolation
+    let effectiveUserId = userId;
+    if (!effectiveUserId) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        effectiveUserId = user?.id;
+      } catch {}
+    }
+    const userFolder = effectiveUserId ? effectiveUserId.replace(/[^a-zA-Z0-9-]/g, '') : 'general';
+    const ext = file.name ? file.name.split('.').pop().toLowerCase() : 'webp';
+    const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'webp';
+    const filePath = `avatars/${userFolder}/avatar_${Date.now()}.${safeExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('chat-attachments')
+    // Attempt upload to dedicated avatars bucket, fallback to chat-attachments
+    let targetBucket = 'avatars';
+    let uploadRes = await supabase.storage
+      .from(targetBucket)
       .upload(filePath, file, {
+        contentType: file.type || `image/${safeExt}`,
         cacheControl: '3600',
         upsert: true
       });
 
-    if (uploadError) {
-      console.error('Avatar upload failed:', uploadError);
-      throw new Error(uploadError.message || 'Failed to upload avatar image');
+    if (uploadRes.error && uploadRes.error.message?.toLowerCase().includes('bucket not found')) {
+      targetBucket = 'chat-attachments';
+      uploadRes = await supabase.storage
+        .from(targetBucket)
+        .upload(filePath, file, {
+          contentType: file.type || `image/${safeExt}`,
+          cacheControl: '3600',
+          upsert: true
+        });
+    }
+
+    if (uploadRes.error) {
+      console.error('Avatar upload failed:', uploadRes.error);
+      throw new Error(uploadRes.error.message || 'Failed to upload avatar image. Please check file format.');
     }
 
     const { data: publicData } = supabase.storage
-      .from('chat-attachments')
+      .from(targetBucket)
       .getPublicUrl(filePath);
 
     return publicData?.publicUrl;
@@ -236,6 +260,8 @@ export const authApi = {
 
   // Update profile full_name and/or avatar_url
   async updateProfile(profileId, { full_name, avatar_url }) {
+    if (!profileId) throw new Error('Profile ID is required.');
+
     const updates = {
       updated_at: new Date().toISOString()
     };
@@ -250,9 +276,25 @@ export const authApi = {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database profile update error:', error);
+        throw new Error(error.message || 'Failed to update profile record in database.');
+      }
 
-      // Update Supabase Auth metadata
+      // Invalidate memory cache so subsequent user list / directory queries reflect updates immediately
+      try {
+        const { invalidateUsersCache } = await import('./usersApi.js');
+        invalidateUsersCache();
+      } catch {}
+
+      // Broadcast update across active browser tabs
+      try {
+        const bc = new BroadcastChannel('teamsync_bc_profiles');
+        bc.postMessage({ type: 'PROFILE_UPDATED', profileId, data });
+        bc.close();
+      } catch {}
+
+      // Update Supabase Auth metadata in the background if possible
       try {
         await supabase.auth.updateUser({
           data: {
@@ -261,7 +303,7 @@ export const authApi = {
           }
         });
       } catch (authErr) {
-        console.warn('Could not update user metadata:', authErr);
+        console.warn('Could not update Supabase auth metadata:', authErr);
       }
 
       return data;

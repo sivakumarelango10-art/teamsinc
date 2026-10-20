@@ -10,23 +10,30 @@ import {
   AlertCircle,
   Loader2,
   Award,
-  Building2
+  Building2,
+  Edit2
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { departmentsApi } from '../../api/departmentsApi';
 import { format, parseISO } from 'date-fns';
+import ImageCropperModal from '../../components/profile/ImageCropperModal';
 
 export const Profile = () => {
   const { user, profile, role, updateCurrentUserProfile, uploadUserAvatar } = useAuth();
 
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
-  const [selectedFile, setSelectedFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatar_url || null);
   const [userDepartments, setUserDepartments] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [nameError, setNameError] = useState('');
+
+  // Cropper Modal State
+  const [cropImageSrc, setCropImageSrc] = useState(null);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -34,11 +41,9 @@ export const Profile = () => {
     if (profile) {
       setFullName(profile.full_name || '');
       setAvatarUrl(profile.avatar_url || '');
-      if (!selectedFile) {
-        setAvatarPreview(profile.avatar_url || null);
-      }
+      setAvatarPreview(profile.avatar_url || null);
     }
-  }, [profile, selectedFile]);
+  }, [profile]);
 
   useEffect(() => {
     const userId = profile?.id || user?.id;
@@ -49,35 +54,105 @@ export const Profile = () => {
     }
   }, [profile?.id, user?.id]);
 
+  // File Selection & Validation
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
+    // Reset input so user can pick the same file again if desired
+    if (e.target) e.target.value = '';
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setErrorMsg('Please select a valid image file (PNG, JPG, WebP).');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg('Image size must be less than 5MB.');
-      return;
-    }
-
-    setSelectedFile(file);
     setErrorMsg('');
     setSuccessMsg('');
 
+    // Validate MIME type
+    const validMimes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validMimes.includes(file.type.toLowerCase())) {
+      setErrorMsg('Please select a supported image file (JPEG, PNG, or WebP).');
+      return;
+    }
+
+    // Validate size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMsg('Image size exceeds the 5MB limit. Please choose a smaller photo.');
+      return;
+    }
+
+    // Read image into Data URL for cropper preview
     const reader = new FileReader();
     reader.onload = () => {
-      setAvatarPreview(reader.result);
+      setCropImageSrc(reader.result);
+      setIsCropperOpen(true);
+    };
+    reader.onerror = () => {
+      setErrorMsg('Failed to read image file from device. Please try again.');
     };
     reader.readAsDataURL(file);
   };
 
+  // Save Cropped Avatar
+  const handleSaveCroppedAvatar = async (croppedFile) => {
+    try {
+      setAvatarSaving(true);
+      setErrorMsg('');
+      setSuccessMsg('');
+
+      // 1. Upload cropped image to storage
+      const uploadedUrl = await uploadUserAvatar(croppedFile);
+
+      // 2. Persist new avatar URL to user profile
+      const updated = await updateCurrentUserProfile({
+        avatar_url: uploadedUrl,
+        full_name: fullName.trim() || profile?.full_name
+      });
+
+      setAvatarUrl(uploadedUrl);
+      setAvatarPreview(uploadedUrl);
+      setIsCropperOpen(false);
+      setCropImageSrc(null);
+      setSuccessMsg('Profile picture updated successfully!');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err) {
+      console.error('Failed to save profile picture:', err);
+      // Clean, actionable user error message without exposing SQL/internal details
+      const msg = err.message || '';
+      if (msg.includes('subquery')) {
+        setErrorMsg('Database configuration error prevented update. Please try again.');
+      } else {
+        setErrorMsg(msg || 'Failed to update profile picture. Please try again.');
+      }
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
+
+  // Full Name Input Validation
+  const handleNameChange = (e) => {
+    const val = e.target.value;
+    setFullName(val);
+    if (!val.trim()) {
+      setNameError('Full name cannot be empty.');
+    } else if (val.trim().length < 2) {
+      setNameError('Full name must be at least 2 characters.');
+    } else if (val.trim().length > 60) {
+      setNameError('Full name cannot exceed 60 characters.');
+    } else {
+      setNameError('');
+    }
+  };
+
+  // Save Profile Details
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!fullName.trim()) {
-      setErrorMsg('Full name cannot be empty.');
+    const cleanName = fullName.trim();
+
+    if (!cleanName) {
+      setNameError('Full name is required.');
+      setErrorMsg('Please enter a valid display name.');
+      return;
+    }
+
+    if (cleanName.length < 2 || cleanName.length > 60) {
+      setErrorMsg('Full name must be between 2 and 60 characters.');
       return;
     }
 
@@ -86,23 +161,21 @@ export const Profile = () => {
       setErrorMsg('');
       setSuccessMsg('');
 
-      let uploadedUrl = avatarUrl;
-      if (selectedFile) {
-        uploadedUrl = await uploadUserAvatar(selectedFile);
-        setAvatarUrl(uploadedUrl);
-      }
-
       await updateCurrentUserProfile({
-        full_name: fullName.trim(),
-        avatar_url: uploadedUrl
+        full_name: cleanName,
+        avatar_url: avatarUrl
       });
 
-      setSelectedFile(null);
       setSuccessMsg('Profile updated successfully!');
-      setTimeout(() => setSuccessMsg(''), 3500);
+      setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err) {
       console.error('Failed to update profile:', err);
-      setErrorMsg(err.message || 'Failed to update profile. Please try again.');
+      const msg = err.message || '';
+      if (msg.includes('subquery')) {
+        setErrorMsg('Database error prevented saving. Please try again.');
+      } else {
+        setErrorMsg(msg || 'Failed to update profile. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -163,14 +236,20 @@ export const Profile = () => {
 
         {/* Notifications */}
         {successMsg && (
-          <div className="p-3.5 rounded-2xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
+          <div
+            role="status"
+            className="p-3.5 rounded-2xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn"
+          >
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
 
         {errorMsg && (
-          <div className="p-3.5 rounded-2xl bg-red-950/60 border border-red-800/80 text-red-300 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
+          <div
+            role="alert"
+            className="p-3.5 rounded-2xl bg-red-950/60 border border-red-800/80 text-red-300 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn"
+          >
             <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -184,13 +263,13 @@ export const Profile = () => {
               {avatarPreview ? (
                 <img
                   src={avatarPreview}
-                  alt={fullName}
+                  alt={fullName || 'Profile Avatar'}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                   onError={() => setAvatarPreview(null)}
                 />
               ) : (
-                <span>{fullName?.charAt(0) || 'U'}</span>
+                <span>{(fullName?.trim().charAt(0) || 'U').toUpperCase()}</span>
               )}
             </div>
 
@@ -199,7 +278,8 @@ export const Profile = () => {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="absolute -bottom-2 -right-2 p-2.5 rounded-2xl bg-white text-black hover:bg-neutral-200 border-2 border-black shadow-lg transition-all duration-150 active:scale-90 cursor-pointer"
-              title="Change profile photo"
+              title="Upload and crop photo"
+              aria-label="Upload and crop photo"
             >
               <Camera className="w-4 h-4" />
             </button>
@@ -207,9 +287,10 @@ export const Profile = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
+              accept="image/png,image/jpeg,image/webp"
               onChange={handleFileChange}
               className="hidden"
+              aria-label="Upload profile photo"
             />
           </div>
 
@@ -225,7 +306,7 @@ export const Profile = () => {
               <span>{profile?.email || user?.email}</span>
             </p>
             <p className="text-[11px] text-neutral-500">
-              Click the camera icon to upload a custom profile picture (PNG, JPG up to 5MB).
+              Click the camera icon to upload and crop a custom photo (JPEG, PNG, WebP up to 5MB).
             </p>
           </div>
         </div>
@@ -234,29 +315,42 @@ export const Profile = () => {
         <form onSubmit={handleSave} className="space-y-5">
           {/* Full Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-neutral-300 block">
-              Full Name
+            <label htmlFor="profile-full-name" className="text-xs font-bold text-neutral-300 block flex items-center justify-between">
+              <span>Full Name</span>
+              <span className="text-[11px] text-neutral-500 font-normal">Editable</span>
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="profile-full-name"
                 type="text"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Your full name"
-                className="w-full pl-10 pr-4 py-2.5 bg-neutral-900 border border-neutral-800 rounded-2xl text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-white transition"
+                onChange={handleNameChange}
+                placeholder="Your display name"
+                maxLength={60}
+                className={`w-full pl-10 pr-4 py-2.5 bg-neutral-900 border rounded-2xl text-sm text-white placeholder-neutral-500 focus:outline-none transition ${
+                  nameError ? 'border-red-600 focus:border-red-500' : 'border-neutral-800 focus:border-white'
+                }`}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby={nameError ? 'name-error-msg' : undefined}
               />
             </div>
+            {nameError && (
+              <p id="name-error-msg" className="text-[11px] text-red-400 font-medium">
+                {nameError}
+              </p>
+            )}
           </div>
 
           {/* Email Address (Read-Only) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-neutral-400 block">
+            <label htmlFor="profile-email" className="text-xs font-bold text-neutral-400 block">
               Email Address <span className="text-[10px] text-neutral-500 font-normal">(Primary Google Workspace ID)</span>
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-neutral-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="profile-email"
                 type="email"
                 value={profile?.email || user?.email || ''}
                 disabled
@@ -267,12 +361,13 @@ export const Profile = () => {
 
           {/* Role & Access (Read-Only) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-neutral-400 block">
+            <label htmlFor="profile-role" className="text-xs font-bold text-neutral-400 block">
               Assigned Role
             </label>
             <div className="relative">
               <Shield className="w-4 h-4 text-neutral-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="profile-role"
                 type="text"
                 value={role || 'MEMBER'}
                 disabled
@@ -328,8 +423,8 @@ export const Profile = () => {
           <div className="pt-4 flex justify-end">
             <button
               type="submit"
-              disabled={saving}
-              className="px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-50 rounded-2xl text-xs font-extrabold transition-all duration-150 active:scale-95 flex items-center gap-2 shadow-lg cursor-pointer"
+              disabled={saving || Boolean(nameError)}
+              className="px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl text-xs font-extrabold transition-all duration-150 active:scale-95 flex items-center gap-2 shadow-lg cursor-pointer"
             >
               {saving ? (
                 <>
@@ -346,6 +441,18 @@ export const Profile = () => {
           </div>
         </form>
       </div>
+
+      {/* Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={isCropperOpen}
+        imageSrc={cropImageSrc}
+        saving={avatarSaving}
+        onCancel={() => {
+          setIsCropperOpen(false);
+          setCropImageSrc(null);
+        }}
+        onSave={handleSaveCroppedAvatar}
+      />
     </div>
   );
 };

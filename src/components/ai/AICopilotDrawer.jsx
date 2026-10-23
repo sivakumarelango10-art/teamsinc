@@ -56,7 +56,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
     {
       id: 'welcome-1',
       sender: 'copilot',
-      text: `Hello **${profile?.full_name || 'Team Member'}**! I am your **TeamSync AI Copilot**.\n\nI have live visibility across your dashboard tasks, daily workforce planning, bug reports, and department workloads. How can I assist your operations today?`,
+      text: `Hello **${profile?.full_name || 'Team Member'}**! I am your **TeamSinc AI Copilot**.\n\nI have live visibility across your dashboard tasks, daily workforce planning, bug reports, and department workloads. How can I assist your operations today?`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -779,7 +779,7 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
       }`}
       role="dialog"
       aria-modal="true"
-      aria-label="TeamSync AI Copilot"
+      aria-label="TeamSinc AI Copilot"
     >
       {/* Backdrop with smooth blur and fade */}
       <div
@@ -807,11 +807,11 @@ export const AICopilotDrawer = ({ isOpen, onClose }) => {
           <div className="flex items-center gap-2.5">
             <div className="relative w-9 h-9 rounded-xl overflow-hidden shadow-lg shrink-0 border border-neutral-750 bg-black p-0.5 group">
               <span className="absolute -inset-0.5 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 opacity-60 blur-xs animate-pulse -z-10" />
-              <img src="/ai-logo.png" alt="TeamSync AI" className="w-full h-full object-cover rounded-lg" />
+              <img src="/ai-logo.png" alt="TeamSinc AI" className="w-full h-full object-cover rounded-lg" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h2 className="text-sm font-bold text-white tracking-tight">TeamSync Copilot</h2>
+                <h2 className="text-sm font-bold text-white tracking-tight">TeamSinc Copilot</h2>
                 <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-700/80 text-emerald-400 font-bold uppercase tracking-wider">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                   Active

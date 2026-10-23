@@ -68,7 +68,7 @@ export const DashboardLayout = ({ title, children }) => {
             type="button"
             onClick={() => setCopilotOpen(true)}
             className="relative w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-full bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 p-[2px] shadow-[0_4px_24px_rgba(99,102,241,0.5)] hover:shadow-[0_6px_32px_rgba(168,85,247,0.75)] hover:scale-110 active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center cursor-pointer group ai-gradient-border"
-            title="TeamSync AI Copilot (Ctrl + K)"
+            title="TeamSinc AI Copilot (Ctrl + K)"
             aria-label="Open AI Copilot"
           >
             <div className="w-full h-full bg-neutral-950 rounded-full overflow-hidden flex items-center justify-center p-0.5">

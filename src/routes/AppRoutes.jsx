@@ -46,7 +46,7 @@ export const AppRoutes = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
-        <LoadingSpinner text="Starting TeamSync..." size="large" />
+        <LoadingSpinner text="Starting TeamSinc..." size="large" />
       </div>
     );
   }

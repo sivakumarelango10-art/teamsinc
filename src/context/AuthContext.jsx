@@ -54,7 +54,7 @@ export const AuthProvider = ({ children }) => {
             await supabase.auth.signOut();
             setUser(null);
             setProfile(null);
-            setError(verification.error || 'Access Denied: Your email is not registered in TeamSync.');
+            setError(verification.error || 'Access Denied: Your email is not registered in TeamSinc.');
             return;
           }
 

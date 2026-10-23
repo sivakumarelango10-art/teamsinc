@@ -223,7 +223,7 @@ export const CallNotificationProvider = ({ children }) => {
     clearIncomingRing();
   }, [incomingCall]);
 
-  const startCall = useCallback(async (callType = 'video', roomId = 'general', roomTitle = 'TeamSync Company HQ') => {
+  const startCall = useCallback(async (callType = 'video', roomId = 'general', roomTitle = 'TeamSinc Company HQ') => {
     // Generate canonical UUID for call session
     const callId = generateCallId();
     const callerId = currentUser.id;
@@ -363,7 +363,7 @@ export const CallNotificationProvider = ({ children }) => {
               <h3 className="text-base font-bold text-white tracking-tight mt-1 truncate max-w-[240px]">
                 {incomingCall.caller_name}
               </h3>
-              <p className="text-xs text-neutral-400">TeamSync Company Channel (#general)</p>
+              <p className="text-xs text-neutral-400">TeamSinc Company Channel (#general)</p>
             </div>
 
             {/* Actions: Decline / Join */}
@@ -397,7 +397,7 @@ export const CallNotificationProvider = ({ children }) => {
             callSession={activeCallSession}
             currentUser={currentUser}
             roomId={activeCallSession.room_id || 'general'}
-            roomTitle={activeCallSession.room_title || 'TeamSync Company HQ'}
+            roomTitle={activeCallSession.room_title || 'TeamSinc Company HQ'}
             isAudioOnly={activeCallSession.call_type === 'voice'}
             onLeaveCall={leaveCall}
             onEndCall={endCall}

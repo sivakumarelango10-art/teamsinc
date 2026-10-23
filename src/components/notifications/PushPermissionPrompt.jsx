@@ -114,7 +114,7 @@ const PushPermissionPrompt = () => {
               <>
                 <p className="text-sm font-semibold text-white">Stay in the loop</p>
                 <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">
-                  Get notified about new messages and incoming calls — even when TeamSync is in the background.
+                  Get notified about new messages and incoming calls — even when TeamSinc is in the background.
                 </p>
               </>
             )}

@@ -229,7 +229,7 @@ class NotificationService {
     if (this.hasPermission) {
       try {
         const preview = content.length > 80 ? content.substring(0, 77) + '...' : content;
-        const notification = new Notification(`${senderName || 'Team Member'} · TeamSync`, {
+        const notification = new Notification(`${senderName || 'Team Member'} · TeamSinc`, {
           body: preview || 'Sent a message in #general',
           icon: '/logo.jpg',
           badge: '/logo.jpg',

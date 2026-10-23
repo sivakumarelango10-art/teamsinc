@@ -1,4 +1,4 @@
-// TeamSync Gemini AI Multi-Role Engine
+// TeamSinc Gemini AI Multi-Role Engine
 // Connects separate API keys for Founder, Admin, and Founding Advisor
 
 const getEnv = (key) => {
@@ -329,7 +329,7 @@ export const geminiApi = {
   async generateDepartmentSuggestions({ prompt, currentDepartments = [] }) {
     const existingNames = currentDepartments.map(d => d.name).join(', ') || 'None';
 
-    const systemInstruction = `You are an elite Enterprise Organizational Architect for TeamSync.
+    const systemInstruction = `You are an elite Enterprise Organizational Architect for TeamSinc.
 Your task is to analyze the user's organization request and return a JSON array of optimized departments.
 Current existing departments: [${existingNames}]. Do not duplicate existing department names unless improving them.
 Return STRICT JSON format:
@@ -426,7 +426,7 @@ Return STRICT JSON format:
 
     const deptList = departments.map(d => ({ id: d.id, name: d.name, description: d.description || '' }));
 
-    const systemInstruction = `You are the Automated Bug Triage & Intelligent Routing Engine for TeamSync.
+    const systemInstruction = `You are the Automated Bug Triage & Intelligent Routing Engine for TeamSinc.
 Analyze the reported issue and assign it to the most appropriate functional department.
 Available departments: ${JSON.stringify(deptList)}.
 
@@ -487,7 +487,7 @@ Initial User Severity: ${severity}`;
     systemSnapshot = {},
     conversationHistory = []
   }) {
-    const systemInstruction = `You are TeamSync AI Copilot, the authoritative, elite enterprise operations intelligence system embedded directly into TeamSync.
+    const systemInstruction = `You are TeamSinc AI Copilot, the authoritative, elite enterprise operations intelligence system embedded directly into TeamSinc.
 
 WORKSPACE CONTEXT & TELEMETRY:
 - Current User: ${userName} | Active Role: ${role}
@@ -542,7 +542,7 @@ SECURITY & PRIVILEGE BOUNDARIES:
 
   // ─── 4. Daily Morning Executive Briefing ──────────────────────────────────
   async generateDailyBriefing({ role = 'FOUNDER', userName = 'Leader', systemSnapshot = {} }) {
-    const systemInstruction = `You are the TeamSync Executive AI Briefing Engine.
+    const systemInstruction = `You are the TeamSinc Executive AI Briefing Engine.
 Create a sharp, comprehensive executive daily briefing report for ${userName} (${role}).
 Format with rich GitHub markdown:
 1. 🎯 **Today's Strategic Focus** (Top 2-3 priorities today)
@@ -565,7 +565,7 @@ ${JSON.stringify(systemSnapshot, null, 2)}`;
 
   // ─── 5. Task Subtask & Milestone Breakdown ────────────────────────────────
   async breakdownTaskIntoSubtasks({ title, description, departmentName = '' }) {
-    const systemInstruction = `You are a Senior Project Architect for TeamSync.
+    const systemInstruction = `You are a Senior Project Architect for TeamSinc.
 Break down the provided task deliverable into 3-5 concrete, actionable subtasks/milestones.
 Return STRICT JSON format:
 {

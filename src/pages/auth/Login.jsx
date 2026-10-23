@@ -38,7 +38,7 @@ export const Login = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-neutral-950 p-8 rounded-2xl border border-neutral-800 shadow-2xl">
-          <h2 className="text-xl font-bold text-white mb-1.5">Sign in to TeamSync</h2>
+          <h2 className="text-xl font-bold text-white mb-1.5">Sign in to TeamSinc</h2>
           <p className="text-xs text-neutral-400 mb-6">
             Authentication is restricted to verified team members. Sign in with your registered Google account.
           </p>

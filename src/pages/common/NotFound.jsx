@@ -130,7 +130,7 @@ export const NotFound = () => {
                 <Compass className="w-3.5 h-3.5 text-neutral-400" />
                 Quick Destinations
               </span>
-              <span className="text-[10px] text-neutral-400 font-medium">TeamSync Navigation</span>
+              <span className="text-[10px] text-neutral-400 font-medium">TeamSinc Navigation</span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -185,7 +185,7 @@ export const NotFound = () => {
 
       {/* Footer */}
       <footer className="relative z-10 w-full px-6 py-4 text-center border-t border-neutral-900 text-xs text-neutral-400">
-        &copy; {new Date().getFullYear()} TeamSync Platform. All rights reserved.
+        &copy; {new Date().getFullYear()} TeamSinc Platform. All rights reserved.
       </footer>
 
       {/* Bug Report Modal */}

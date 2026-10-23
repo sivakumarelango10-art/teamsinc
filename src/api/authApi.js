@@ -114,7 +114,7 @@ export const authApi = {
       registered: false,
       profile: null,
       role: null,
-      error: `Access Denied: The email "${cleanEmail}" is not registered in TeamSync. Only accounts registered by the Founder can sign in.`
+      error: `Access Denied: The email "${cleanEmail}" is not registered in TeamSinc. Only accounts registered by the Founder can sign in.`
     };
   },
 

@@ -23,7 +23,7 @@ export const generateCallId = () => {
 
 export const callApi = {
   // Create a new call session with canonical UUID
-  async createCallSession({ id, roomId = 'general', roomTitle = 'TeamSync HQ General Call', caller, callType = 'video' }) {
+  async createCallSession({ id, roomId = 'general', roomTitle = 'TeamSinc HQ General Call', caller, callType = 'video' }) {
     const callUuid = isValidUuid(id) ? id : generateCallId();
     const sessionData = {
       id: callUuid,

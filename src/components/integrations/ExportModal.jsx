@@ -53,7 +53,7 @@ const RESOURCE_OPTIONS = [
   { id: 'tickets', label: 'Tickets & Reports', icon: Layers, description: 'KalviLearn bugs, features, and feedback' },
   { id: 'students', label: 'Students', icon: GraduationCap, description: 'Learner activity, submissions, and cohorts' },
   { id: 'mentors', label: 'Mentors', icon: Users, description: 'Mentor oversight and activity' },
-  { id: 'tasks', label: 'Tasks & Issues', icon: CheckSquare, description: 'TeamSync engineering tasks backlog' },
+  { id: 'tasks', label: 'Tasks & Issues', icon: CheckSquare, description: 'TeamSinc engineering tasks backlog' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Live KPI summary and category distributions' }
 ];
 
@@ -148,7 +148,7 @@ export const ExportModal = ({
               <h2 className="text-base font-black text-white tracking-tight flex items-center gap-2">
                 <span>Export Integration Data</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
-                  TeamSync × KalviLearn
+                  TeamSinc × KalviLearn
                 </span>
               </h2>
               <p className="text-xs text-neutral-400 mt-0.5">

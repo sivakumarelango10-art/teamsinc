@@ -12,7 +12,7 @@ export class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('TeamSync Uncaught Application Error:', error, errorInfo);
+    console.error('TeamSinc Uncaught Application Error:', error, errorInfo);
   }
 
   handleReload = () => {
@@ -35,7 +35,7 @@ export class ErrorBoundary extends React.Component {
             Something unexpected occurred
           </h1>
           <p className="text-xs md:text-sm text-neutral-400 max-w-md mb-6 leading-relaxed">
-            TeamSync encountered a temporary glitch. We have protected your session and state.
+            TeamSinc encountered a temporary glitch. We have protected your session and state.
           </p>
 
           {this.state.error?.message && (
@@ -50,7 +50,7 @@ export class ErrorBoundary extends React.Component {
               className="px-5 py-2.5 rounded-xl bg-white text-black hover:bg-neutral-200 font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow-md"
             >
               <RefreshCw className="w-4 h-4" />
-              Reload TeamSync
+              Reload TeamSinc
             </button>
             <button
               onClick={this.handleGoHome}

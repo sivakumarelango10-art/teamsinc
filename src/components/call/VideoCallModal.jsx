@@ -43,7 +43,7 @@ export const VideoCallModal = ({
   callSession,
   currentUser,
   roomId = 'general',
-  roomTitle = 'TeamSync Company HQ',
+  roomTitle = 'TeamSinc Company HQ',
   isAudioOnly = false,
   onLeaveCall,
   onEndCall,
@@ -171,7 +171,7 @@ export const VideoCallModal = ({
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        a.download = `teamsync-call-record-${new Date().toISOString().slice(0, 10)}.webm`;
+        a.download = `teamsinc-call-record-${new Date().toISOString().slice(0, 10)}.webm`;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
@@ -280,7 +280,7 @@ export const VideoCallModal = ({
         {/* Left: Call Title & Duration */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-white p-0.5 flex items-center justify-center overflow-hidden shadow-sm">
-            <img src="/logo.jpg" alt="TeamSync" className="w-full h-full object-contain" />
+            <img src="/logo.jpg" alt="TeamSinc" className="w-full h-full object-contain" />
           </div>
 
           <div>

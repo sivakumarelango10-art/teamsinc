@@ -1,6 +1,8 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+import ChunkErrorBoundary from '../components/common/ChunkErrorBoundary';
 
 // Layout
 import DashboardLayout from '../components/layout/DashboardLayout';
@@ -14,32 +16,32 @@ const PageLoadingFallback = () => (
   </div>
 );
 
-// Route-level code-splitting (cuts initial bundle size & defers recharts/chat/reports)
-const Login = lazy(() => import('../pages/auth/Login'));
-const FounderDashboard = lazy(() => import('../pages/founder/FounderDashboard'));
-const Users = lazy(() => import('../pages/founder/Users'));
-const Departments = lazy(() => import('../pages/founder/Departments'));
-const Reports = lazy(() => import('../pages/founder/Reports'));
+// Route-level code-splitting with automated stale-chunk loading recovery
+const Login = lazyWithRetry(() => import('../pages/auth/Login'), 'Login');
+const FounderDashboard = lazyWithRetry(() => import('../pages/founder/FounderDashboard'), 'FounderDashboard');
+const Users = lazyWithRetry(() => import('../pages/founder/Users'), 'Users');
+const Departments = lazyWithRetry(() => import('../pages/founder/Departments'), 'Departments');
+const Reports = lazyWithRetry(() => import('../pages/founder/Reports'), 'Reports');
 
-const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
-const Tasks = lazy(() => import('../pages/admin/Tasks'));
-const AssignTask = lazy(() => import('../pages/admin/AssignTask'));
-const DailyPlanning = lazy(() => import('../pages/admin/DailyPlanning'));
+const AdminDashboard = lazyWithRetry(() => import('../pages/admin/AdminDashboard'), 'AdminDashboard');
+const Tasks = lazyWithRetry(() => import('../pages/admin/Tasks'), 'Tasks');
+const AssignTask = lazyWithRetry(() => import('../pages/admin/AssignTask'), 'AssignTask');
+const DailyPlanning = lazyWithRetry(() => import('../pages/admin/DailyPlanning'), 'DailyPlanning');
 
-const MemberDashboard = lazy(() => import('../pages/member/MemberDashboard'));
-const MyTasks = lazy(() => import('../pages/member/MyTasks'));
-const MyDailyPlan = lazy(() => import('../pages/member/MyDailyPlan'));
-const TeamChat = lazy(() => import('../pages/chat/TeamChat'));
-const LeadershipChat = lazy(() => import('../pages/chat/LeadershipChat'));
-const AdvisorDashboard = lazy(() => import('../pages/advisor/AdvisorDashboard'));
-const AdvisorTasks = lazy(() => import('../pages/advisor/AdvisorTasks'));
+const MemberDashboard = lazyWithRetry(() => import('../pages/member/MemberDashboard'), 'MemberDashboard');
+const MyTasks = lazyWithRetry(() => import('../pages/member/MyTasks'), 'MyTasks');
+const MyDailyPlan = lazyWithRetry(() => import('../pages/member/MyDailyPlan'), 'MyDailyPlan');
+const TeamChat = lazyWithRetry(() => import('../pages/chat/TeamChat'), 'TeamChat');
+const LeadershipChat = lazyWithRetry(() => import('../pages/chat/LeadershipChat'), 'LeadershipChat');
+const AdvisorDashboard = lazyWithRetry(() => import('../pages/advisor/AdvisorDashboard'), 'AdvisorDashboard');
+const AdvisorTasks = lazyWithRetry(() => import('../pages/advisor/AdvisorTasks'), 'AdvisorTasks');
 
-const BugManagement = lazy(() => import('../pages/bugs/BugManagement'));
-const MyReportedBugs = lazy(() => import('../pages/bugs/MyReportedBugs'));
+const BugManagement = lazyWithRetry(() => import('../pages/bugs/BugManagement'), 'BugManagement');
+const MyReportedBugs = lazyWithRetry(() => import('../pages/bugs/MyReportedBugs'), 'MyReportedBugs');
 const KalviLearnHub = lazy(() => import('../pages/integrations/KalviLearnHub'));
-const MeetingHub = lazy(() => import('../pages/meetings/MeetingHub'));
-const Profile = lazy(() => import('../pages/profile/Profile'));
-const NotFound = lazy(() => import('../pages/common/NotFound'));
+const MeetingHub = lazyWithRetry(() => import('../pages/meetings/MeetingHub'), 'MeetingHub');
+const Profile = lazyWithRetry(() => import('../pages/profile/Profile'), 'Profile');
+const NotFound = lazyWithRetry(() => import('../pages/common/NotFound'), 'NotFound');
 
 export const AppRoutes = () => {
   const { user, profile, loading } = useAuth();
@@ -160,7 +162,9 @@ export const AppRoutes = () => {
         element={
           <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
             <DashboardLayout title="Chats">
-              <TeamChat />
+              <ChunkErrorBoundary routeName="Chats">
+                <TeamChat />
+              </ChunkErrorBoundary>
             </DashboardLayout>
           </ProtectedRoute>
         }

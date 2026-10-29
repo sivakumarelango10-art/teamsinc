@@ -59,7 +59,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         { to: '/founding-advisor/dashboard', label: 'Overview', icon: LayoutDashboard },
         { to: '/meetings', label: 'Meetings', icon: Video },
         { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
-        { to: '/chat', label: 'Leadership Chat', icon: Shield },
+        { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/founding-advisor/users', label: 'User Management', icon: Users },
         { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare },
         { to: '/profile', label: 'My Profile', icon: User }
@@ -69,7 +69,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         { to: '/member/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
         { to: '/meetings', label: 'Meetings', icon: Video },
         { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
-        { to: '/chat', label: 'Team Chat', icon: MessageSquare },
+        { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/member/users', label: 'User Management', icon: Users },
         { to: '/member/tasks', label: 'My Tasks', icon: CheckSquare },
         { to: '/member/daily-plan', label: 'My Daily Plan', icon: Calendar },

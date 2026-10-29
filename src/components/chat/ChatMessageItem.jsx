@@ -151,6 +151,7 @@ const ChatMessageItemComponent = ({
             senderInitial={msg.sender_name?.charAt(0) || 'U'}
             timestamp={formatMessageTime(msg.created_at)}
             isOptimistic={msg.isOptimistic}
+            status={msg.is_read ? 'read' : (msg.recipient_id ? 'sent' : 'read')}
           />
         </div>
       ) : (
@@ -285,7 +286,10 @@ const ChatMessageItemComponent = ({
               >
                 <span>{formatMessageTime(msg.created_at)}</span>
                 {isSelf && (
-                  <WhatsAppCheck isOptimistic={msg.isOptimistic} status="read" />
+                  <WhatsAppCheck
+                    isOptimistic={msg.isOptimistic}
+                    status={msg.is_read ? 'read' : (msg.recipient_id ? 'sent' : 'read')}
+                  />
                 )}
               </span>
             </div>
@@ -296,7 +300,10 @@ const ChatMessageItemComponent = ({
             >
               <span>{formatMessageTime(msg.created_at)}</span>
               {isSelf && (
-                <WhatsAppCheck isOptimistic={msg.isOptimistic} status="read" />
+                <WhatsAppCheck
+                  isOptimistic={msg.isOptimistic}
+                  status={msg.is_read ? 'read' : (msg.recipient_id ? 'sent' : 'read')}
+                />
               )}
             </div>
           )}

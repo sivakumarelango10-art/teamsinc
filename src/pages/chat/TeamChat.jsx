@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { usePresence } from '../../context/PresenceContext';
 import { useCallNotification } from '../../context/CallNotificationContext';
 import { chatApi } from '../../api/chatApi';
+import { directChatApi } from '../../api/directChatApi';
 import { callApi } from '../../api/callApi';
 import { supabase } from '../../api/supabase';
 import notificationService from '../../utils/notificationService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import BrandLogo from '../../components/common/BrandLogo';
 import VoiceNotePlayer from '../../components/chat/VoiceNotePlayer';
 import VoiceRecorderBar from '../../components/chat/VoiceRecorderBar';
 import ChatMessageItem from '../../components/chat/ChatMessageItem';
 import ActiveCallBanner from '../../components/call/ActiveCallBanner';
 import CallHistoryModal from '../../components/call/CallHistoryModal';
+import NewChatModal from '../../components/chat/NewChatModal';
 import Avatar from '../../components/common/Avatar';
 import { usersApi } from '../../api/usersApi';
 import {
@@ -34,7 +36,10 @@ import {
   Search,
   ChevronLeft,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  UserCheck,
+  Award,
+  Sparkles
 } from 'lucide-react';
 import { format, parseISO, isToday, isYesterday, isThisYear, isSameDay } from 'date-fns';
 
@@ -46,17 +51,24 @@ const formatDayDividerLabel = (isoString) => {
   try {
     const d = typeof isoString === 'string' ? parseISO(isoString) : new Date(isoString);
     if (isNaN(d.getTime())) return '';
-
-    if (isToday(d)) {
-      return 'Today';
-    }
-    if (isYesterday(d)) {
-      return 'Yesterday';
-    }
-    if (isThisYear(d)) {
-      return format(d, 'MMMM d, yyyy');
-    }
+    if (isToday(d)) return 'Today';
+    if (isYesterday(d)) return 'Yesterday';
+    if (isThisYear(d)) return format(d, 'MMMM d, yyyy');
     return format(d, 'dd/MM/yyyy');
+  } catch {
+    return '';
+  }
+};
+
+const formatConversationTime = (isoString) => {
+  if (!isoString) return '';
+  try {
+    const d = typeof isoString === 'string' ? parseISO(isoString) : new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    if (isToday(d)) return format(d, 'h:mm a');
+    if (isYesterday(d)) return 'Yesterday';
+    if (isThisYear(d)) return format(d, 'MMM d');
+    return format(d, 'dd/MM/yy');
   } catch {
     return '';
   }
@@ -79,15 +91,17 @@ export const TeamChat = ({
   title: initialTitle,
   subtitle: initialSubtitle
 }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, profile, isFounder, isAdmin, isFoundingAdvisor, isLeadership } = useAuth();
   const { isUserOnline, onlineCount } = usePresence();
 
+  // All team users directory for avatar and profile enrichment
   const [usersList, setUsersList] = useState([]);
   useEffect(() => {
     usersApi.getUsers().then(list => setUsersList(list || [])).catch(() => {});
   }, []);
 
-  const usersMap = React.useMemo(() => {
+  const usersMap = useMemo(() => {
     const map = {};
     usersList.forEach(u => {
       if (u.id) map[u.id] = u;
@@ -100,18 +114,25 @@ export const TeamChat = ({
   const isAdvisor = profile?.role === 'FOUNDING_ADVISOR' || Boolean(isFoundingAdvisor);
   const canAccessLeadership = isFounder || isAdmin || isAdvisor;
   const canAccessGeneral = !isAdvisor;
-  const hasMultipleChannels = canAccessGeneral && canAccessLeadership; // Founder & Admin
 
-  // Active channel state (Founding Advisor defaults and is restricted to 'leadership')
+  // Chat Mode & Active Target
+  // chatMode: 'channel' | 'direct'
+  const [chatMode, setChatMode] = useState('channel');
   const defaultChannel = isAdvisor ? 'leadership' : (initialChannel || 'general');
   const [activeChannel, setActiveChannel] = useState(defaultChannel);
+  const [activeDirectConv, setActiveDirectConv] = useState(null);
 
-  // Ensure Founding Advisor is locked strictly to 'leadership' channel
+  // Direct conversations list & modal
+  const [directConversations, setDirectConversations] = useState([]);
+  const [loadingConversations, setLoadingConversations] = useState(false);
+  const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+
+  // Ensure Founding Advisor is locked away from general channel if in channel mode
   useEffect(() => {
-    if (isAdvisor && activeChannel !== 'leadership') {
+    if (isAdvisor && chatMode === 'channel' && activeChannel !== 'leadership') {
       setActiveChannel('leadership');
     }
-  }, [isAdvisor, activeChannel]);
+  }, [isAdvisor, chatMode, activeChannel]);
 
   // Chat sidebar collapse/hide state & Mobile animated state
   const [isChatListOpen, setIsChatListOpen] = useState(true);
@@ -119,6 +140,7 @@ export const TeamChat = ({
   const [isMobileClosing, setIsMobileClosing] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
 
+  // Messages & Composer State
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [inputValue, setInputValue] = useState('');
@@ -135,6 +157,7 @@ export const TeamChat = ({
   const typingTimeoutRef = useRef(null);
   const lastTypingBroadcastRef = useRef(0);
   const realtimeChannelRef = useRef(null);
+  const directRealtimeChannelRef = useRef(null);
   const typingBcRef = useRef(null);
 
   // Pagination & Smart Scroll State
@@ -161,6 +184,7 @@ export const TeamChat = ({
   const attachMenuRef = useRef(null);
   const emojiPickerRef = useRef(null);
 
+  // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (attachMenuRef.current && !attachMenuRef.current.contains(e.target)) {
@@ -189,12 +213,80 @@ export const TeamChat = ({
     });
   }, [isNearBottom]);
 
-  const loadMessages = async (targetChannel = activeChannel) => {
+  // Load Direct Conversations for Current User
+  const loadDirectConversations = useCallback(async () => {
+    if (!profile?.id) return;
+    try {
+      setLoadingConversations(true);
+      const list = await directChatApi.getConversations(profile.id);
+      // Enrich otherParticipant details with usersMap if missing full_name/avatar
+      const enriched = list.map(c => {
+        const enrichedOther = usersMap[c.otherParticipant?.id] || c.otherParticipant;
+        return {
+          ...c,
+          otherParticipant: {
+            ...c.otherParticipant,
+            ...enrichedOther
+          }
+        };
+      });
+      setDirectConversations(enriched);
+      return enriched;
+    } catch (err) {
+      console.error('Failed to load direct conversations:', err);
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, [profile?.id, usersMap]);
+
+  useEffect(() => {
+    loadDirectConversations();
+  }, [loadDirectConversations]);
+
+  // Handle URL query parameters (e.g. ?dm=userId or ?channel=leadership)
+  useEffect(() => {
+    const dmUserId = searchParams.get('dm');
+    const channelParam = searchParams.get('channel');
+
+    if (dmUserId && profile?.id && dmUserId !== profile.id && usersList.length > 0) {
+      const targetUser = usersList.find(u => u.id === dmUserId);
+      if (targetUser) {
+        handleStartChatWithMember(targetUser);
+      }
+    } else if (channelParam) {
+      if (channelParam === 'leadership' && canAccessLeadership) {
+        setChatMode('channel');
+        setActiveChannel('leadership');
+        setActiveDirectConv(null);
+      } else if (channelParam === 'general' && canAccessGeneral) {
+        setChatMode('channel');
+        setActiveChannel('general');
+        setActiveDirectConv(null);
+      }
+    }
+  }, [searchParams, profile?.id, usersList, canAccessLeadership, canAccessGeneral]);
+
+  // Load Messages for Active Channel or Active Direct Conversation
+  const loadMessages = useCallback(async () => {
     try {
       setLoading(true);
       processedMsgIdsRef.current.clear();
       newlyArrivedIdsRef.current.clear();
-      const list = await chatApi.getMessages(50, null, targetChannel);
+
+      let list = [];
+      if (chatMode === 'channel') {
+        list = await chatApi.getMessages(50, null, activeChannel);
+      } else if (chatMode === 'direct' && activeDirectConv) {
+        list = await directChatApi.getMessages(activeDirectConv.id, { limit: 50 });
+        // Mark conversation unread messages as read
+        if (profile?.id) {
+          await directChatApi.markAsRead(activeDirectConv.id, profile.id);
+          setDirectConversations(prev =>
+            prev.map(c => c.id === activeDirectConv.id ? { ...c, unreadCount: 0 } : c)
+          );
+        }
+      }
+
       list.forEach(m => processedMsgIdsRef.current.add(m.id));
       setMessages(list);
       setHasMoreOlder(list.length >= 50);
@@ -203,14 +295,21 @@ export const TeamChat = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [chatMode, activeChannel, activeDirectConv?.id, profile?.id]);
 
   const loadOlderMessages = async () => {
     if (loadingOlder || messages.length === 0) return;
     setLoadingOlder(true);
     try {
       const oldestDate = messages[0]?.created_at;
-      const olderList = await chatApi.getMessages(50, oldestDate, activeChannel);
+      let olderList = [];
+
+      if (chatMode === 'channel') {
+        olderList = await chatApi.getMessages(50, oldestDate, activeChannel);
+      } else if (chatMode === 'direct' && activeDirectConv) {
+        olderList = await directChatApi.getMessages(activeDirectConv.id, { limit: 50, before: oldestDate });
+      }
+
       if (olderList.length < 50) {
         setHasMoreOlder(false);
       }
@@ -240,7 +339,8 @@ export const TeamChat = ({
       name: myName,
       isTyping,
       time: Date.now(),
-      channel: activeChannel
+      mode: chatMode,
+      targetId: chatMode === 'channel' ? activeChannel : activeDirectConv?.id
     };
 
     if (realtimeChannelRef.current) {
@@ -256,12 +356,15 @@ export const TeamChat = ({
         typingBcRef.current.postMessage(payload);
       } catch {}
     }
-  }, [profile, user, activeChannel]);
+  }, [profile, user, chatMode, activeChannel, activeDirectConv?.id]);
 
   const handleTypingSignal = useCallback((payload) => {
     if (!payload?.email) return;
     const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
     if (payload.email.toLowerCase() === myEmail) return;
+
+    const currentTarget = chatMode === 'channel' ? activeChannel : activeDirectConv?.id;
+    if (payload.targetId !== currentTarget) return;
 
     setTypingUsers(prev => {
       const updated = { ...prev };
@@ -272,7 +375,7 @@ export const TeamChat = ({
       }
       return updated;
     });
-  }, [profile?.email, user?.email]);
+  }, [profile?.email, user?.email, chatMode, activeChannel, activeDirectConv?.id]);
 
   const handleInputChange = (val) => {
     setInputValue(val);
@@ -307,25 +410,6 @@ export const TeamChat = ({
     return () => clearInterval(interval);
   }, []);
 
-  const handleStartCall = async (callType = 'video') => {
-    try {
-      // If a call is already active in this room, join the existing session
-      if (ongoingCall && ongoingCall.room_id === activeChannel && ongoingCall.status === 'ongoing') {
-        acceptCall(ongoingCall);
-        return;
-      }
-      const channelTitle = activeChannel === 'leadership' ? 'Leadership Council' : (initialTitle || 'Team Chat');
-      await startCall(callType, activeChannel, channelTitle);
-    } catch (err) {
-      console.error('Error starting call:', err);
-      setError(err.message || 'Failed to start call. Please try again.');
-    }
-  };
-
-  const handleJoinCall = (call) => {
-    acceptCall(call || ongoingCall);
-  };
-
   // Mobile Back button smooth close handler
   const handleMobileBack = () => {
     setIsMobileClosing(true);
@@ -335,6 +419,70 @@ export const TeamChat = ({
     }, 200);
   };
 
+  // Channel & Conversation Switchers
+  const handleSelectChannel = (channelId) => {
+    setChatMode('channel');
+    setActiveChannel(channelId);
+    setActiveDirectConv(null);
+    setIsMobileChatOpen(true);
+    setInputValue('');
+    setError('');
+    removeAttachment();
+    setSearchParams(channelId === 'leadership' ? { channel: 'leadership' } : {});
+  };
+
+  const handleSelectDirectConversation = async (conv) => {
+    setChatMode('direct');
+    setActiveDirectConv(conv);
+    setIsMobileChatOpen(true);
+    setInputValue('');
+    setError('');
+    removeAttachment();
+    if (conv.otherParticipant?.id) {
+      setSearchParams({ dm: conv.otherParticipant.id });
+    }
+
+    if (profile?.id) {
+      await directChatApi.markAsRead(conv.id, profile.id);
+      setDirectConversations(prev =>
+        prev.map(c => c.id === conv.id ? { ...c, unreadCount: 0 } : c)
+      );
+    }
+  };
+
+  const handleStartChatWithMember = async (member) => {
+    if (!profile?.id || !member?.id) return;
+    try {
+      setLoading(true);
+      const conv = await directChatApi.getOrCreateConversation(profile.id, member.id);
+      const formattedConv = {
+        ...conv,
+        otherParticipant: {
+          ...conv.otherParticipant,
+          ...member
+        }
+      };
+
+      setDirectConversations(prev => {
+        const existingIdx = prev.findIndex(c => c.id === conv.id);
+        if (existingIdx !== -1) {
+          const updated = [...prev];
+          updated[existingIdx] = formattedConv;
+          return updated;
+        }
+        return [formattedConv, ...prev];
+      });
+
+      await handleSelectDirectConversation(formattedConv);
+    } catch (err) {
+      console.error('Failed to open direct conversation:', err);
+      setError('Unable to open direct chat. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Real-time Subscriptions (Channel + Direct Messages)
   useEffect(() => {
     notificationService.setForegroundState(true);
 
@@ -343,130 +491,319 @@ export const TeamChat = ({
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    loadMessages(activeChannel);
+    loadMessages();
 
-    // Supabase Realtime subscription
     let rtChannel = null;
+    let directRtChannel = null;
+    let bc = null;
+    let typingBc = null;
+
     if (supabase) {
-      rtChannel = supabase
-        .channel(`realtime-chat-${activeChannel}`)
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'messages' },
-          (payload) => {
-            if (payload.new) {
-              const newMsg = payload.new;
-              if ((newMsg.channel || 'general') !== activeChannel) return;
-              if (processedMsgIdsRef.current.has(newMsg.id)) return;
-              processedMsgIdsRef.current.add(newMsg.id);
-              newlyArrivedIdsRef.current.add(newMsg.id);
+      // 1. Channel Realtime Subscription (when in channel mode)
+      if (chatMode === 'channel') {
+        rtChannel = supabase
+          .channel(`realtime-chat-${activeChannel}`)
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'messages' },
+            (payload) => {
+              if (payload.new) {
+                const newMsg = payload.new;
+                if ((newMsg.channel || 'general') !== activeChannel) return;
+                if (processedMsgIdsRef.current.has(newMsg.id)) return;
+                processedMsgIdsRef.current.add(newMsg.id);
+                newlyArrivedIdsRef.current.add(newMsg.id);
+
+                setMessages(prev => {
+                  const optIndex = prev.findIndex(
+                    m => m.isOptimistic && m.sender_id === newMsg.sender_id && m.content === newMsg.content
+                  );
+                  if (optIndex !== -1) {
+                    const updated = [...prev];
+                    updated[optIndex] = newMsg;
+                    return updated;
+                  }
+                  return [...prev, newMsg];
+                });
+                setTimeout(() => scrollToBottom(true, false), 40);
+
+                const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+                if (newMsg.sender_email && myEmail && newMsg.sender_email.toLowerCase() !== myEmail) {
+                  notificationService.notifyChatMessage({
+                    senderName: newMsg.sender_name,
+                    content: newMsg.content || newMsg.file_name,
+                    currentPath: window.location.pathname,
+                    messageId: newMsg.id
+                  });
+                }
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'messages' },
+            (payload) => {
+              if (payload.new) {
+                const updatedMsg = payload.new;
+                if ((updatedMsg.channel || 'general') !== activeChannel) return;
+                setMessages(prev => prev.map(m => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)));
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: 'DELETE', schema: 'public', table: 'messages' },
+            (payload) => {
+              if (payload.old?.id) {
+                processedMsgIdsRef.current.delete(payload.old.id);
+                setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+              }
+            }
+          )
+          .on('broadcast', { event: 'typing' }, ({ payload }) => {
+            if (payload?.targetId === activeChannel) {
+              handleTypingSignal(payload);
+            }
+          })
+          .subscribe();
+
+        realtimeChannelRef.current = rtChannel;
+
+        try {
+          bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+          bc.onmessage = (event) => {
+            if (event.data?.type === 'NEW_MESSAGE' && event.data.message) {
+              const msg = event.data.message;
+              if ((msg.channel || 'general') !== activeChannel) return;
+              if (processedMsgIdsRef.current.has(msg.id)) return;
+              processedMsgIdsRef.current.add(msg.id);
+              newlyArrivedIdsRef.current.add(msg.id);
 
               setMessages(prev => {
-                const optIndex = prev.findIndex(m => m.isOptimistic && m.sender_id === newMsg.sender_id && m.content === newMsg.content);
-                if (optIndex !== -1) {
-                  const updated = [...prev];
-                  updated[optIndex] = newMsg;
-                  return updated;
-                }
-                return [...prev, newMsg];
+                if (prev.some(m => m.id === msg.id)) return prev;
+                return [...prev, msg];
               });
               setTimeout(() => scrollToBottom(true, false), 40);
+            }
+          };
 
-              const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
-              if (newMsg.sender_email && myEmail && newMsg.sender_email.toLowerCase() !== myEmail) {
-                notificationService.notifyChatMessage({
-                  senderName: newMsg.sender_name,
-                  content: newMsg.content || newMsg.file_name,
-                  currentPath: window.location.pathname,
-                  messageId: newMsg.id
+          typingBc = new BroadcastChannel(`teamsync_typing_channel_${activeChannel}`);
+          typingBcRef.current = typingBc;
+          typingBc.onmessage = (event) => {
+            if (event.data && event.data.targetId === activeChannel) {
+              handleTypingSignal(event.data);
+            }
+          };
+        } catch {}
+      }
+
+      // 2. Direct Messages Realtime Subscription
+      if (chatMode === 'direct' && activeDirectConv) {
+        directRtChannel = supabase
+          .channel(`realtime-direct-${activeDirectConv.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'direct_messages',
+              filter: `conversation_id=eq.${activeDirectConv.id}`
+            },
+            async (payload) => {
+              if (payload.new) {
+                const newMsg = payload.new;
+                if (processedMsgIdsRef.current.has(newMsg.id)) return;
+                processedMsgIdsRef.current.add(newMsg.id);
+                newlyArrivedIdsRef.current.add(newMsg.id);
+
+                setMessages(prev => {
+                  const optIndex = prev.findIndex(
+                    m => m.isOptimistic && m.sender_id === newMsg.sender_id && m.content === newMsg.content
+                  );
+                  if (optIndex !== -1) {
+                    const updated = [...prev];
+                    updated[optIndex] = newMsg;
+                    return updated;
+                  }
+                  return [...prev, newMsg];
                 });
+                setTimeout(() => scrollToBottom(true, false), 40);
+
+                // Auto-mark as read if we are the recipient
+                if (profile?.id && newMsg.recipient_id === profile.id) {
+                  await directChatApi.markAsRead(activeDirectConv.id, profile.id);
+                }
+
+                // Update conversation list preview
+                setDirectConversations(prev =>
+                  prev.map(c =>
+                    c.id === activeDirectConv.id
+                      ? {
+                          ...c,
+                          lastMessageAt: newMsg.created_at,
+                          lastMessagePreview: newMsg.content || newMsg.file_name || 'Attachment'
+                        }
+                      : c
+                  )
+                );
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'direct_messages',
+              filter: `conversation_id=eq.${activeDirectConv.id}`
+            },
+            (payload) => {
+              if (payload.new) {
+                const updatedMsg = payload.new;
+                setMessages(prev =>
+                  prev.map(m => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m))
+                );
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: 'direct_messages',
+              filter: `conversation_id=eq.${activeDirectConv.id}`
+            },
+            (payload) => {
+              if (payload.old?.id) {
+                processedMsgIdsRef.current.delete(payload.old.id);
+                setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+              }
+            }
+          )
+          .on('broadcast', { event: 'typing' }, ({ payload }) => {
+            if (payload?.targetId === activeDirectConv.id) {
+              handleTypingSignal(payload);
+            }
+          })
+          .subscribe();
+
+        realtimeChannelRef.current = directRtChannel;
+
+        try {
+          typingBc = new BroadcastChannel(`teamsync_typing_dm_${activeDirectConv.id}`);
+          typingBcRef.current = typingBc;
+          typingBc.onmessage = (event) => {
+            if (event.data && event.data.targetId === activeDirectConv.id) {
+              handleTypingSignal(event.data);
+            }
+          };
+        } catch {}
+      }
+
+      // 3. Global Listener for Incoming Direct Messages across all conversations
+      const globalDirectChannel = supabase
+        .channel(`global-direct-inbox-${profile?.id || 'anon'}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'direct_messages'
+          },
+          (payload) => {
+            if (payload.new && profile?.id) {
+              const msg = payload.new;
+              // Only act if message is meant for current user
+              if (msg.recipient_id === profile.id) {
+                // If message is for another inactive conversation, increment unread count & refresh preview
+                if (chatMode !== 'direct' || activeDirectConv?.id !== msg.conversation_id) {
+                  setDirectConversations(prev => {
+                    const exists = prev.some(c => c.id === msg.conversation_id);
+                    if (!exists) {
+                      loadDirectConversations();
+                      return prev;
+                    }
+                    return prev.map(c =>
+                      c.id === msg.conversation_id
+                        ? {
+                            ...c,
+                            lastMessageAt: msg.created_at,
+                            lastMessagePreview: msg.content || msg.file_name || 'Attachment',
+                            unreadCount: (c.unreadCount || 0) + 1
+                          }
+                        : c
+                    );
+                  });
+
+                  // Trigger system notification
+                  const senderInfo = usersMap[msg.sender_id];
+                  notificationService.notifyChatMessage({
+                    senderName: senderInfo?.full_name || 'Team Member',
+                    content: msg.content || msg.file_name || 'Sent you a private message',
+                    currentPath: window.location.pathname,
+                    messageId: msg.id
+                  });
+                }
               }
             }
           }
         )
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'messages' },
-          (payload) => {
-            if (payload.new) {
-              const updatedMsg = payload.new;
-              if ((updatedMsg.channel || 'general') !== activeChannel) return;
-              setMessages(prev => prev.map(m => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)));
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'DELETE', schema: 'public', table: 'messages' },
-          (payload) => {
-            if (payload.old?.id) {
-              processedMsgIdsRef.current.delete(payload.old.id);
-              setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-            }
-          }
-        )
-        .on('broadcast', { event: 'typing' }, ({ payload }) => {
-          if (payload?.channel === activeChannel) {
-            handleTypingSignal(payload);
-          }
-        })
         .subscribe();
-
-      realtimeChannelRef.current = rtChannel;
     }
 
-    // Cross-tab synchronization
-    let bc = null;
-    let typingBc = null;
-    try {
-      bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
-      bc.onmessage = (event) => {
-        if (event.data?.type === 'NEW_MESSAGE' && event.data.message) {
-          const msg = event.data.message;
-          if ((msg.channel || 'general') !== activeChannel) return;
-          if (processedMsgIdsRef.current.has(msg.id)) return;
-          processedMsgIdsRef.current.add(msg.id);
-          newlyArrivedIdsRef.current.add(msg.id);
-
-          setMessages(prev => {
-            if (prev.some(m => m.id === msg.id)) return prev;
-            return [...prev, msg];
-          });
-          setTimeout(() => scrollToBottom(true, false), 40);
-        } else if (event.data?.type === 'DELETE_MESSAGE' && event.data.id) {
-          processedMsgIdsRef.current.delete(event.data.id);
-          setMessages(prev => prev.filter(m => m.id !== event.data.id));
+    // DirectChat cross-tab synchronization
+    const unsubBroadcast = directChatApi.onBroadcastEvent((data) => {
+      if (data.type === 'MESSAGE_SENT' && data.payload) {
+        const msg = data.payload;
+        if (chatMode === 'direct' && activeDirectConv?.id === msg.conversation_id) {
+          if (!processedMsgIdsRef.current.has(msg.id)) {
+            processedMsgIdsRef.current.add(msg.id);
+            setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+            setTimeout(() => scrollToBottom(true, false), 40);
+          }
         }
-      };
-
-      typingBc = new BroadcastChannel(`teamsync_typing_channel_${activeChannel}`);
-      typingBcRef.current = typingBc;
-      typingBc.onmessage = (event) => {
-        if (event.data && event.data.channel === activeChannel) {
-          handleTypingSignal(event.data);
+      } else if (data.type === 'MESSAGES_READ' && data.payload) {
+        if (chatMode === 'direct' && activeDirectConv?.id === data.payload.conversationId) {
+          setMessages(prev => prev.map(m => ({ ...m, is_read: true })));
         }
-      };
-    } catch {}
+      } else if (data.type === 'CONVERSATION_CREATED') {
+        loadDirectConversations();
+      }
+    });
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (rtChannel && supabase) supabase.removeChannel(rtChannel);
+      if (directRtChannel && supabase) supabase.removeChannel(directRtChannel);
       if (bc) bc.close();
       if (typingBc) {
         typingBc.close();
         typingBcRef.current = null;
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      unsubBroadcast();
       notificationService.setForegroundState(false);
     };
-  }, [handleTypingSignal, profile?.email, user?.email, activeChannel]);
+  }, [
+    chatMode,
+    activeChannel,
+    activeDirectConv?.id,
+    profile?.id,
+    handleTypingSignal,
+    loadMessages,
+    loadDirectConversations,
+    usersMap,
+    scrollToBottom
+  ]);
 
   useEffect(() => {
     if (!loading) {
       scrollToBottom(false, true);
     }
-  }, [loading, activeChannel]);
+  }, [loading, chatMode, activeChannel, activeDirectConv?.id, scrollToBottom]);
 
+  // File Upload Handlers
   const handleFileSelect = (e, fileTypeHint = 'document') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -530,7 +867,7 @@ export const TeamChat = ({
     if (videoInputRef.current) videoInputRef.current.value = '';
   };
 
-  // Instant Optimistic Message Delivery (<0.1ms client-side perceived latency)
+  // Instant Message Delivery with Optimistic UI
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if ((!inputValue.trim() && !selectedFile) || sending) return;
@@ -551,7 +888,7 @@ export const TeamChat = ({
     const senderRole = profile?.role || 'MEMBER';
     const senderId = profile?.id || user?.id;
 
-    // 1. Instant Optimistic UI insertion
+    // Optimistic UI insertion
     const optId = 'opt-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
     const optimisticMsg = {
       id: optId,
@@ -560,12 +897,14 @@ export const TeamChat = ({
       sender_name: senderName,
       sender_email: senderEmail,
       sender_role: senderRole,
+      recipient_id: chatMode === 'direct' ? activeDirectConv?.otherParticipant?.id : null,
       file_url: attachmentPreview?.url || null,
       file_name: fileToSend?.name || null,
       file_size: fileToSend?.size || null,
       file_type: fileToSend ? (fileToSend.type?.startsWith('image/') ? 'image' : 'document') : null,
       created_at: new Date().toISOString(),
-      isOptimistic: true
+      isOptimistic: true,
+      is_read: false
     };
 
     newlyArrivedIdsRef.current.add(optId);
@@ -580,25 +919,51 @@ export const TeamChat = ({
         attachmentData = await chatApi.uploadAttachment(fileToSend);
       }
 
-      const newMsg = await chatApi.sendMessage({
-        content,
-        senderId,
-        senderName,
-        senderEmail,
-        senderRole,
-        attachment: attachmentData,
-        channel: activeChannel
-      });
+      let newMsg = null;
+      if (chatMode === 'channel') {
+        newMsg = await chatApi.sendMessage({
+          content,
+          senderId,
+          senderName,
+          senderEmail,
+          senderRole,
+          attachment: attachmentData,
+          channel: activeChannel
+        });
 
-      newlyArrivedIdsRef.current.add(newMsg.id);
-      setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
-      processedMsgIdsRef.current.add(newMsg.id);
+        try {
+          const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+          bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
+          bc.close();
+        } catch {}
+      } else if (chatMode === 'direct' && activeDirectConv) {
+        newMsg = await directChatApi.sendMessage({
+          conversationId: activeDirectConv.id,
+          senderId: profile.id,
+          recipientId: activeDirectConv.otherParticipant.id,
+          content,
+          attachment: attachmentData
+        });
 
-      try {
-        const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
-        bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
-        bc.close();
-      } catch {}
+        // Update direct conversation preview in sidebar
+        setDirectConversations(prev =>
+          prev.map(c =>
+            c.id === activeDirectConv.id
+              ? {
+                  ...c,
+                  lastMessageAt: newMsg.created_at,
+                  lastMessagePreview: newMsg.content || newMsg.file_name || 'Attachment'
+                }
+              : c
+          )
+        );
+      }
+
+      if (newMsg) {
+        newlyArrivedIdsRef.current.add(newMsg.id);
+        setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
+        processedMsgIdsRef.current.add(newMsg.id);
+      }
     } catch (err) {
       console.error('Error sending message:', err);
       setError(err.message || 'Failed to send message. Please try again.');
@@ -609,7 +974,7 @@ export const TeamChat = ({
     }
   };
 
-  // WhatsApp-style Voice Note Sender
+  // Voice Note Sender
   const handleSendVoice = async (audioBlob, duration) => {
     setIsRecordingVoice(false);
     if (!audioBlob) return;
@@ -628,12 +993,14 @@ export const TeamChat = ({
       sender_name: senderName,
       sender_email: senderEmail,
       sender_role: senderRole,
+      recipient_id: chatMode === 'direct' ? activeDirectConv?.otherParticipant?.id : null,
       file_url: tempAudioUrl,
       file_name: `Voice note (${Math.round(duration)}s)`,
       file_size: audioBlob.size,
       file_type: 'audio',
       created_at: new Date().toISOString(),
-      isOptimistic: true
+      isOptimistic: true,
+      is_read: false
     };
 
     newlyArrivedIdsRef.current.add(optId);
@@ -644,25 +1011,50 @@ export const TeamChat = ({
       const audioFile = new File([audioBlob], `voice_note_${Date.now()}.webm`, { type: 'audio/webm' });
       const attachmentData = await chatApi.uploadAttachment(audioFile);
 
-      const newMsg = await chatApi.sendMessage({
-        content: `Voice message (${Math.round(duration)}s)`,
-        senderId,
-        senderName,
-        senderEmail,
-        senderRole,
-        attachment: attachmentData,
-        channel: activeChannel
-      });
+      let newMsg = null;
+      if (chatMode === 'channel') {
+        newMsg = await chatApi.sendMessage({
+          content: `Voice message (${Math.round(duration)}s)`,
+          senderId,
+          senderName,
+          senderEmail,
+          senderRole,
+          attachment: attachmentData,
+          channel: activeChannel
+        });
 
-      newlyArrivedIdsRef.current.add(newMsg.id);
-      setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
-      processedMsgIdsRef.current.add(newMsg.id);
+        try {
+          const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+          bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
+          bc.close();
+        } catch {}
+      } else if (chatMode === 'direct' && activeDirectConv) {
+        newMsg = await directChatApi.sendMessage({
+          conversationId: activeDirectConv.id,
+          senderId: profile.id,
+          recipientId: activeDirectConv.otherParticipant.id,
+          content: `Voice message (${Math.round(duration)}s)`,
+          attachment: attachmentData
+        });
 
-      try {
-        const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
-        bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
-        bc.close();
-      } catch {}
+        setDirectConversations(prev =>
+          prev.map(c =>
+            c.id === activeDirectConv.id
+              ? {
+                  ...c,
+                  lastMessageAt: newMsg.created_at,
+                  lastMessagePreview: 'Voice note'
+                }
+              : c
+          )
+        );
+      }
+
+      if (newMsg) {
+        newlyArrivedIdsRef.current.add(newMsg.id);
+        setMessages(prev => prev.map(m => m.id === optId ? newMsg : m));
+        processedMsgIdsRef.current.add(newMsg.id);
+      }
     } catch (err) {
       console.error('Failed to send voice note:', err);
       setError('Failed to upload voice note.');
@@ -684,17 +1076,49 @@ export const TeamChat = ({
 
   const handleDeleteMessage = useCallback(async (msgId) => {
     try {
-      await chatApi.deleteMessage(msgId);
-      setMessages(prev => prev.filter(m => m.id !== msgId));
-      try {
-        const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
-        bc.postMessage({ type: 'DELETE_MESSAGE', id: msgId });
-        bc.close();
-      } catch {}
+      if (chatMode === 'channel') {
+        await chatApi.deleteMessage(msgId);
+        setMessages(prev => prev.filter(m => m.id !== msgId));
+        try {
+          const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+          bc.postMessage({ type: 'DELETE_MESSAGE', id: msgId });
+          bc.close();
+        } catch {}
+      } else if (chatMode === 'direct') {
+        await directChatApi.deleteMessage(msgId, profile?.id);
+        setMessages(prev => prev.filter(m => m.id !== msgId));
+      }
     } catch (err) {
       console.error('Failed to delete message:', err);
     }
-  }, [activeChannel]);
+  }, [chatMode, activeChannel, profile?.id]);
+
+  const handleStartCall = async (callType = 'video') => {
+    try {
+      const roomId = chatMode === 'direct'
+        ? `dm_${activeDirectConv.id}`
+        : activeChannel;
+
+      // If call is already active in this room, join session
+      if (ongoingCall && ongoingCall.room_id === roomId && ongoingCall.status === 'ongoing') {
+        acceptCall(ongoingCall);
+        return;
+      }
+
+      const roomTitle = chatMode === 'direct'
+        ? `Call with ${activeDirectConv.otherParticipant.full_name}`
+        : (activeChannel === 'leadership' ? 'Leadership Council' : (initialTitle || 'Team Chat'));
+
+      await startCall(callType, roomId, roomTitle);
+    } catch (err) {
+      console.error('Error starting call:', err);
+      setError(err.message || 'Failed to start call. Please try again.');
+    }
+  };
+
+  const handleJoinCall = (call) => {
+    acceptCall(call || ongoingCall);
+  };
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
@@ -704,12 +1128,60 @@ export const TeamChat = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Determine current active chat title and info
-  const isLeadershipActive = activeChannel === 'leadership';
-  const currentChatTitle = isLeadershipActive ? 'Leadership Council' : 'Team Chat';
-  const currentChatSubtitle = isLeadershipActive
-    ? 'Restricted Executive Channel (Founder, Admin & Advisor)'
-    : `Company HQ • All Members • ${onlineCount} online`;
+  // Filtered direct conversations
+  const filteredDirectConversations = useMemo(() => {
+    const q = chatSearchQuery.trim().toLowerCase();
+    if (!q) return directConversations;
+    return directConversations.filter(c => {
+      const name = (c.otherParticipant?.full_name || '').toLowerCase();
+      const email = (c.otherParticipant?.email || '').toLowerCase();
+      const preview = (c.lastMessagePreview || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || preview.includes(q);
+    });
+  }, [directConversations, chatSearchQuery]);
+
+  // Active Chat Titles & Presence
+  const isDirectMode = chatMode === 'direct' && Boolean(activeDirectConv);
+  const isLeadershipActive = !isDirectMode && activeChannel === 'leadership';
+
+  const otherPerson = activeDirectConv?.otherParticipant;
+  const isOtherOnline = otherPerson ? (isUserOnline(otherPerson.id) || isUserOnline(otherPerson.email)) : false;
+
+  const currentChatTitle = isDirectMode
+    ? (otherPerson?.full_name || 'Team Member')
+    : (isLeadershipActive ? 'Leadership Council' : 'Team Chat');
+
+  const currentChatSubtitle = isDirectMode
+    ? (isOtherOnline ? 'Active Now • Online' : 'Offline')
+    : (isLeadershipActive
+        ? 'Restricted Executive Channel (Founder, Admin & Advisor)'
+        : `Company HQ • All Members • ${onlineCount} online`);
+
+  const getRoleBadge = (role) => {
+    switch (role) {
+      case 'FOUNDER':
+        return 'bg-amber-950/80 text-amber-300 border-amber-800';
+      case 'ADMIN':
+        return 'bg-blue-950/80 text-blue-300 border-blue-800';
+      case 'FOUNDING_ADVISOR':
+        return 'bg-purple-950/80 text-purple-300 border-purple-800';
+      default:
+        return 'bg-neutral-800 text-neutral-300 border-neutral-700';
+    }
+  };
+
+  const getRoleLabel = (role) => {
+    switch (role) {
+      case 'FOUNDER':
+        return 'Founder';
+      case 'ADMIN':
+        return 'Admin';
+      case 'FOUNDING_ADVISOR':
+        return 'Advisor';
+      default:
+        return 'Member';
+    }
+  };
 
   return (
     <div className="h-[calc(100vh-6.5rem)] flex bg-neutral-950 rounded-2xl md:rounded-3xl border border-neutral-800 overflow-hidden shadow-2xl relative transition-all duration-300">
@@ -737,77 +1209,86 @@ export const TeamChat = ({
       />
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          LEFT PANE: WhatsApp Conversation & Channel Selector (Admin & Founder Only)
+          LEFT PANE: WhatsApp Conversation & Channel Selector (Available to ALL members)
           ───────────────────────────────────────────────────────────────────────── */}
-      {hasMultipleChannels && (
-        <div
-          className={`bg-black flex flex-col shrink-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            isChatListOpen
-              ? 'w-full md:w-80 opacity-100 translate-x-0 border-r border-neutral-800'
-              : 'w-0 opacity-0 -translate-x-4 pointer-events-none border-r-0'
-          } ${isMobileChatOpen ? 'hidden md:flex' : 'flex'}`}
-        >
-          <div className="w-full md:w-80 flex flex-col h-full shrink-0">
-            {/* Top Header with Close / Hide Toggle Button */}
-            <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Avatar
-                  src={profile?.avatar_url}
-                  name={profile?.full_name}
-                  size="md"
-                  rounded="rounded-2xl"
-                />
-                <div>
-                  <h2 className="text-base font-bold text-white tracking-tight">Chats</h2>
-                  <p className="text-[11px] text-neutral-400">Team & Leadership</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400">
-                  {onlineCount} Online
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsChatListOpen(false)}
-                  className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition cursor-pointer"
-                  title="Close / Hide Chats Panel"
-                >
-                  <PanelLeftClose className="w-4 h-4" />
-                </button>
+      <div
+        className={`bg-black flex flex-col shrink-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isChatListOpen
+            ? 'w-full md:w-80 opacity-100 translate-x-0 border-r border-neutral-800'
+            : 'w-0 opacity-0 -translate-x-4 pointer-events-none border-r-0'
+        } ${isMobileChatOpen ? 'hidden md:flex' : 'flex'}`}
+      >
+        <div className="w-full md:w-80 flex flex-col h-full shrink-0">
+          {/* Top Header with Close / Hide Toggle Button & New Chat Action */}
+          <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <Avatar
+                src={profile?.avatar_url}
+                name={profile?.full_name}
+                size="md"
+                rounded="rounded-2xl"
+              />
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-white tracking-tight truncate">Chats</h2>
+                <p className="text-[11px] text-neutral-400 truncate">Channels & Direct Messages</p>
               </div>
             </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsNewChatModalOpen(true)}
+                className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 transition cursor-pointer flex items-center gap-1 text-xs font-semibold"
+                title="Start New Direct Message"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline text-[11px]">New</span>
+              </button>
 
-            {/* Search Bar */}
-            <div className="p-3 border-b border-neutral-800/80">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={chatSearchQuery}
-                  onChange={(e) => setChatSearchQuery(e.target.value)}
-                  placeholder="Search chats..."
-                  className="w-full pl-8 pr-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder:text-neutral-500 outline-none focus:border-neutral-700 transition"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsChatListOpen(false)}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition cursor-pointer hidden md:flex"
+                title="Hide Chats Panel"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
             </div>
+          </div>
 
-            {/* Channel / Conversation Items List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-              {/* 1. Team Chat (General) */}
+          {/* Search Bar */}
+          <div className="p-3 border-b border-neutral-800/80">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={chatSearchQuery}
+                onChange={(e) => setChatSearchQuery(e.target.value)}
+                placeholder="Search chats and contacts..."
+                className="w-full pl-8 pr-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder:text-neutral-500 outline-none focus:border-neutral-700 transition"
+              />
+            </div>
+          </div>
+
+          {/* Channel / Conversation Items List */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-3">
+            {/* 1. CHANNELS SECTION */}
+            <div className="space-y-1">
+              <div className="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                Channels
+              </div>
+
+              {/* Team Chat (General) */}
               {canAccessGeneral && (!chatSearchQuery || 'team chat general company hq all members'.toLowerCase().includes(chatSearchQuery.toLowerCase())) && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveChannel('general');
-                    setIsMobileChatOpen(true);
-                  }}
-                  className={`w-full p-3 rounded-2xl flex items-center gap-3 transition-all duration-200 text-left cursor-pointer ${
-                    activeChannel === 'general'
+                  onClick={() => handleSelectChannel('general')}
+                  className={`w-full p-2.5 rounded-2xl flex items-center gap-3 transition-all duration-200 text-left cursor-pointer ${
+                    chatMode === 'channel' && activeChannel === 'general'
                       ? 'bg-neutral-900 border border-neutral-700 text-white shadow-md'
                       : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
                   }`}
                 >
-                  <div className="w-11 h-11 rounded-2xl bg-emerald-950/60 border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-950/60 border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
                     <Users className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -822,21 +1303,18 @@ export const TeamChat = ({
                 </button>
               )}
 
-              {/* 2. Leadership Chat (Restricted - Founder, Admin, Founding Advisor) */}
+              {/* Leadership Chat (Founder, Admin, Founding Advisor) */}
               {canAccessLeadership && (!chatSearchQuery || 'leadership council chat executive founder admin advisor'.toLowerCase().includes(chatSearchQuery.toLowerCase())) && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveChannel('leadership');
-                    setIsMobileChatOpen(true);
-                  }}
-                  className={`w-full p-3 rounded-2xl flex items-center gap-3 transition-all duration-200 text-left cursor-pointer ${
-                    activeChannel === 'leadership'
+                  onClick={() => handleSelectChannel('leadership')}
+                  className={`w-full p-2.5 rounded-2xl flex items-center gap-3 transition-all duration-200 text-left cursor-pointer ${
+                    chatMode === 'channel' && activeChannel === 'leadership'
                       ? 'bg-neutral-900 border border-amber-800/80 text-white shadow-md'
                       : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
                   }`}
                 >
-                  <div className="w-11 h-11 rounded-2xl bg-amber-950/60 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-950/60 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0">
                     <Shield className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -844,6 +1322,7 @@ export const TeamChat = ({
                       <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
                         <span>Leadership Chat</span>
                       </span>
+                      <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Restricted</span>
                     </div>
                     <p className="text-[11px] text-neutral-400 truncate mt-0.5">
                       Founder, Admin & Advisor
@@ -852,23 +1331,106 @@ export const TeamChat = ({
                 </button>
               )}
             </div>
+
+            {/* 2. DIRECT MESSAGES SECTION */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between px-3 pt-2 pb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                  Direct Messages {directConversations.length > 0 && `(${directConversations.length})`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsNewChatModalOpen(true)}
+                  className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>New Chat</span>
+                </button>
+              </div>
+
+              {filteredDirectConversations.length === 0 ? (
+                <div className="p-4 rounded-xl bg-neutral-900/30 border border-neutral-800/60 text-center space-y-2 my-1">
+                  <MessageSquare className="w-5 h-5 mx-auto text-neutral-600" />
+                  <p className="text-[11px] text-neutral-400">
+                    {chatSearchQuery ? 'No matching conversations' : 'No direct messages yet'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewChatModalOpen(true)}
+                    className="px-3 py-1 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-[11px] font-semibold border border-blue-500/30 transition cursor-pointer"
+                  >
+                    Start a conversation
+                  </button>
+                </div>
+              ) : (
+                filteredDirectConversations.map((conv) => {
+                  const other = conv.otherParticipant;
+                  const isOnline = other ? (isUserOnline(other.id) || isUserOnline(other.email)) : false;
+                  const isSelected = chatMode === 'direct' && activeDirectConv?.id === conv.id;
+
+                  return (
+                    <button
+                      key={conv.id}
+                      type="button"
+                      onClick={() => handleSelectDirectConversation(conv)}
+                      className={`w-full p-2.5 rounded-2xl flex items-center gap-3 transition-all duration-200 text-left cursor-pointer group ${
+                        isSelected
+                          ? 'bg-neutral-900 border border-blue-500/50 text-white shadow-md'
+                          : 'hover:bg-neutral-900/50 text-neutral-300 border border-transparent'
+                      }`}
+                    >
+                      <Avatar
+                        src={other?.avatar_url}
+                        name={other?.full_name}
+                        size="md"
+                        rounded="rounded-2xl"
+                        showStatus={true}
+                        status={isOnline ? 'online' : 'offline'}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-bold text-white truncate group-hover:text-blue-400 transition">
+                            {other?.full_name || 'Team Member'}
+                          </span>
+                          <span className="text-[10px] text-neutral-500 shrink-0 font-mono">
+                            {formatConversationTime(conv.lastMessageAt)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <p className="text-[11px] text-neutral-400 truncate">
+                            {conv.lastMessagePreview || 'Started conversation'}
+                          </p>
+                          {conv.unreadCount > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-600 text-white shrink-0 shadow-sm animate-pulse">
+                              {conv.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          RIGHT PANE: WhatsApp Conversation View
+          RIGHT PANE: WhatsApp Conversation View (Channels & Direct Messages)
           ───────────────────────────────────────────────────────────────────────── */}
       <div
         className={`flex-1 flex flex-col min-w-0 bg-neutral-950 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           !isMobileChatOpen ? 'hidden md:flex' : 'flex'
         } ${isMobileClosing ? 'animate-mobile-chat-exit' : 'animate-mobile-chat-enter md:animate-none'}`}
       >
-        {/* 1. WhatsApp Group Header */}
+        {/* 1. Header Bar */}
         <div className="px-4 md:px-5 py-3 bg-black border-b border-neutral-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {/* Show / Open Chats List Button (When Hidden) */}
-            {hasMultipleChannels && !isChatListOpen && (
+            {!isChatListOpen && (
               <button
                 type="button"
                 onClick={() => setIsChatListOpen(true)}
@@ -880,40 +1442,59 @@ export const TeamChat = ({
               </button>
             )}
 
-            {/* Mobile Back Button (Only for Admin & Founder who have conversation switcher) */}
-            {hasMultipleChannels && isChatListOpen && (
-              <button
-                type="button"
-                onClick={handleMobileBack}
-                className="md:hidden p-1.5 -ml-1 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 transition cursor-pointer"
-                title="Back to all chats"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-            )}
+            {/* Mobile Back Button */}
+            <button
+              type="button"
+              onClick={handleMobileBack}
+              className="md:hidden p-1.5 -ml-1 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 transition cursor-pointer"
+              title="Back to all chats"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
 
             {/* Avatar Icon */}
-            <div className="relative shrink-0">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md overflow-hidden transition-colors duration-200 ${
-                isLeadershipActive
-                  ? 'bg-amber-950/80 border border-amber-800 text-amber-300'
-                  : 'bg-emerald-950/80 border border-emerald-800 text-emerald-300'
-              }`}>
-                {isLeadershipActive ? <Shield className="w-5 h-5" /> : <Users className="w-5 h-5" />}
-              </div>
-              <span
-                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-black"
-                title="Channel online"
+            {isDirectMode ? (
+              <Avatar
+                src={otherPerson?.avatar_url}
+                name={otherPerson?.full_name}
+                size="md"
+                rounded="rounded-xl"
+                showStatus={true}
+                status={isOtherOnline ? 'online' : 'offline'}
               />
-            </div>
+            ) : (
+              <div className="relative shrink-0">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md overflow-hidden transition-colors duration-200 ${
+                    isLeadershipActive
+                      ? 'bg-amber-950/80 border border-amber-800 text-amber-300'
+                      : 'bg-emerald-950/80 border border-emerald-800 text-emerald-300'
+                  }`}
+                >
+                  {isLeadershipActive ? <Shield className="w-5 h-5" /> : <Users className="w-5 h-5" />}
+                </div>
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-black"
+                  title="Channel online"
+                />
+              </div>
+            )}
 
-            {/* Group Meta Info */}
+            {/* Group / Direct Meta Info */}
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm md:text-base font-bold text-white tracking-tight truncate">
                   {currentChatTitle}
                 </h2>
-                {isLeadershipActive ? (
+                {isDirectMode ? (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getRoleBadge(
+                      otherPerson?.role
+                    )}`}
+                  >
+                    {getRoleLabel(otherPerson?.role)}
+                  </span>
+                ) : isLeadershipActive ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 border border-amber-800 text-amber-200 flex items-center gap-1 animate-fadeIn">
                     <Shield className="w-2.5 h-2.5 text-amber-400" />
                     #leadership
@@ -936,7 +1517,7 @@ export const TeamChat = ({
               type="button"
               onClick={() => handleStartCall('video')}
               className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-500/50 btn-emerald-smooth"
-              title="Start Group Video Call"
+              title={isDirectMode ? 'Start 1-to-1 Video Call' : 'Start Group Video Call'}
             >
               <Video className="w-4 h-4 text-emerald-400" />
               <span className="hidden sm:inline">Video Call</span>
@@ -946,7 +1527,7 @@ export const TeamChat = ({
               type="button"
               onClick={() => handleStartCall('voice')}
               className="p-2 sm:px-3 sm:py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-500/50 btn-emerald-smooth"
-              title="Start Group Voice Call"
+              title={isDirectMode ? 'Start 1-to-1 Voice Call' : 'Start Group Voice Call'}
             >
               <Phone className="w-4 h-4 text-emerald-400" />
               <span className="hidden sm:inline">Voice Call</span>
@@ -1010,11 +1591,23 @@ export const TeamChat = ({
           ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 animate-fadeIn">
               <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-500 shadow-inner">
-                {isLeadershipActive ? <Shield className="w-7 h-7 text-amber-400/80" /> : <MessageSquare className="w-7 h-7 text-emerald-400/80" />}
+                {isDirectMode ? (
+                  <MessageSquare className="w-7 h-7 text-blue-400/80" />
+                ) : isLeadershipActive ? (
+                  <Shield className="w-7 h-7 text-amber-400/80" />
+                ) : (
+                  <MessageSquare className="w-7 h-7 text-emerald-400/80" />
+                )}
               </div>
-              <h3 className="text-base font-bold text-white">No Messages Yet</h3>
+              <h3 className="text-base font-bold text-white">
+                {isDirectMode
+                  ? `Private Conversation with ${otherPerson?.full_name || 'Member'}`
+                  : 'No Messages Yet'}
+              </h3>
               <p className="text-xs text-neutral-400 max-w-sm">
-                {isLeadershipActive
+                {isDirectMode
+                  ? `This is the direct, end-to-end private conversation between you and ${otherPerson?.full_name || 'this member'}. Messages sent here are strictly confidential.`
+                  : isLeadershipActive
                   ? 'Start the confidential leadership briefing with Founder, Admins, and Founding Advisor.'
                   : 'Start the conversation with your team. Share updates, attachments, or voice notes.'}
               </p>
@@ -1022,11 +1615,17 @@ export const TeamChat = ({
           ) : (
             messages.map((msg, index) => {
               const myEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
+              const myId = profile?.id || user?.id;
+
               const isSelf = Boolean(
-                (msg.sender_id && user && msg.sender_id === user.id) ||
+                (msg.sender_id && myId && msg.sender_id === myId) ||
                 (msg.sender_email && myEmail && msg.sender_email.toLowerCase() === myEmail)
               );
-              const isOnline = isUserOnline(msg.sender_email);
+
+              const senderOnline = msg.sender_id
+                ? (isUserOnline(msg.sender_id) || isUserOnline(msg.sender_email))
+                : false;
+
               const canDelete = isFounder || isSelf;
               const isNew = newlyArrivedIdsRef.current.has(msg.id) || Boolean(msg.isOptimistic);
 
@@ -1045,11 +1644,17 @@ export const TeamChat = ({
                   )}
                   <ChatMessageItem
                     msg={(() => {
-                      const senderAvatar = msg.sender_avatar_url || usersMap[msg.sender_id]?.avatar_url || usersMap[msg.sender_email?.toLowerCase()]?.avatar_url;
-                      return senderAvatar && !msg.sender_avatar_url ? { ...msg, sender_avatar_url: senderAvatar } : msg;
+                      const senderAvatar =
+                        msg.sender_avatar_url ||
+                        msg.sender?.avatar_url ||
+                        usersMap[msg.sender_id]?.avatar_url ||
+                        usersMap[msg.sender_email?.toLowerCase()]?.avatar_url;
+                      return senderAvatar && !msg.sender_avatar_url
+                        ? { ...msg, sender_avatar_url: senderAvatar }
+                        : msg;
                     })()}
                     isSelf={isSelf}
-                    isOnline={isOnline}
+                    isOnline={senderOnline}
                     canDelete={canDelete}
                     onDelete={handleDeleteMessage}
                     isNew={isNew}
@@ -1235,7 +1840,11 @@ export const TeamChat = ({
                   value={inputValue}
                   onChange={(e) => handleInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Type a message"
+                  placeholder={
+                    isDirectMode
+                      ? `Message ${otherPerson?.full_name?.split(' ')[0] || 'member'} privately...`
+                      : 'Type a message...'
+                  }
                   disabled={sending}
                   className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none px-1"
                 />
@@ -1270,9 +1879,18 @@ export const TeamChat = ({
         </div>
       </div>
 
+      {/* New Direct Message Member Picker Modal */}
+      <NewChatModal
+        isOpen={isNewChatModalOpen}
+        onClose={() => setIsNewChatModalOpen(false)}
+        onSelectMember={handleStartChatWithMember}
+        members={usersList}
+        currentUserId={profile?.id}
+      />
+
       {/* Past Call History Modal */}
       <CallHistoryModal
-        roomId={activeChannel}
+        roomId={chatMode === 'direct' ? `dm_${activeDirectConv?.id}` : activeChannel}
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
       />

@@ -31,7 +31,8 @@ const VoiceNotePlayerComponent = ({
   senderAvatar = null,
   senderInitial = 'U',
   timestamp = '',
-  isOptimistic = false
+  isOptimistic = false,
+  status = 'read'
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -253,7 +254,7 @@ const VoiceNotePlayerComponent = ({
             <div className="flex items-center gap-1 select-none">
               <span>{timestamp}</span>
               {isSelf && (
-                <WhatsAppCheck isOptimistic={isOptimistic} status="read" />
+                <WhatsAppCheck isOptimistic={isOptimistic} status={status} />
               )}
             </div>
           </div>

@@ -3,11 +3,13 @@ import assert from 'node:assert';
 import http from 'node:http';
 import { app } from '../server/app.js';
 import { exportRateLimiter } from '../server/middleware/rateLimiter.js';
+import { query } from '../server/db.js';
 
 describe('TeamSync × KalviLearn Export System Test Suite', () => {
   let server;
   let baseUrl;
   const TEST_API_KEY = 'ts_live_kalvilearn_sec_99a8b1c4e2d3f7';
+  let seededTicketIds = [];
 
   before(async () => {
     exportRateLimiter.reset();
@@ -17,9 +19,39 @@ describe('TeamSync × KalviLearn Export System Test Suite', () => {
     });
     const port = server.address().port;
     baseUrl = `http://127.0.0.1:${port}`;
+
+    // Seed temporary test tickets for export tests if dataset is empty
+    try {
+      const res1 = await query(`
+        INSERT INTO public.tickets (
+          source, external_reference_id, type, title, description, status, priority, portal,
+          reporter_name, reporter_email, reporter_role
+        ) VALUES (
+          'KALVILEARN', 'export-test-student-${Date.now()}', 'BUG', 'Export Test Student Bug',
+          'Export test description for student', 'OPEN', 'MEDIUM', 'STUDENT',
+          'Synthetic Student', 'synthetic.student@kalvilearn.test', 'STUDENT'
+        ) RETURNING id;
+      `);
+      const res2 = await query(`
+        INSERT INTO public.tickets (
+          source, external_reference_id, type, title, description, status, priority, portal,
+          reporter_name, reporter_email, reporter_role
+        ) VALUES (
+          'KALVILEARN', 'export-test-mentor-${Date.now()}', 'FEEDBACK', 'Export Test Mentor Feedback',
+          'Export test description for mentor', 'OPEN', 'LOW', 'MENTOR',
+          'Synthetic Mentor', 'synthetic.mentor@kalvilearn.test', 'MENTOR'
+        ) RETURNING id;
+      `);
+      seededTicketIds.push(res1.rows[0].id, res2.rows[0].id);
+    } catch (seedErr) {
+      console.warn('[Export Test Suite] Non-fatal seed note:', seedErr.message);
+    }
   });
 
   after(async () => {
+    if (seededTicketIds.length > 0) {
+      await query('DELETE FROM public.tickets WHERE id = ANY($1::uuid[]);', [seededTicketIds]).catch(() => {});
+    }
     exportRateLimiter.reset();
     if (server) {
       await new Promise((resolve) => server.close(resolve));

@@ -42,6 +42,15 @@ describe('TeamSync ➔ KalviLearn Production Integration Verification Suite', ()
   });
 
   after(async () => {
+    try {
+      await query(`
+        DELETE FROM public.tickets
+        WHERE external_reference_id LIKE 'FB-%'
+           OR ($1::uuid IS NOT NULL AND id = $1);
+      `, [createdTicketId]).catch(() => {});
+      await query('DELETE FROM public.webhook_deliveries WHERE event_type LIKE \'%TICKET%\' OR target_url LIKE \'%kalvilearn%\';').catch(() => {});
+    } catch (_) {}
+
     resetWebhookTransportHook();
     if (server) {
       await new Promise((resolve) => server.close(resolve));

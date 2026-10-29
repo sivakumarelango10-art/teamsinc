@@ -33,3 +33,7 @@ lerna-debug.log*
 
 # Supabase CLI temp files
 supabase/.temp/
+
+# Windows PowerShell temp files
+Microsoft/
+

@@ -34,6 +34,18 @@ describe('KalviLearn ➔ TeamSync Integration API Test Suite', () => {
   });
 
   after(async () => {
+    // Clean up test tickets created during this suite
+    try {
+      await query(`
+        DELETE FROM public.tickets
+        WHERE external_reference_id LIKE 'kalvilearn-bug-%'
+           OR external_reference_id LIKE 'kalvilearn-feat-%'
+           OR external_reference_id LIKE 'kalvilearn-crit-%'
+           OR ($1::text IS NOT NULL AND ticket_number = $1);
+      `, [createdTicketNumber]);
+      await query('DELETE FROM public.webhook_deliveries WHERE event_type LIKE \'%TICKET%\' OR target_url LIKE \'%kalvilearn%\';').catch(() => {});
+    } catch (_) {}
+
     // Clean up test server
     if (server) {
       await new Promise((resolve) => server.close(resolve));

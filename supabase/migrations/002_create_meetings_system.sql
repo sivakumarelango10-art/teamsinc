@@ -236,3 +236,4 @@ BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.meeting_participants;
     END IF;
 END $$;
+

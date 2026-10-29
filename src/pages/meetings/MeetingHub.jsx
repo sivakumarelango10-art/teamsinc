@@ -223,7 +223,7 @@ export const MeetingHub = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-white tracking-tight">Founder Meeting Hub</h1>
+                <h1 className="text-2xl font-bold text-white tracking-tight">Meeting Hub</h1>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Realtime Active
@@ -232,7 +232,7 @@ export const MeetingHub = () => {
               <p className="text-xs text-neutral-400">
                 {isFounder
                   ? 'Schedule, manage, and coordinate meetings seamlessly across all dates and teams'
-                  : 'Discover, track, and join live and upcoming team sessions with the Founder'}
+                  : 'Discover, track, and join live and upcoming team sessions'}
               </p>
             </div>
           </div>

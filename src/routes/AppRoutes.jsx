@@ -37,6 +37,7 @@ const AdvisorTasks = lazy(() => import('../pages/advisor/AdvisorTasks'));
 const BugManagement = lazy(() => import('../pages/bugs/BugManagement'));
 const MyReportedBugs = lazy(() => import('../pages/bugs/MyReportedBugs'));
 const KalviLearnHub = lazy(() => import('../pages/integrations/KalviLearnHub'));
+const MeetingHub = lazy(() => import('../pages/meetings/MeetingHub'));
 const Profile = lazy(() => import('../pages/profile/Profile'));
 const NotFound = lazy(() => import('../pages/common/NotFound'));
 
@@ -176,6 +177,22 @@ export const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* Meeting Hub (All Authenticated Roles) */}
+      <Route
+        path="/meetings"
+        element={
+          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
+            <DashboardLayout title="Meeting Hub">
+              <MeetingHub />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/founder/meetings" element={<Navigate to="/meetings" replace />} />
+      <Route path="/admin/meetings" element={<Navigate to="/meetings" replace />} />
+      <Route path="/member/meetings" element={<Navigate to="/meetings" replace />} />
+      <Route path="/founding-advisor/meetings" element={<Navigate to="/meetings" replace />} />
 
       {/* User Profile Management Route (All Authenticated Roles) */}
       <Route

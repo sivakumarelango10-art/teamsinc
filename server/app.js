@@ -3,6 +3,7 @@ import kalvilearnRoutes from './routes/kalvilearnRoutes.js';
 import ticketsRoutes from './routes/ticketsRoutes.js';
 import docsRoutes from './routes/docsRoutes.js';
 import usersRoutes from './routes/usersRoutes.js';
+import meetingsRoutes from './routes/meetingsRoutes.js';
 
 export const app = express();
 
@@ -52,6 +53,7 @@ app.get('/api/health', handleHealth);
 // 4. Mount API Routes
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/tickets', ticketsRoutes);
+app.use('/api/v1/meetings', meetingsRoutes);
 app.use('/api/v1/integrations/kalvilearn', kalvilearnRoutes);
 app.use('/api', docsRoutes);
 

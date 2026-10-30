@@ -92,7 +92,7 @@ export const TeamChat = ({
   subtitle: initialSubtitle
 }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, profile, isFounder, isAdmin, isFoundingAdvisor, isLeadership } = useAuth();
+  const { user, profile, isFounder, isAdmin, isFoundingAdvisor } = useAuth();
   const { isUserOnline, onlineCount } = usePresence();
 
   // All team users directory for avatar and profile enrichment
@@ -125,6 +125,7 @@ export const TeamChat = ({
   // Direct conversations list & modal
   const [directConversations, setDirectConversations] = useState([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
+  const loadDirectConversationsRequestRef = useRef(0);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
 
   // Ensure Founding Advisor is locked away from general channel if in channel mode
@@ -177,6 +178,9 @@ export const TeamChat = ({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const processedMsgIdsRef = useRef(new Set());
   const newlyArrivedIdsRef = useRef(new Set());
+  // Ignore out-of-order responses when users switch chats before a fetch completes.
+  const loadMessagesRequestRef = useRef(0);
+  const loadOlderRequestRef = useRef(0);
 
   // Voice recording state
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -227,10 +231,18 @@ export const TeamChat = ({
 
   // Load Direct Conversations for Current User
   const loadDirectConversations = useCallback(async () => {
-    if (!profile?.id) return;
+    const requestId = ++loadDirectConversationsRequestRef.current;
+    if (!profile?.id) {
+      setDirectConversations([]);
+      setLoadingConversations(false);
+      return [];
+    }
+
     try {
       setLoadingConversations(true);
       const list = await directChatApi.getConversations(profile.id);
+      if (requestId !== loadDirectConversationsRequestRef.current) return [];
+
       // Enrich otherParticipant details with usersMap if missing full_name/avatar
       const enriched = list.map(c => {
         const enrichedOther = usersMap[c.otherParticipant?.id] || c.otherParticipant;
@@ -245,9 +257,14 @@ export const TeamChat = ({
       setDirectConversations(enriched);
       return enriched;
     } catch (err) {
-      console.error('Failed to load direct conversations:', err);
+      if (requestId === loadDirectConversationsRequestRef.current) {
+        console.error('Failed to load direct conversations:', err);
+      }
+      return [];
     } finally {
-      setLoadingConversations(false);
+      if (requestId === loadDirectConversationsRequestRef.current) {
+        setLoadingConversations(false);
+      }
     }
   }, [profile?.id, usersMap]);
 
@@ -285,6 +302,7 @@ export const TeamChat = ({
 
   // Load Messages for Active Channel or Active Direct Conversation
   const loadMessages = useCallback(async () => {
+    const requestId = ++loadMessagesRequestRef.current;
     try {
       setLoading(true);
       processedMsgIdsRef.current.clear();
@@ -295,27 +313,42 @@ export const TeamChat = ({
         list = await chatApi.getMessages(50, null, activeChannel);
       } else if (chatMode === 'direct' && activeDirectConv) {
         list = await directChatApi.getMessages(activeDirectConv.id, { limit: 50 });
-        // Mark conversation unread messages as read
-        if (profile?.id) {
-          await directChatApi.markAsRead(activeDirectConv.id, profile.id);
-          setDirectConversations(prev =>
-            prev.map(c => c.id === activeDirectConv.id ? { ...c, unreadCount: 0 } : c)
-          );
-        }
+      }
+
+      // A slower response for a previously selected chat must never replace
+      // the messages for the conversation currently on screen.
+      if (requestId !== loadMessagesRequestRef.current) return;
+
+      if (chatMode === 'direct' && activeDirectConv && profile?.id) {
+        await directChatApi.markAsRead(activeDirectConv.id, profile.id);
+        if (requestId !== loadMessagesRequestRef.current) return;
+        setDirectConversations(prev =>
+          prev.map(c => c.id === activeDirectConv.id ? { ...c, unreadCount: 0 } : c)
+        );
       }
 
       list.forEach(m => processedMsgIdsRef.current.add(m.id));
       setMessages(list);
       setHasMoreOlder(list.length >= 50);
     } catch (err) {
-      console.error('Failed to load chat messages:', err);
+      if (requestId === loadMessagesRequestRef.current) {
+        console.error('Failed to load chat messages:', err);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadMessagesRequestRef.current) {
+        setLoading(false);
+      }
     }
   }, [chatMode, activeChannel, activeDirectConv?.id, profile?.id]);
 
+  useEffect(() => {
+    loadOlderRequestRef.current += 1;
+    setLoadingOlder(false);
+  }, [chatMode, activeChannel, activeDirectConv?.id]);
+
   const loadOlderMessages = async () => {
     if (loadingOlder || messages.length === 0) return;
+    const requestId = ++loadOlderRequestRef.current;
     setLoadingOlder(true);
     try {
       const oldestDate = messages[0]?.created_at;
@@ -326,6 +359,8 @@ export const TeamChat = ({
       } else if (chatMode === 'direct' && activeDirectConv) {
         olderList = await directChatApi.getMessages(activeDirectConv.id, { limit: 50, before: oldestDate });
       }
+
+      if (requestId !== loadOlderRequestRef.current) return;
 
       if (olderList.length < 50) {
         setHasMoreOlder(false);
@@ -341,7 +376,9 @@ export const TeamChat = ({
     } catch (e) {
       console.error('Error loading older messages:', e);
     } finally {
-      setLoadingOlder(false);
+      if (requestId === loadOlderRequestRef.current) {
+        setLoadingOlder(false);
+      }
     }
   };
 
@@ -1222,9 +1259,7 @@ export const TeamChat = ({
 
   const currentChatSubtitle = isDirectMode
     ? (isOtherOnline ? 'Active Now • Online' : 'Offline')
-    : (isLeadershipActive
-        ? 'Restricted Executive Channel (Founder, Admin & Advisor)'
-        : `Company HQ • All Members • ${onlineCount} online`);
+    : (isLeadershipActive ? '' : `Company HQ • All Members • ${onlineCount} online`);
 
   const getRoleBadge = (role) => {
     switch (role) {
@@ -1387,15 +1422,7 @@ export const TeamChat = ({
                     <Shield className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                        <span>Leadership Chat</span>
-                      </span>
-                      <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Restricted</span>
-                    </div>
-                    <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                      Founder, Admin & Advisor
-                    </p>
+                    <span className="text-xs font-bold text-white truncate">Leadership Chat</span>
                   </div>
                 </button>
               )}
@@ -1563,20 +1590,17 @@ export const TeamChat = ({
                   >
                     {getRoleLabel(otherPerson?.role)}
                   </span>
-                ) : isLeadershipActive ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 border border-amber-800 text-amber-200 flex items-center gap-1 animate-fadeIn">
-                    <Shield className="w-2.5 h-2.5 text-amber-400" />
-                    #leadership
-                  </span>
-                ) : (
+                ) : !isLeadershipActive ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900 border border-neutral-800 text-neutral-300 animate-fadeIn">
                     #general
                   </span>
-                )}
+                ) : null}
               </div>
-              <p className="text-[11px] text-neutral-400 truncate">
-                {currentChatSubtitle}
-              </p>
+              {currentChatSubtitle && (
+                <p className="text-[11px] text-neutral-400 truncate">
+                  {currentChatSubtitle}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1677,7 +1701,7 @@ export const TeamChat = ({
                 {isDirectMode
                   ? `This is the direct, end-to-end private conversation between you and ${otherPerson?.full_name || 'this member'}. Messages sent here are strictly confidential.`
                   : isLeadershipActive
-                  ? 'Start the confidential leadership briefing with Founder, Admins, and Founding Advisor.'
+                  ? 'Start the leadership conversation.'
                   : 'Start the conversation with your team. Share updates, attachments, or voice notes.'}
               </p>
             </div>

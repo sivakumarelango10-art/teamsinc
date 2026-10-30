@@ -237,4 +237,57 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
     );
   });
 
+  it('13. Leadership Council UI omits the requested restriction copy and #leadership badge without removing access control', () => {
+    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+
+    assert.ok(!content.includes('Restricted Executive Channel (Founder, Admin & Advisor)'));
+    assert.ok(!content.includes('#leadership'));
+    assert.ok(!content.includes('Founder, Admin & Advisor'));
+
+    // Presentation text is removed; the actual role-based gate remains.
+    assert.ok(
+      content.includes('const canAccessLeadership = isFounder || isAdmin || isAdvisor;'),
+      'Leadership access must remain restricted by the existing role check'
+    );
+  });
+
+  it('14. Chat message, older-history, and conversation-list loaders ignore stale responses', () => {
+    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+
+    assert.ok(content.includes('const loadMessagesRequestRef = useRef(0)'));
+    assert.ok(content.includes('const requestId = ++loadMessagesRequestRef.current'));
+    assert.ok(content.includes('if (requestId !== loadMessagesRequestRef.current) return;'));
+    assert.ok(
+      content.includes('if (requestId === loadMessagesRequestRef.current) {\n        setLoading(false);'),
+      'Only the latest request may clear the active conversation loading state'
+    );
+
+    assert.ok(content.includes('const loadOlderRequestRef = useRef(0)'));
+    assert.ok(content.includes('if (requestId !== loadOlderRequestRef.current) return;'));
+    assert.ok(content.includes('if (requestId === loadOlderRequestRef.current) {'));
+
+    assert.ok(content.includes('const loadDirectConversationsRequestRef = useRef(0)'));
+    assert.ok(content.includes('if (requestId !== loadDirectConversationsRequestRef.current) return []'));
+    assert.ok(content.includes('if (requestId === loadDirectConversationsRequestRef.current)'));
+  });
+
+  it('15. Global presence context does not publish a new Set when membership is unchanged', () => {
+    const content = fs.readFileSync(path.resolve('src/context/PresenceContext.jsx'), 'utf8');
+
+    assert.ok(content.includes('const areSameMembers = (left, right) =>'));
+    assert.ok(content.includes('areSameMembers(prev, next) ? prev : next'));
+    assert.ok(
+      content.includes('if (prev.has(email)) return prev;'),
+      'Repeated online pings must preserve the existing Set reference'
+    );
+  });
+
+  it('16. Leadership badge removal leaves a valid JSX fallback branch', () => {
+    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+
+    assert.ok(content.includes(') : !isLeadershipActive ? ('));
+    assert.ok(content.includes(') : null}'));
+    assert.ok(!content.includes('#leadership'));
+  });
+
 });

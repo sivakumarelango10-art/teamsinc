@@ -4,19 +4,28 @@ import { useAuth } from '../hooks/useAuth';
 
 const PresenceContext = createContext(null);
 
+const areSameMembers = (left, right) =>
+  left.size === right.size && [...left].every((value) => right.has(value));
+
 export const PresenceProvider = ({ children }) => {
   const { user } = useAuth();
   const [onlineEmails, setOnlineEmails] = useState(new Set());
 
   useEffect(() => {
     if (!user?.email) {
-      setOnlineEmails(new Set());
+      setOnlineEmails(prev => (prev.size ? new Set() : prev));
       return;
     }
 
     const currentEmail = user.email.toLowerCase();
-    // Always include current user as online in their local view
-    setOnlineEmails(prev => new Set([...prev, currentEmail]));
+    // Always include current user as online in their local view.
+    // Preserve the Set identity when presence has not actually changed.
+    setOnlineEmails(prev => {
+      if (prev.has(currentEmail)) return prev;
+      const next = new Set(prev);
+      next.add(currentEmail);
+      return next;
+    });
 
     // BroadcastChannel for cross-tab synchronization on the same browser
     let bc = null;
@@ -24,11 +33,19 @@ export const PresenceProvider = ({ children }) => {
       bc = new BroadcastChannel('teamsync_presence_channel');
       bc.onmessage = (event) => {
         if (event.data?.type === 'ONLINE_PING' && event.data.email) {
-          setOnlineEmails(prev => new Set([...prev, event.data.email.toLowerCase()]));
-        } else if (event.data?.type === 'OFFLINE_PING' && event.data.email) {
+          const email = event.data.email.toLowerCase();
           setOnlineEmails(prev => {
+            if (prev.has(email)) return prev;
             const next = new Set(prev);
-            next.delete(event.data.email.toLowerCase());
+            next.add(email);
+            return next;
+          });
+        } else if (event.data?.type === 'OFFLINE_PING' && event.data.email) {
+          const email = event.data.email.toLowerCase();
+          setOnlineEmails(prev => {
+            if (!prev.has(email)) return prev;
+            const next = new Set(prev);
+            next.delete(email);
             return next;
           });
         }
@@ -57,7 +74,8 @@ export const PresenceProvider = ({ children }) => {
           try {
             const state = channel.presenceState();
             const activeKeys = Object.keys(state).map(k => k.toLowerCase());
-            setOnlineEmails(new Set([currentEmail, ...activeKeys]));
+            const next = new Set([currentEmail, ...activeKeys]);
+            setOnlineEmails(prev => (areSameMembers(prev, next) ? prev : next));
           } catch {}
         }, 150);
       };

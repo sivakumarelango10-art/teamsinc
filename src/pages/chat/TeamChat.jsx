@@ -166,7 +166,8 @@ export const TeamChat = ({
   const chatModeRef = useRef(chatMode);
   const activeDirectConvRef = useRef(activeDirectConv);
   const usersMapRef = useRef(usersMap);
-  const loadDirectConversationsRef = useRef(loadDirectConversations);
+  // The callback is declared later in this component; initialize the ref safely, then sync it after declaration.
+  const loadDirectConversationsRef = useRef(null);
   useEffect(() => { chatModeRef.current = chatMode; }, [chatMode]);
   useEffect(() => { activeDirectConvRef.current = activeDirectConv; }, [activeDirectConv]);
   useEffect(() => { usersMapRef.current = usersMap; }, [usersMap]);

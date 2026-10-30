@@ -160,6 +160,18 @@ export const TeamChat = ({
   const directRealtimeChannelRef = useRef(null);
   const typingBcRef = useRef(null);
 
+  // Stable refs so global-inbox handler can access volatile state without
+  // being in the global-inbox effect's dependency array (prevents re-subscribe
+  // on every chatMode/conversation/usersMap change).
+  const chatModeRef = useRef(chatMode);
+  const activeDirectConvRef = useRef(activeDirectConv);
+  const usersMapRef = useRef(usersMap);
+  const loadDirectConversationsRef = useRef(loadDirectConversations);
+  useEffect(() => { chatModeRef.current = chatMode; }, [chatMode]);
+  useEffect(() => { activeDirectConvRef.current = activeDirectConv; }, [activeDirectConv]);
+  useEffect(() => { usersMapRef.current = usersMap; }, [usersMap]);
+  useEffect(() => { loadDirectConversationsRef.current = loadDirectConversations; }, [loadDirectConversations]);
+
   // Pagination & Smart Scroll State
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -701,55 +713,6 @@ export const TeamChat = ({
         } catch {}
       }
 
-      // 3. Global Listener for Incoming Direct Messages across all conversations
-      const globalDirectChannel = supabase
-        .channel(`global-direct-inbox-${profile?.id || 'anon'}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'direct_messages'
-          },
-          (payload) => {
-            if (payload.new && profile?.id) {
-              const msg = payload.new;
-              // Only act if message is meant for current user
-              if (msg.recipient_id === profile.id) {
-                // If message is for another inactive conversation, increment unread count & refresh preview
-                if (chatMode !== 'direct' || activeDirectConv?.id !== msg.conversation_id) {
-                  setDirectConversations(prev => {
-                    const exists = prev.some(c => c.id === msg.conversation_id);
-                    if (!exists) {
-                      loadDirectConversations();
-                      return prev;
-                    }
-                    return prev.map(c =>
-                      c.id === msg.conversation_id
-                        ? {
-                            ...c,
-                            lastMessageAt: msg.created_at,
-                            lastMessagePreview: msg.content || msg.file_name || 'Attachment',
-                            unreadCount: (c.unreadCount || 0) + 1
-                          }
-                        : c
-                    );
-                  });
-
-                  // Trigger system notification
-                  const senderInfo = usersMap[msg.sender_id];
-                  notificationService.notifyChatMessage({
-                    senderName: senderInfo?.full_name || 'Team Member',
-                    content: msg.content || msg.file_name || 'Sent you a private message',
-                    currentPath: window.location.pathname,
-                    messageId: msg.id
-                  });
-                }
-              }
-            }
-          }
-        )
-        .subscribe();
     }
 
     // DirectChat cross-tab synchronization
@@ -792,10 +755,111 @@ export const TeamChat = ({
     profile?.id,
     handleTypingSignal,
     loadMessages,
-    loadDirectConversations,
-    usersMap,
     scrollToBottom
   ]);
+
+  // ── Global Direct Inbox Subscription ────────────────────────────────────────
+  // IMPORTANT: This effect is intentionally isolated from the main subscription
+  // effect above. It must only re-run when `profile?.id` changes (i.e. user
+  // switches accounts or signs in/out).
+  //
+  // Root cause of the production error
+  // ────────────────────────────────────
+  // supabase.channel(name) is DEDUPLICATED: calling it a second time with the
+  // same topic returns the EXISTING already-subscribed instance. If any part of
+  // the code then calls .on('postgres_changes', …) on that already-joined
+  // channel, the SDK throws:
+  //   "cannot add 'postgres_changes' callbacks after 'subscribe'"
+  //
+  // Previously this channel was created inside the big subscription effect whose
+  // dependencies included chatMode, activeDirectConv?.id, usersMap, and
+  // loadDirectConversations. Every time the user switched conversations (or the
+  // users map re-loaded), the effect re-ran: the cleanup removed rtChannel and
+  // directRtChannel but NOT globalDirectChannel, so the next run found the
+  // already-subscribed instance and tried to add a new postgres_changes listener
+  // to it → crash.
+  //
+  // Fix: separate this channel into its own effect keyed ONLY on profile?.id.
+  // All volatile state (chatMode, activeDirectConv, usersMap, …) is read through
+  // stable refs so the handler stays current without forcing a re-subscribe.
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+
+    const userId = profile.id;
+    const topic = `global-direct-inbox-${userId}`;
+
+    // Ensure no stale channel with this topic is left in the SDK's registry
+    // before we create a fresh one.  supabase.channel() would return the old
+    // instance if we didn't remove it first.
+    const stale = supabase.getChannels().find(c => c.topic === `realtime:${topic}`);
+    if (stale) {
+      supabase.removeChannel(stale);
+    }
+
+    const globalDirectChannel = supabase
+      .channel(topic)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'direct_messages'
+        },
+        (payload) => {
+          if (!payload.new) return;
+          const msg = payload.new;
+          // Only act on messages addressed to the currently authenticated user
+          if (msg.recipient_id !== userId) return;
+
+          // Read volatile state through refs — no extra effect dependencies needed
+          const currentChatMode = chatModeRef.current;
+          const currentActiveDirectConv = activeDirectConvRef.current;
+          const currentUsersMap = usersMapRef.current;
+          const currentLoadDirectConversations = loadDirectConversationsRef.current;
+
+          // Only notify when the message belongs to a conversation not currently open
+          if (currentChatMode !== 'direct' || currentActiveDirectConv?.id !== msg.conversation_id) {
+            setDirectConversations(prev => {
+              const exists = prev.some(c => c.id === msg.conversation_id);
+              if (!exists) {
+                currentLoadDirectConversations?.();
+                return prev;
+              }
+              return prev.map(c =>
+                c.id === msg.conversation_id
+                  ? {
+                      ...c,
+                      lastMessageAt: msg.created_at,
+                      lastMessagePreview: msg.content || msg.file_name || 'Attachment',
+                      unreadCount: (c.unreadCount || 0) + 1
+                    }
+                  : c
+              );
+            });
+
+            // System notification via the notification service
+            const senderInfo = currentUsersMap[msg.sender_id];
+            notificationService.notifyChatMessage({
+              senderName: senderInfo?.full_name || 'Team Member',
+              content: msg.content || msg.file_name || 'Sent you a private message',
+              currentPath: window.location.pathname,
+              messageId: msg.id
+            });
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (err) {
+          console.warn('[GlobalInbox] Subscription error:', err);
+        }
+      });
+
+    return () => {
+      if (supabase) {
+        supabase.removeChannel(globalDirectChannel);
+      }
+    };
+  }, [profile?.id]); // ← only re-subscribe when authenticated user changes
 
   useEffect(() => {
     if (!loading) {

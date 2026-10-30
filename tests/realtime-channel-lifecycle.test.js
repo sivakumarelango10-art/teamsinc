@@ -31,10 +31,12 @@ const TEAM_CHAT_PATH = path.resolve('src/pages/chat/TeamChat.jsx');
 const DIRECT_CHAT_TEST_PATH = path.resolve('tests/direct-chat.test.js');
 const KALVI_HUB_PATH = path.resolve('src/pages/integrations/KalviLearnHub.jsx');
 
+const getTeamChatContent = () => fs.readFileSync(TEAM_CHAT_PATH, 'utf-8').replace(/\r\n/g, '\n');
+
 describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
 
   it('1. global-direct-inbox channel is in its own isolated useEffect keyed only on profile?.id', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     // The isolated effect must exist and subscribe only to profile?.id
     assert.ok(
@@ -44,7 +46,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('2. global-direct-inbox postgres_changes listener is registered BEFORE subscribe() is called', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     // Extract the isolated global inbox effect block
     const effectStart = content.indexOf("const globalDirectChannel = supabase\n      .channel(topic)");
@@ -67,7 +69,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('3. global-direct-inbox channel is removed in the isolated effect cleanup (not leaked)', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     // The cleanup of the isolated effect must call supabase.removeChannel(globalDirectChannel)
     const cleanupIndex = content.indexOf('supabase.removeChannel(globalDirectChannel)');
@@ -78,7 +80,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('4. global-direct-inbox channel is NOT created inside the main subscription effect', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     // Locate the main subscription effect (marked by its known start)
     const mainEffectStart = content.indexOf('// Real-time Subscriptions (Channel + Direct Messages)');
@@ -101,7 +103,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('5. Stale channel guard: isolated effect checks getChannels() before creating new channel', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     assert.ok(
       content.includes('supabase.getChannels().find(c => c.topic === `realtime:${topic}`)'),
@@ -114,7 +116,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('6. Volatile state (chatMode, activeDirectConv, usersMap) is read through refs in the inbox handler', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     // These four stable ref reads must exist inside the handler
     assert.ok(
@@ -136,7 +138,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('7. Stable refs are initialized safely and synchronized after callback declaration', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     assert.ok(content.includes('const chatModeRef = useRef(chatMode)'), 'chatModeRef declared');
     assert.ok(content.includes('const activeDirectConvRef = useRef(activeDirectConv)'), 'activeDirectConvRef declared');
@@ -161,7 +163,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('8. The main subscription effect does NOT include usersMap or loadDirectConversations in its dep array', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     const mainEffectDeps = content.indexOf(
       "  }, [\n    chatMode,\n    activeChannel,\n    activeDirectConv?.id,\n    profile?.id,\n    handleTypingSignal,\n    loadMessages,\n    scrollToBottom\n  ]);"
@@ -181,7 +183,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
     // Our fix prevents this by isolating the global inbox channel in its own effect
     // with only [profile?.id] as a dependency.
 
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     // Verify the isolated effect guard comment is present (architectural documentation)
     assert.ok(
@@ -195,7 +197,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('10. Private message privacy: recipient_id check in global inbox handler ensures users only see their own messages', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     // The fix captures userId in a closure at subscription time (from profile.id),
     // then checks msg.recipient_id !== userId to enforce privacy
@@ -218,19 +220,12 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
     );
   });
 
-  it('12. KalviLearn Integration Hub is completely untouched by this fix', () => {
-    // Confirm KalviLearnHub file exists and was not modified
-    assert.ok(fs.existsSync(KALVI_HUB_PATH), 'KalviLearnHub.jsx must exist and be untouched');
+  it('12. KalviLearn Integration Hub is completely removed from the project', () => {
+    // Confirm KalviLearnHub file no longer exists
+    assert.ok(!fs.existsSync(KALVI_HUB_PATH), 'KalviLearnHub.jsx must be removed');
 
-    const content = fs.readFileSync(KALVI_HUB_PATH, 'utf8');
-    // File must contain its core markers
-    assert.ok(
-      content.includes('KalviLearnHub'),
-      'KalviLearnHub.jsx must contain its own component definition'
-    );
-
-    // Verify TeamChat.jsx does not import or modify KalviLearn paths
-    const chatContent = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    // Verify TeamChat.jsx does not import or reference KalviLearn
+    const chatContent = getTeamChatContent();
     assert.ok(
       !chatContent.includes('KalviLearn'),
       'TeamChat.jsx must not reference KalviLearn'
@@ -238,7 +233,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('13. Leadership Council UI omits the requested restriction copy and #leadership badge without removing access control', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     assert.ok(!content.includes('Restricted Executive Channel (Founder, Admin & Advisor)'));
     assert.ok(!content.includes('#leadership'));
@@ -252,7 +247,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('14. Chat message, older-history, and conversation-list loaders ignore stale responses', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     assert.ok(content.includes('const loadMessagesRequestRef = useRef(0)'));
     assert.ok(content.includes('const requestId = ++loadMessagesRequestRef.current'));
@@ -283,7 +278,7 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
   });
 
   it('16. Leadership badge removal leaves a valid JSX fallback branch', () => {
-    const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
+    const content = getTeamChatContent();
 
     assert.ok(content.includes(') : !isLeadershipActive ? ('));
     assert.ok(content.includes(') : null}'));

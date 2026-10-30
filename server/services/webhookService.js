@@ -13,19 +13,19 @@ export function resetWebhookTransportHook() {
 }
 
 export function getConfiguredWebhookConfig() {
-  let url = process.env.KALVILEARN_WEBHOOK_URL ? process.env.KALVILEARN_WEBHOOK_URL.trim().replace(/^["']|["']$/g, '') : null;
-  let secret = (process.env.KALVILEARN_WEBHOOK_SECRET || process.env.TEAMSYNC_WEBHOOK_SECRET)
-    ? (process.env.KALVILEARN_WEBHOOK_SECRET || process.env.TEAMSYNC_WEBHOOK_SECRET).trim().replace(/^["']|["']$/g, '')
+  let url = (process.env.TEAMSYNC_WEBHOOK_URL || process.env.WEBHOOK_URL)
+    ? (process.env.TEAMSYNC_WEBHOOK_URL || process.env.WEBHOOK_URL).trim().replace(/^["']|["']$/g, '')
+    : null;
+  let secret = process.env.TEAMSYNC_WEBHOOK_SECRET
+    ? process.env.TEAMSYNC_WEBHOOK_SECRET.trim().replace(/^["']|["']$/g, '')
     : null;
 
   if ((!url || !secret) && fs.existsSync('.env')) {
     const content = fs.readFileSync('.env', 'utf-8');
     for (const line of content.split('\n')) {
       const trimmed = line.trim();
-      if (trimmed.startsWith('KALVILEARN_WEBHOOK_URL=') && !url) {
-        url = trimmed.replace(/^KALVILEARN_WEBHOOK_URL=/, '').replace(/^["']|["']$/g, '');
-      } else if (trimmed.startsWith('KALVILEARN_WEBHOOK_SECRET=') && !secret) {
-        secret = trimmed.replace(/^KALVILEARN_WEBHOOK_SECRET=/, '').replace(/^["']|["']$/g, '');
+      if ((trimmed.startsWith('TEAMSYNC_WEBHOOK_URL=') || trimmed.startsWith('WEBHOOK_URL=')) && !url) {
+        url = trimmed.split('=')[1]?.replace(/^["']|["']$/g, '');
       } else if (trimmed.startsWith('TEAMSYNC_WEBHOOK_SECRET=') && !secret) {
         secret = trimmed.replace(/^TEAMSYNC_WEBHOOK_SECRET=/, '').replace(/^["']|["']$/g, '');
       }
@@ -33,10 +33,10 @@ export function getConfiguredWebhookConfig() {
   }
 
   if (!url) {
-    console.warn('[TeamSync] WARNING: KALVILEARN_WEBHOOK_URL is not configured. Webhook dispatch will be skipped.');
+    // Webhook dispatch optional
   }
   if (!secret) {
-    console.error('[TeamSync] CRITICAL: KALVILEARN_WEBHOOK_SECRET / TEAMSYNC_WEBHOOK_SECRET is not set. Webhook signatures cannot be computed.');
+    // Secret optional
   }
 
   return {
@@ -150,7 +150,7 @@ export function calculateBackoffMs(attempt) {
 }
 
 /**
- * Dispatch webhook event to KalviLearn
+ * Dispatch webhook event
  */
 export async function dispatchWebhookEvent(eventType, payload, customEventId = null) {
   const { url, secret } = getConfiguredWebhookConfig();
@@ -165,7 +165,7 @@ export async function dispatchWebhookEvent(eventType, payload, customEventId = n
   const eventId = customEventId || `evt_${eventType.toLowerCase()}_${Date.now()}_${crypto.randomUUID().substring(0, 8)}`;
   const timestamp = Math.floor(Date.now() / 1000);
 
-  // Canonical KalviLearn payload format
+  // Canonical payload format
   const webhookBody = {
     id: eventId,
     eventId: eventId,
@@ -187,7 +187,7 @@ export async function dispatchWebhookEvent(eventType, payload, customEventId = n
       id: payload.ticketId,
       ticketNumber: payload.ticketNumber,
       sourceReferenceId: payload.sourceReferenceId,
-      source: 'KALVILEARN'
+      source: 'TEAMSYNC'
     },
     data: payload
   };

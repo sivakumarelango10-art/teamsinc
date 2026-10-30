@@ -10,7 +10,7 @@ const router = express.Router();
 router.use(integrationRateLimiter.middleware());
 
 /**
- * 1. Create Ticket from KalviLearn
+ * 1. Create Ticket
  * POST /api/v1/tickets
  */
 router.post('/', requireApiKey, validateFeedbackPayload, async (req, res, next) => {
@@ -112,7 +112,7 @@ router.patch('/:identifier/status', requireApiKey, async (req, res, next) => {
     }
 
     const updated = await ticketService.updateTicketStatus(req.params.identifier, status, {
-      performedByName: req.body.performedByName || 'KalviLearn API'
+      performedByName: req.body.performedByName || 'TeamSync API'
     });
 
     return res.status(200).json({
@@ -144,7 +144,7 @@ router.patch('/:identifier/assign', requireApiKey, async (req, res, next) => {
   try {
     const { assignedTo } = req.body;
     const updated = await ticketService.assignTicket(req.params.identifier, assignedTo, {
-      performedByName: req.body.performedByName || 'KalviLearn API'
+      performedByName: req.body.performedByName || 'TeamSync API'
     });
 
     return res.status(200).json({
@@ -171,7 +171,7 @@ router.patch('/:identifier/priority', requireApiKey, async (req, res, next) => {
     }
 
     const updated = await ticketService.updateTicketPriority(req.params.identifier, priority, {
-      performedByName: req.body.performedByName || 'KalviLearn API'
+      performedByName: req.body.performedByName || 'TeamSync API'
     });
 
     return res.status(200).json({
@@ -194,11 +194,11 @@ router.post('/:identifier/comments', requireApiKey, async (req, res, next) => {
   try {
     const commentText = req.body.comment || req.body.content || req.body.text;
     const authorObj = req.body.author || {};
-    const authorName = req.body.authorName || authorObj.name || 'KalviLearn User';
+    const authorName = req.body.authorName || authorObj.name || 'Team Member';
     const authorRole = req.body.authorRole || authorObj.role || null;
     const authorId = req.body.authorId || authorObj.id || null;
     const authorEmail = req.body.authorEmail || authorObj.email || null;
-    const origin = req.body.origin || (req.authenticatedClient?.source === 'KALVILEARN' ? 'KALVILEARN' : null);
+    const origin = req.body.origin || (req.authenticatedClient?.source || 'API');
 
     const result = await ticketService.addTicketComment(req.params.identifier, {
       comment: commentText,

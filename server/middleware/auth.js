@@ -85,7 +85,7 @@ export function requireApiKey(req, res, next) {
   }
 
   req.authenticatedClient = {
-    source: 'KALVILEARN',
+    source: 'API_CLIENT',
     authMethod: 'API_KEY',
     role: 'ADMIN'
   };

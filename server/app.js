@@ -1,5 +1,4 @@
 import express from 'express';
-import kalvilearnRoutes from './routes/kalvilearnRoutes.js';
 import ticketsRoutes from './routes/ticketsRoutes.js';
 import docsRoutes from './routes/docsRoutes.js';
 import usersRoutes from './routes/usersRoutes.js';
@@ -15,8 +14,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 2. Controlled CORS policy for server-to-server & internal browser endpoints
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  // Allow localhost or same-origin for TeamSync workspace & KalviLearn
-  if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('teamsync') || origin.includes('kalvilearn'))) {
+  // Allow localhost or same-origin for TeamSync workspace
+  if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('teamsync'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
@@ -54,7 +53,6 @@ app.get('/api/health', handleHealth);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/tickets', ticketsRoutes);
 app.use('/api/v1/meetings', meetingsRoutes);
-app.use('/api/v1/integrations/kalvilearn', kalvilearnRoutes);
 app.use('/api', docsRoutes);
 
 // 5. 404 Handler for API

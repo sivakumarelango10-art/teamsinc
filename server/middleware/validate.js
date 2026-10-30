@@ -33,7 +33,7 @@ function sanitizeString(str) {
 }
 
 /**
- * Request validation middleware for POST /api/v1/tickets and POST /api/v1/integrations/kalvilearn/feedback
+ * Request validation middleware for POST /api/v1/tickets
  */
 export function validateFeedbackPayload(req, res, next) {
   const body = req.body;
@@ -90,7 +90,7 @@ export function validateFeedbackPayload(req, res, next) {
   if (!reporterObj || typeof reporterObj !== 'object') {
     errors.push('Field "reporter" (or "user") is required and must be an object.');
   } else {
-    const name = reporterObj.name || (reporterObj.fullName) || 'KalviLearn User';
+    const name = reporterObj.name || (reporterObj.fullName) || 'Team Member';
     const email = reporterObj.email;
     const role = reporterObj.role;
     const externalUserId = reporterObj.externalUserId || reporterObj.userId || reporterObj.id;
@@ -140,7 +140,7 @@ export function validateFeedbackPayload(req, res, next) {
   if (body.source && typeof body.source === 'string') {
     body.source = sanitizeString(body.source).toUpperCase();
   } else {
-    body.source = 'KALVILEARN';
+    body.source = 'TEAMSYNC';
   }
 
   // 7. Context Sanitization

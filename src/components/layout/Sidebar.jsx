@@ -14,7 +14,6 @@ import {
   Bug,
   User,
   ChevronRight,
-  Layers,
   Video
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -31,7 +30,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       return [
         { to: '/founder/dashboard', label: 'Founder Dashboard', icon: LayoutDashboard },
         { to: '/meetings', label: 'Meeting Hub', icon: Video },
-        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/founder/bugs', label: 'Bug Reports', icon: Bug },
         { to: '/founder/users', label: 'User Management', icon: Users },
@@ -45,7 +43,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       return [
         { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
         { to: '/meetings', label: 'Meetings', icon: Video },
-        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/admin/bugs', label: 'Bug Reports', icon: Bug },
         { to: '/admin/users', label: 'User Management', icon: Users },
@@ -58,7 +55,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       return [
         { to: '/founding-advisor/dashboard', label: 'Overview', icon: LayoutDashboard },
         { to: '/meetings', label: 'Meetings', icon: Video },
-        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/founding-advisor/users', label: 'User Management', icon: Users },
         { to: '/founding-advisor/tasks', label: 'Tasks', icon: CheckSquare },
@@ -68,7 +64,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       return [
         { to: '/member/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
         { to: '/meetings', label: 'Meetings', icon: Video },
-        { to: '/integrations/kalvilearn', label: 'KalviLearn Hub', icon: Layers },
         { to: '/chat', label: 'Chats', icon: MessageSquare },
         { to: '/member/users', label: 'User Management', icon: Users },
         { to: '/member/tasks', label: 'My Tasks', icon: CheckSquare },

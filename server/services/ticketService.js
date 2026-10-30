@@ -69,7 +69,7 @@ function formatTicketResponse(row) {
  * 1. Create a TeamSync Ticket with Idempotency Protection
  */
 export async function createTicket(data, idempotencyKey = null) {
-  const source = data.source || 'KALVILEARN';
+  const source = data.source || 'TEAMSYNC';
   const extRef = data.sourceReferenceId || data.externalReferenceId || (data.metadata && data.metadata.requestId) || `req_${Date.now()}`;
   const effectiveIdempotencyKey = idempotencyKey || data.idempotencyKey || null;
 
@@ -146,7 +146,7 @@ export async function createTicket(data, idempotencyKey = null) {
     data.device || null,
     data.appVersion || null,
     reporterObj.externalUserId || reporterObj.userId || reporterObj.id || null,
-    reporterObj.name || reporterObj.fullName || 'KalviLearn User',
+    reporterObj.name || reporterObj.fullName || 'Team Member',
     reporterObj.email || '',
     reporterObj.role || null,
     JSON.stringify(data.metadata || {}),
@@ -183,7 +183,7 @@ export async function createTicket(data, idempotencyKey = null) {
   await query(`
     INSERT INTO public.ticket_activities (
       ticket_id, action, from_value, to_value, performed_by_name
-    ) VALUES ($1, 'TICKET_CREATED', NULL, 'OPEN', 'KalviLearn System')
+    ) VALUES ($1, 'TICKET_CREATED', NULL, 'OPEN', 'System')
   `, [newRow.id]);
 
   // 5. Insert Attachments if provided (supports array, single object, or metadata URL)
@@ -229,7 +229,7 @@ export async function createTicket(data, idempotencyKey = null) {
 
   const formatted = formatTicketResponse(newRow);
 
-  // 6. Asynchronous Webhook Notification back to KalviLearn
+  // 6. Asynchronous Webhook Notification
   await dispatchWebhookEvent('TICKET_CREATED', {
     ticketId: formatted.id,
     ticketNumber: formatted.ticketNumber,
@@ -760,12 +760,10 @@ export async function addTicketComment(ticketNumber, { comment, authorId = null,
     ) VALUES ($1, 'COMMENT_ADDED', NULL, $2, $3, $4);
   `, [currentTicket.id, comment.trim().substring(0, 100), authorId, authorName]);
 
-  // Dispatch webhook event ONLY if comment was created by TeamSync staff (prevent infinite echo loop)
-  const isKalviLearnOrigin = origin === 'KALVILEARN' || 
-    ['STUDENT', 'MENTOR', 'CAMPUS_MANAGER'].includes(authorRole) ||
-    authorName.toLowerCase().includes('kalvilearn');
+  // Dispatch webhook event ONLY if comment was created by staff (prevent infinite echo loop)
+  const isExternalOrigin = origin === 'EXTERNAL' || origin === 'API';
 
-  if (!isKalviLearnOrigin) {
+  if (!isExternalOrigin) {
     await dispatchWebhookEvent('COMMENT_CREATED', {
       ticketId: currentTicket.id,
       ticketNumber: currentTicket.ticketNumber,
@@ -878,7 +876,7 @@ export async function deleteTicket(ticketNumber, { performedBy = null, performed
   // Hard delete — FK ON DELETE CASCADE removes comments, activities, attachments
   await query(`DELETE FROM public.tickets WHERE id = $1;`, [currentTicket.id]);
 
-  // Best-effort webhook notification to KalviLearn
+  // Best-effort webhook notification
   try {
     await dispatchWebhookEvent('TICKET_DELETED', {
       ticket: {

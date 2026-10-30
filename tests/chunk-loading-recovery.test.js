@@ -98,24 +98,24 @@ describe('TeamSync Chunk Loading & Safe Recovery Test Suite', () => {
     );
   });
 
-  it('6. KalviLearn Integration Hub remains completely untouched and protected', () => {
+  it('6. KalviLearn Integration Hub route and imports are completely removed from AppRoutes', () => {
     const appRoutesPath = path.resolve('src/routes/AppRoutes.jsx');
     const content = fs.readFileSync(appRoutesPath, 'utf8');
 
-    // Confirm KalviLearnHub retains its exact import and route structure
+    // Confirm KalviLearnHub is completely absent from routes
     assert.ok(
-      content.includes("const KalviLearnHub = lazy(() => import('../pages/integrations/KalviLearnHub'));"),
-      'KalviLearnHub lazy import must remain preserved'
+      !content.includes('KalviLearnHub'),
+      'KalviLearnHub lazy import must be completely removed'
     );
 
     assert.ok(
-      content.includes('path="/integrations/kalvilearn"'),
-      'KalviLearn route path must remain untouched'
+      !content.includes('/integrations/kalvilearn'),
+      'KalviLearn route path must be completely removed'
     );
 
-    // Confirm file exists unchanged
+    // Confirm file no longer exists
     const klHubPath = path.resolve('src/pages/integrations/KalviLearnHub.jsx');
-    assert.ok(fs.existsSync(klHubPath), 'KalviLearnHub.jsx must exist');
+    assert.ok(!fs.existsSync(klHubPath), 'KalviLearnHub.jsx must not exist');
   });
 });
 

@@ -71,9 +71,4 @@ export const integrationRateLimiter = new RateLimiter({
   maxRequests: 60
 });
 
-export const exportRateLimiter = new RateLimiter({
-  windowMs: 60 * 1000,
-  maxRequests: 20
-});
-
 export default integrationRateLimiter;

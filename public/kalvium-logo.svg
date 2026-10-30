@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" fill="none">
-  <!-- Outer rectangular frame -->
-  <rect x="15" y="15" width="70" height="90" stroke="#ED2A2B" stroke-width="11" stroke-linejoin="miter" />
-  <!-- Stylized inner chevron forming geometric K -->
-  <polyline points="79.5 20.5 20.5 60 79.5 99.5" stroke="#ED2A2B" stroke-width="11" stroke-linecap="square" stroke-linejoin="miter" />
-</svg>

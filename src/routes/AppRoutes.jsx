@@ -38,7 +38,6 @@ const AdvisorTasks = lazyWithRetry(() => import('../pages/advisor/AdvisorTasks')
 
 const BugManagement = lazyWithRetry(() => import('../pages/bugs/BugManagement'), 'BugManagement');
 const MyReportedBugs = lazyWithRetry(() => import('../pages/bugs/MyReportedBugs'), 'MyReportedBugs');
-const KalviLearnHub = lazy(() => import('../pages/integrations/KalviLearnHub'));
 const MeetingHub = lazyWithRetry(() => import('../pages/meetings/MeetingHub'), 'MeetingHub');
 const Profile = lazyWithRetry(() => import('../pages/profile/Profile'), 'Profile');
 const NotFound = lazyWithRetry(() => import('../pages/common/NotFound'), 'NotFound');
@@ -165,18 +164,6 @@ export const AppRoutes = () => {
               <ChunkErrorBoundary routeName="Chats">
                 <TeamChat />
               </ChunkErrorBoundary>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* KalviLearn Integration Hub (All Authenticated Roles) */}
-      <Route
-        path="/integrations/kalvilearn"
-        element={
-          <ProtectedRoute allowedRoles={['FOUNDER', 'ADMIN', 'MEMBER', 'FOUNDING_ADVISOR']}>
-            <DashboardLayout title="KalviLearn Hub">
-              <KalviLearnHub />
             </DashboardLayout>
           </ProtectedRoute>
         }

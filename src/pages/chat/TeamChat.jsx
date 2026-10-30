@@ -171,7 +171,6 @@ export const TeamChat = ({
   useEffect(() => { chatModeRef.current = chatMode; }, [chatMode]);
   useEffect(() => { activeDirectConvRef.current = activeDirectConv; }, [activeDirectConv]);
   useEffect(() => { usersMapRef.current = usersMap; }, [usersMap]);
-  useEffect(() => { loadDirectConversationsRef.current = loadDirectConversations; }, [loadDirectConversations]);
 
   // Pagination & Smart Scroll State
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
@@ -251,6 +250,11 @@ export const TeamChat = ({
       setLoadingConversations(false);
     }
   }, [profile?.id, usersMap]);
+
+  // Sync only after the callback's const binding has been initialized.
+  useEffect(() => {
+    loadDirectConversationsRef.current = loadDirectConversations;
+  }, [loadDirectConversations]);
 
   useEffect(() => {
     loadDirectConversations();

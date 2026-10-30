@@ -135,16 +135,25 @@ describe('TeamSync Realtime Channel Lifecycle Regression Tests', () => {
     );
   });
 
-  it('7. Stable refs for volatile state are declared and synchronized with useEffect', () => {
+  it('7. Stable refs are initialized safely and synchronized after callback declaration', () => {
     const content = fs.readFileSync(TEAM_CHAT_PATH, 'utf8');
 
-    // All four refs must be declared
     assert.ok(content.includes('const chatModeRef = useRef(chatMode)'), 'chatModeRef declared');
     assert.ok(content.includes('const activeDirectConvRef = useRef(activeDirectConv)'), 'activeDirectConvRef declared');
     assert.ok(content.includes('const usersMapRef = useRef(usersMap)'), 'usersMapRef declared');
-    assert.ok(content.includes('const loadDirectConversationsRef = useRef(loadDirectConversations)'), 'loadDirectConversationsRef declared');
 
-    // All four sync effects must exist
+    // Do not eagerly read a const callback before its declaration: that causes
+    // "Cannot access '<minified binding>' before initialization" on first render.
+    assert.ok(
+      content.includes('const loadDirectConversationsRef = useRef(null)'),
+      'loadDirectConversationsRef must use a safe initial value'
+    );
+
+    const callbackDeclaration = content.indexOf('const loadDirectConversations = useCallback');
+    const refSync = content.indexOf('loadDirectConversationsRef.current = loadDirectConversations');
+    assert.ok(callbackDeclaration !== -1, 'loadDirectConversations callback must be declared');
+    assert.ok(refSync > callbackDeclaration, 'callback ref must only be synchronized after callback declaration');
+
     assert.ok(content.includes('chatModeRef.current = chatMode'), 'chatModeRef sync effect must exist');
     assert.ok(content.includes('activeDirectConvRef.current = activeDirectConv'), 'activeDirectConvRef sync effect must exist');
     assert.ok(content.includes('usersMapRef.current = usersMap'), 'usersMapRef sync effect must exist');

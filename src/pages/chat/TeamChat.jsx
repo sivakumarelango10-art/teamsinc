@@ -166,11 +166,11 @@ export const TeamChat = ({
   const chatModeRef = useRef(chatMode);
   const activeDirectConvRef = useRef(activeDirectConv);
   const usersMapRef = useRef(usersMap);
-  const loadDirectConversationsRef = useRef(loadDirectConversations);
+  // The callback is declared later in this component; initialize the ref safely, then sync it after declaration.
+  const loadDirectConversationsRef = useRef(null);
   useEffect(() => { chatModeRef.current = chatMode; }, [chatMode]);
   useEffect(() => { activeDirectConvRef.current = activeDirectConv; }, [activeDirectConv]);
   useEffect(() => { usersMapRef.current = usersMap; }, [usersMap]);
-  useEffect(() => { loadDirectConversationsRef.current = loadDirectConversations; }, [loadDirectConversations]);
 
   // Pagination & Smart Scroll State
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
@@ -250,6 +250,11 @@ export const TeamChat = ({
       setLoadingConversations(false);
     }
   }, [profile?.id, usersMap]);
+
+  // Sync only after the callback's const binding has been initialized.
+  useEffect(() => {
+    loadDirectConversationsRef.current = loadDirectConversations;
+  }, [loadDirectConversations]);
 
   useEffect(() => {
     loadDirectConversations();

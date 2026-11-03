@@ -126,3 +126,4 @@ EXCEPTION WHEN OTHERS THEN
     -- Publication might not exist in local testing environment
     NULL;
 END $$;
+

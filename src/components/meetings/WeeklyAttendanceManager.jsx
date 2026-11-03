@@ -700,3 +700,4 @@ export const WeeklyAttendanceManager = ({
 };
 
 export default WeeklyAttendanceManager;
+

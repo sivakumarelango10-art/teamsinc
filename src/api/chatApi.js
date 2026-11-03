@@ -17,7 +17,7 @@ export const chatApi = {
       try {
         let query = supabase
           .from('messages')
-          .select('id, content, sender_id, sender_name, sender_email, sender_role, file_url, file_name, file_size, file_type, channel, created_at')
+          .select('id, content, sender_id, sender_name, sender_email, sender_role, file_url, file_name, file_size, file_type, channel, metadata, created_at')
           .eq('channel', channel)
           .order('created_at', { ascending: false })
           .limit(limit);
@@ -117,7 +117,7 @@ export const chatApi = {
     }
   },
 
-  async sendMessage({ content = '', senderId, senderName, senderEmail, senderRole, attachment = null, channel = 'general' }) {
+  async sendMessage({ content = '', senderId, senderName, senderEmail, senderRole, attachment = null, channel = 'general', metadata = {} }) {
     let fileUrl = null;
     let fileName = null;
     let fileSize = null;
@@ -135,9 +135,12 @@ export const chatApi = {
     if (!cleanContent && attachment) {
       cleanContent = fileType === 'audio' ? 'Voice message' : (attachment.name || 'Attachment');
     }
+    if (!cleanContent && metadata && (metadata.type || metadata.question || metadata.title)) {
+      cleanContent = metadata.title || metadata.question || `Shared ${metadata.type || 'collaboration item'}`;
+    }
 
     if (!cleanContent && !attachment) {
-      throw new Error('Please type a message or record audio to send');
+      throw new Error('Please type a message, record audio, or select a collaboration item to send');
     }
 
     if (supabase) {
@@ -153,7 +156,8 @@ export const chatApi = {
           file_name: fileName,
           file_size: fileSize,
           file_type: fileType,
-          channel: channel || 'general'
+          channel: channel || 'general',
+          metadata: metadata || {}
         }])
         .select()
         .single();

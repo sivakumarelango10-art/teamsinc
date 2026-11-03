@@ -10,12 +10,16 @@ const TaskCardComponent = ({
   canUpdateStatus = false,
   onStatusChange,
   onEdit,
-  onDelete
+  onDelete,
+  onClick
 }) => {
   const isOverdue = Boolean(task.deadline && task.status !== 'COMPLETED' && isPast(parseISO(task.deadline)));
 
   return (
-    <div className="glass-card rounded-2xl p-5 border border-neutral-800 flex flex-col justify-between hover:border-neutral-700 transition duration-200 group bg-neutral-950">
+    <div
+      onClick={() => onClick && onClick(task)}
+      className={`glass-card rounded-2xl p-5 border border-neutral-800 flex flex-col justify-between hover:border-neutral-700 transition duration-200 group bg-neutral-950 ${onClick ? 'cursor-pointer hover:border-purple-500/50' : ''}`}
+    >
       <div>
         {/* Header: Priority, Department, and Actions */}
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -30,10 +34,13 @@ const TaskCardComponent = ({
           </div>
 
           {canManage && (
-            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
               {onEdit && (
                 <button
-                  onClick={() => onEdit(task)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(task);
+                  }}
                   className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded-lg transition"
                   title="Edit Task"
                 >
@@ -42,7 +49,10 @@ const TaskCardComponent = ({
               )}
               {onDelete && (
                 <button
-                  onClick={() => onDelete(task)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(task);
+                  }}
                   className="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-lg transition"
                   title="Delete Task"
                 >
@@ -95,10 +105,13 @@ const TaskCardComponent = ({
           <TaskStatusBadge status={task.status} />
 
           {canUpdateStatus && onStatusChange && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               {task.status !== 'TODO' && (
                 <button
-                  onClick={() => onStatusChange(task.id, 'TODO')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusChange(task.id, 'TODO');
+                  }}
                   className="px-2 py-1 text-[11px] font-medium bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-850 rounded border border-neutral-800 transition"
                 >
                   To Do
@@ -106,7 +119,10 @@ const TaskCardComponent = ({
               )}
               {task.status !== 'IN_PROGRESS' && (
                 <button
-                  onClick={() => onStatusChange(task.id, 'IN_PROGRESS')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusChange(task.id, 'IN_PROGRESS');
+                  }}
                   className="px-2 py-1 text-[11px] font-medium bg-neutral-800 text-white hover:bg-neutral-700 rounded border border-neutral-700 transition"
                 >
                   In Progress
@@ -114,7 +130,10 @@ const TaskCardComponent = ({
               )}
               {task.status !== 'COMPLETED' && (
                 <button
-                  onClick={() => onStatusChange(task.id, 'COMPLETED')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusChange(task.id, 'COMPLETED');
+                  }}
                   className="px-2.5 py-1 text-[11px] font-bold bg-white text-black hover:bg-neutral-200 rounded transition flex items-center gap-1 shadow-sm"
                 >
                   <CheckCircle className="w-3 h-3" />

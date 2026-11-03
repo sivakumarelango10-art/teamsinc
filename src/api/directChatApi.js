@@ -271,6 +271,7 @@ export const directChatApi = {
             file_name,
             file_size,
             file_type,
+            metadata,
             is_read,
             read_at,
             created_at,
@@ -312,7 +313,7 @@ export const directChatApi = {
   /**
    * Send a direct message
    */
-  async sendMessage({ conversationId, senderId, recipientId, content = '', attachment = null }) {
+  async sendMessage({ conversationId, senderId, recipientId, content = '', attachment = null, metadata = {} }) {
     let cleanContent = (content || '').trim();
     if (!cleanContent && attachment) {
       cleanContent = attachment.type === 'audio' ? 'Voice note' : (attachment.name || 'Attachment');
@@ -330,7 +331,8 @@ export const directChatApi = {
       file_url: attachment?.url || null,
       file_name: attachment?.name || null,
       file_size: attachment?.size || null,
-      file_type: attachment?.type || null
+      file_type: attachment?.type || null,
+      metadata: metadata || {}
     };
 
     if (supabase) {
@@ -347,6 +349,7 @@ export const directChatApi = {
           file_name,
           file_size,
           file_type,
+          metadata,
           is_read,
           read_at,
           created_at,

@@ -17,6 +17,12 @@ import CallHistoryModal from '../../components/call/CallHistoryModal';
 import NewChatModal from '../../components/chat/NewChatModal';
 import Avatar from '../../components/common/Avatar';
 import { usersApi } from '../../api/usersApi';
+import { tasksApi } from '../../api/tasksApi';
+import CreatePollModal from '../../components/collaboration/CreatePollModal';
+import CreateNoteModal from '../../components/collaboration/CreateNoteModal';
+import CreateProgressReportModal from '../../components/collaboration/CreateProgressReportModal';
+import TaskTransferModal from '../../components/collaboration/TaskTransferModal';
+import TaskDetailsModal from '../../components/tasks/TaskDetailsModal';
 import {
   Plus,
   Smile,
@@ -39,7 +45,11 @@ import {
   PanelLeftOpen,
   UserCheck,
   Award,
-  Sparkles
+  Sparkles,
+  BarChart2,
+  CheckSquare,
+  TrendingUp,
+  ArrowRightLeft
 } from 'lucide-react';
 import { format, parseISO, isToday, isYesterday, isThisYear, isSameDay } from 'date-fns';
 
@@ -147,6 +157,119 @@ export const TeamChat = ({
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+
+  // Collaboration Modals & Inspection State
+  const [isPollModalOpen, setIsPollModalOpen] = useState(false);
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [noteModalType, setNoteModalType] = useState('GENERAL');
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
+  const [taskToInspect, setTaskToInspect] = useState(null);
+
+  const handleOpenTaskDetails = async (taskId) => {
+    if (!taskId) return;
+    try {
+      const t = await tasksApi.getTaskById(taskId);
+      if (t) {
+        setTaskToInspect(t);
+        setIsTaskDetailsOpen(true);
+      }
+    } catch (err) {
+      console.warn('Failed to load task details:', err);
+    }
+  };
+
+  const handleSendCollaborationCard = async (previewText, metadata) => {
+    setIsAttachMenuOpen(false);
+    const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Team Member';
+    const senderEmail = profile?.email || user?.email || '';
+    const senderRole = profile?.role || 'MEMBER';
+    const senderId = profile?.id || user?.id;
+
+    const optId = 'opt-' + Date.now();
+    const optMsg = {
+      id: optId,
+      content: previewText,
+      sender_id: senderId,
+      sender_name: senderName,
+      sender_email: senderEmail,
+      sender_role: senderRole,
+      channel: chatMode === 'channel' ? activeChannel : null,
+      recipient_id: chatMode === 'direct' ? activeDirectConv?.otherParticipant?.id : null,
+      metadata,
+      created_at: new Date().toISOString(),
+      isOptimistic: true,
+      is_read: false
+    };
+
+    setMessages(prev => [...prev, optMsg]);
+    setTimeout(() => scrollToBottom(true, true), 30);
+
+    try {
+      if (chatMode === 'channel') {
+        const newMsg = await chatApi.sendMessage({
+          content: previewText,
+          senderId,
+          senderName,
+          senderEmail,
+          senderRole,
+          channel: activeChannel,
+          metadata
+        });
+        setMessages(prev => prev.map(m => m.id === optId ? (newMsg || m) : m));
+        try {
+          const bc = new BroadcastChannel(`teamsync_chat_channel_${activeChannel}`);
+          bc.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
+          bc.close();
+        } catch {}
+      } else if (chatMode === 'direct' && activeDirectConv) {
+        const newMsg = await directChatApi.sendMessage({
+          conversationId: activeDirectConv.id,
+          senderId: profile.id,
+          recipientId: activeDirectConv.otherParticipant.id,
+          content: previewText,
+          metadata
+        });
+        setMessages(prev => prev.map(m => m.id === optId ? (newMsg || m) : m));
+      }
+    } catch (err) {
+      console.error('Failed to post collaboration card:', err);
+      setError(err.message || 'Failed to post collaboration item to chat');
+    }
+  };
+
+  const handlePollCreated = (poll) => {
+    handleSendCollaborationCard(`📊 Poll: ${poll.question}`, { type: 'poll', poll_id: poll.id, poll });
+  };
+
+  const handleNoteCreated = (note, shareToChat) => {
+    if (!shareToChat) return;
+    const isTodo = note.category === 'TODO' || (note.todo_items && note.todo_items.length > 0);
+    handleSendCollaborationCard(isTodo ? `📋 To-Do: ${note.title}` : `📝 Note: ${note.title}`, {
+      type: isTodo ? 'todo_list' : 'note',
+      note_id: note.id,
+      note
+    });
+  };
+
+  const handleReportSubmitted = (report, shareToChat) => {
+    if (!shareToChat) return;
+    handleSendCollaborationCard(`📈 Progress Report: ${report.task?.title || 'Deliverable'} (${report.progress_percentage || 0}%)`, {
+      type: 'task_progress_report',
+      report_id: report.id,
+      report
+    });
+  };
+
+  const handleTransferRequested = (transfer, shareToChat) => {
+    if (!shareToChat) return;
+    handleSendCollaborationCard(`🔄 Transfer Request: ${transfer.task?.title || 'Deliverable'}`, {
+      type: 'task_transfer',
+      transfer_id: transfer.id,
+      transfer
+    });
+  };
 
   // Global Call Notification Context (handles multi-route calls and ringing)
   const { startCall, ongoingCall, acceptCall, activeCallSession } = useCallNotification();
@@ -1751,6 +1874,10 @@ export const TeamChat = ({
                     canDelete={canDelete}
                     onDelete={handleDeleteMessage}
                     isNew={isNew}
+                    currentUserId={profile?.id || user?.id}
+                    currentUserName={profile?.full_name || user?.user_metadata?.full_name || 'Member'}
+                    currentUserRole={profile?.role || 'MEMBER'}
+                    onOpenTask={handleOpenTaskDetails}
                   />
                 </React.Fragment>
               );
@@ -1829,48 +1956,156 @@ export const TeamChat = ({
             </div>
           )}
 
-          {/* Attachment Floating Menu */}
+          {/* Extended Messaging "+" Action Menu */}
           {isAttachMenuOpen && (
-            <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1.5 w-52 text-xs text-neutral-200 animate-dropdown">
+            <div ref={attachMenuRef} className="absolute bottom-20 left-4 z-50 p-2 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col gap-1 w-64 text-xs text-neutral-200 animate-dropdown max-h-[80vh] overflow-y-auto">
+              {/* Preserved File Attachments */}
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
               >
-                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white shrink-0">
                   <FileText className="w-4 h-4 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <span className="font-bold text-white block">Document</span>
-                  <span className="text-[10px] text-neutral-400 block">PDF, DOCX, XLSX, TXT (25MB)</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">PDF, DOCX, XLSX, TXT (25MB)</span>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => imageInputRef.current?.click()}
-                className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+                onClick={() => {
+                  imageInputRef.current?.click();
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
               >
-                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white shrink-0">
                   <ImageIcon className="w-4 h-4 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <span className="font-bold text-white block">Photos & Media</span>
-                  <span className="text-[10px] text-neutral-400 block">PNG, JPG, WebP (10MB)</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">PNG, JPG, WebP (10MB)</span>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => videoInputRef.current?.click()}
-                className="w-full px-3 py-2.5 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+                onClick={() => {
+                  videoInputRef.current?.click();
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
               >
-                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white">
+                <div className="w-7 h-7 rounded-lg bg-neutral-800 border border-neutral-600 flex items-center justify-center text-white shrink-0">
                   <Video className="w-4 h-4 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <span className="font-bold text-white block">Video File</span>
-                  <span className="text-[10px] text-neutral-400 block">MP4, WebM, MOV (50MB)</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">MP4, WebM, MOV (50MB)</span>
+                </div>
+              </button>
+
+              {/* Collaboration Tools Divider */}
+              <div className="my-1 border-t border-neutral-800" />
+              <div className="px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neutral-500">
+                Collaboration Tools
+              </div>
+
+              {/* 2. Create Poll */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPollModalOpen(true);
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-purple-950/80 border border-purple-800 flex items-center justify-center text-purple-300 shrink-0">
+                  <BarChart2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-white block">Create Poll</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">Team voting & consensus</span>
+                </div>
+              </button>
+
+              {/* 3. Create Note */}
+              <button
+                type="button"
+                onClick={() => {
+                  setNoteModalType('GENERAL');
+                  setIsNoteModalOpen(true);
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-blue-950/80 border border-blue-800 flex items-center justify-center text-blue-300 shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-white block">Create Note</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">Personal or team notes</span>
+                </div>
+              </button>
+
+              {/* 4. Create To-Do List */}
+              <button
+                type="button"
+                onClick={() => {
+                  setNoteModalType('TODO');
+                  setIsNoteModalOpen(true);
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-emerald-950/80 border border-emerald-800 flex items-center justify-center text-emerald-300 shrink-0">
+                  <CheckSquare className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-white block">Create To-Do List</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">Interactive task checklist</span>
+                </div>
+              </button>
+
+              {/* 5. Post Task Progress Report */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReportModalOpen(true);
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-amber-950/80 border border-amber-800 flex items-center justify-center text-amber-300 shrink-0">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-white block">Task Progress Report</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">Milestones, progress % & blockers</span>
+                </div>
+              </button>
+
+              {/* 6. Request Task Transfer */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsTransferModalOpen(true);
+                  setIsAttachMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 rounded-xl hover:bg-neutral-800 text-left flex items-center gap-3 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-indigo-950/80 border border-indigo-800 flex items-center justify-center text-indigo-300 shrink-0">
+                  <ArrowRightLeft className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-white block">Request Task Transfer</span>
+                  <span className="text-[10px] text-neutral-400 block truncate">Controlled reassignment handoff</span>
                 </div>
               </button>
             </div>
@@ -1986,6 +2221,56 @@ export const TeamChat = ({
         roomId={chatMode === 'direct' ? `dm_${activeDirectConv?.id}` : activeChannel}
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
+      />
+
+      {/* Collaboration Modals */}
+      <CreatePollModal
+        isOpen={isPollModalOpen}
+        onClose={() => setIsPollModalOpen(false)}
+        channel={chatMode === 'channel' ? activeChannel : null}
+        conversationId={chatMode === 'direct' ? activeDirectConv?.id : null}
+        currentUserId={profile?.id || user?.id}
+        onPollCreated={handlePollCreated}
+      />
+
+      <CreateNoteModal
+        isOpen={isNoteModalOpen}
+        onClose={() => setIsNoteModalOpen(false)}
+        initialType={noteModalType}
+        channel={chatMode === 'channel' ? activeChannel : null}
+        conversationId={chatMode === 'direct' ? activeDirectConv?.id : null}
+        currentUserId={profile?.id || user?.id}
+        onNoteCreated={handleNoteCreated}
+      />
+
+      <CreateProgressReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        channel={chatMode === 'channel' ? activeChannel : null}
+        conversationId={chatMode === 'direct' ? activeDirectConv?.id : null}
+        currentUserId={profile?.id || user?.id}
+        onReportSubmitted={handleReportSubmitted}
+      />
+
+      <TaskTransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        channel={chatMode === 'channel' ? activeChannel : null}
+        conversationId={chatMode === 'direct' ? activeDirectConv?.id : null}
+        currentUserId={profile?.id || user?.id}
+        currentUserRole={profile?.role || 'MEMBER'}
+        onTransferRequested={handleTransferRequested}
+      />
+
+      <TaskDetailsModal
+        isOpen={isTaskDetailsOpen}
+        onClose={() => {
+          setIsTaskDetailsOpen(false);
+          setTaskToInspect(null);
+        }}
+        task={taskToInspect}
+        currentUserId={profile?.id || user?.id}
+        currentUserRole={profile?.role || 'MEMBER'}
       />
     </div>
   );

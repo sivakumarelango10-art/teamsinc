@@ -4,6 +4,7 @@ import { tasksApi } from '../../api/tasksApi';
 import { supabase } from '../../api/supabase';
 import { useRealtime, broadcastRealtimeEvent } from '../../hooks/useRealtime';
 import TaskCard from '../../components/tasks/TaskCard';
+import TaskDetailsModal from '../../components/tasks/TaskDetailsModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
 import { CheckSquare, Search } from 'lucide-react';
@@ -15,6 +16,7 @@ export const MyTasks = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [selectedTask, setSelectedTask] = useState(null);
 
   const memberId = profile?.id || user?.id;
   const memberEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
@@ -129,9 +131,21 @@ export const MyTasks = () => {
               canManage={false}
               canUpdateStatus={true}
               onStatusChange={handleStatusChange}
+              onClick={(task) => setSelectedTask(task)}
             />
           ))}
         </div>
+      )}
+
+      {selectedTask && (
+        <TaskDetailsModal
+          task={selectedTask}
+          isOpen={Boolean(selectedTask)}
+          onClose={() => setSelectedTask(null)}
+          currentUserId={memberId}
+          currentUserRole={profile?.role || 'MEMBER'}
+          onTaskUpdated={() => loadTasks(true)}
+        />
       )}
     </div>
   );

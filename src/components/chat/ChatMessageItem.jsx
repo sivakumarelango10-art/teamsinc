@@ -11,6 +11,10 @@ import VoiceNotePlayer from './VoiceNotePlayer';
 import WhatsAppCheck from './WhatsAppCheck';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import Avatar from '../common/Avatar';
+import PollCard from '../collaboration/PollCard';
+import NoteCard from '../collaboration/NoteCard';
+import ProgressReportCard from '../collaboration/ProgressReportCard';
+import TaskTransferCard from '../collaboration/TaskTransferCard';
 
 const formatMessageTime = (isoString) => {
   if (!isoString) return '';
@@ -72,8 +76,26 @@ const ChatMessageItemComponent = ({
   isOnline,
   canDelete,
   onDelete,
-  isNew = false
+  isNew = false,
+  currentUserId,
+  currentUserName,
+  currentUserRole = 'MEMBER',
+  onOpenTask
 }) => {
+  // Parse potential metadata for collaboration cards
+  let metadata = msg.metadata;
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch {}
+  }
+
+  const isPoll = metadata?.type === 'poll' || Boolean(metadata?.poll_id);
+  const isNote = metadata?.type === 'note' || metadata?.type === 'todo_list' || Boolean(metadata?.note_id);
+  const isProgressReport = metadata?.type === 'task_progress_report' || Boolean(metadata?.report_id);
+  const isTaskTransfer = metadata?.type === 'task_transfer' || Boolean(metadata?.transfer_id);
+  const isCollabCard = isPoll || isNote || isProgressReport || isTaskTransfer;
+
   // Check if message is a voice note / audio note
   const isAudioNote = Boolean(
     msg.file_type === 'audio' ||
@@ -85,7 +107,7 @@ const ChatMessageItemComponent = ({
 
   return (
     <div className={`flex items-end gap-2 group ${isSelf ? 'justify-end' : 'justify-start'} ${isNew ? 'animate-msg-enter' : ''}`}>
-      {/* Compact Round Avatar for standard incoming messages (Voice notes have internal avatar like WhatsApp demo) */}
+      {/* Compact Round Avatar for standard incoming messages */}
       {!isSelf && !isAudioNote && (
         <Avatar
           src={msg.sender_avatar_url}
@@ -100,9 +122,87 @@ const ChatMessageItemComponent = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          CASE A: WhatsApp Voice Note Bubble (Exact match to demo)
+          CASE 0: Interactive Collaboration Cards (Polls, Notes, Reports, Transfers)
           ───────────────────────────────────────────────────────────────────────── */}
-      {isAudioNote ? (
+      {isCollabCard ? (
+        <div className={`max-w-[95%] sm:max-w-[420px] ${isSelf ? 'ml-auto' : 'mr-auto'}`}>
+          {!isSelf && (
+            <div className="flex items-center justify-between gap-2 mb-1 px-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-purple-400 leading-tight">
+                  {msg.sender_name}
+                </span>
+                {getRoleBadge(msg.sender_role)}
+              </div>
+              {canDelete && (
+                <button
+                  onClick={() => onDelete(msg.id)}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-neutral-500 hover:text-red-400 transition cursor-pointer"
+                  title="Delete message"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {isSelf && canDelete && (
+            <div className="flex justify-end -mt-0.5 mb-0.5">
+              <button
+                onClick={() => onDelete(msg.id)}
+                className="opacity-0 group-hover:opacity-100 p-0.5 text-neutral-500 hover:text-red-400 transition cursor-pointer"
+                title="Delete message"
+              >
+                <Trash2 className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
+
+          {isPoll && (
+            <PollCard
+              pollId={metadata.poll_id || metadata.poll?.id}
+              initialData={metadata.poll}
+              currentUserId={currentUserId}
+              currentUserName={currentUserName}
+              currentUserRole={currentUserRole}
+            />
+          )}
+
+          {isNote && (
+            <NoteCard
+              note={metadata.note || metadata}
+              currentUserId={currentUserId}
+              onOpenTask={onOpenTask}
+            />
+          )}
+
+          {isProgressReport && (
+            <ProgressReportCard
+              report={metadata.report || metadata}
+              onOpenTask={onOpenTask}
+            />
+          )}
+
+          {isTaskTransfer && (
+            <TaskTransferCard
+              transfer={metadata.transfer || metadata}
+              currentUserId={currentUserId}
+              currentUserRole={currentUserRole}
+              onOpenTask={onOpenTask}
+            />
+          )}
+
+          <div className="flex items-center justify-end gap-1 px-1 text-[10px] text-neutral-500">
+            <span>{formatMessageTime(msg.created_at)}</span>
+            {isSelf && (
+              <WhatsAppCheck
+                isOptimistic={msg.isOptimistic}
+                status={msg.is_read ? 'read' : (msg.recipient_id ? 'sent' : 'read')}
+              />
+            )}
+          </div>
+        </div>
+      ) : isAudioNote ? (
         <div
           className={`rounded-2xl px-2.5 py-1.5 relative shadow-sm transition-all max-w-[90%] sm:max-w-[340px] ${
             isSelf

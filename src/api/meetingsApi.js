@@ -48,6 +48,7 @@ export function formatMeetingClient(meeting) {
     timezone: meeting.timezone || 'UTC',
     meetingLink: meeting.meeting_link || meeting.meetingLink,
     meetingType: meeting.meeting_type || meeting.meetingType || 'GENERAL',
+    isWeeklyMeeting: Boolean(meeting.is_weekly_meeting ?? meeting.isWeeklyMeeting ?? (meeting.meeting_type === 'WEEKLY' || meeting.meetingType === 'WEEKLY')),
     location: meeting.location || null,
     status: meeting.status,
     computedStatus,

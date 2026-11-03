@@ -4,6 +4,7 @@ import docsRoutes from './routes/docsRoutes.js';
 import usersRoutes from './routes/usersRoutes.js';
 import meetingsRoutes from './routes/meetingsRoutes.js';
 import collaborationRoutes from './routes/collaborationRoutes.js';
+import attendanceRoutes from './routes/attendanceRoutes.js';
 
 export const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/tickets', ticketsRoutes);
 app.use('/api/v1/meetings', meetingsRoutes);
 app.use('/api/v1/collaboration', collaborationRoutes);
+app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api', docsRoutes);
 
 // 5. 404 Handler for API

@@ -28,6 +28,8 @@ import LiveCountdown from '../../components/meetings/LiveCountdown';
 import CreateMeetingModal from '../../components/meetings/CreateMeetingModal';
 import MeetingDetailModal from '../../components/meetings/MeetingDetailModal';
 import MeetingCalendarView from '../../components/meetings/MeetingCalendarView';
+import MyAttendanceView from '../../components/meetings/MyAttendanceView';
+import AttendanceReportsView from '../../components/meetings/AttendanceReportsView';
 import Avatar from '../../components/common/Avatar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
@@ -64,6 +66,23 @@ export const MeetingHub = () => {
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState('overview');
+
+  const tabs = useMemo(() => {
+    const list = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'upcoming', label: 'Upcoming' },
+      { id: 'today', label: "Today's Meetings" },
+      { id: 'live', label: 'Live Now' },
+      { id: 'past', label: 'Past Meetings' },
+      { id: 'cancelled', label: 'Cancelled' },
+      { id: 'calendar', label: 'Calendar View' },
+      { id: 'my-attendance', label: 'My Attendance' }
+    ];
+    if (isFounderOrAdmin) {
+      list.push({ id: 'attendance-reports', label: 'Attendance Reports' });
+    }
+    return list;
+  }, [isFounderOrAdmin]);
 
   // Meeting states
   const [meetings, setMeetings] = useState([]);
@@ -514,7 +533,7 @@ export const MeetingHub = () => {
       <div className="space-y-4">
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1 border-b border-neutral-800 overflow-x-auto pb-px">
-          {TAB_OPTIONS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -531,7 +550,7 @@ export const MeetingHub = () => {
         </div>
 
         {/* Filter Toolbar (Search, Type, Department) */}
-        {activeTab !== 'calendar' && (
+        {activeTab !== 'calendar' && activeTab !== 'my-attendance' && activeTab !== 'attendance-reports' && (
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="relative flex-1 w-full">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
@@ -575,6 +594,15 @@ export const MeetingHub = () => {
         <div className="py-20 flex justify-center">
           <LoadingSpinner text="Synchronizing Meeting Hub..." size="medium" />
         </div>
+      ) : activeTab === 'my-attendance' ? (
+        <MyAttendanceView />
+      ) : activeTab === 'attendance-reports' ? (
+        <AttendanceReportsView
+          onSelectMeeting={async (meetingId) => {
+            const m = await meetingsApi.getMeetingById(meetingId);
+            if (m) setSelectedMeeting(m);
+          }}
+        />
       ) : activeTab === 'calendar' ? (
         <MeetingCalendarView
           meetings={meetings}
@@ -632,9 +660,16 @@ export const MeetingHub = () => {
                 <div className="space-y-3">
                   {/* Card Header Pills */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-neutral-900 text-neutral-300 border border-neutral-800">
-                      {meeting.meetingType.replace(/_/g, ' ')}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-neutral-900 text-neutral-300 border border-neutral-800">
+                        {meeting.meetingType.replace(/_/g, ' ')}
+                      </span>
+                      {meeting.isWeeklyMeeting && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Weekly
+                        </span>
+                      )}
+                    </div>
                     <LiveCountdown
                       startTime={meeting.startTime}
                       endTime={meeting.endTime}
@@ -684,6 +719,21 @@ export const MeetingHub = () => {
                   </div>
 
                   <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {meeting.isWeeklyMeeting && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedMeeting(meeting);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-xs font-semibold flex items-center gap-1 transition"
+                        title="View / Manage Attendance"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Attendance</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={(e) => handleCopy(meeting.id, meeting.meetingLink, e)}

@@ -81,6 +81,7 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
     timezone: defaultTz,
     meetingLink: '',
     meetingType: 'GENERAL',
+    isWeeklyMeeting: false,
     location: '',
     description: '',
     agenda: '',
@@ -97,6 +98,7 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
     description: '',
     agenda: '',
     meetingType: 'GENERAL',
+    isWeeklyMeeting: false,
     visibility: 'ALL',
     departmentId: '',
     timezone: defaultTz,
@@ -118,6 +120,7 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
     timezone: defaultTz,
     meetingLink: '',
     meetingType: 'GENERAL',
+    isWeeklyMeeting: true,
     description: '',
     agenda: '',
     visibility: 'ALL',
@@ -251,6 +254,7 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
           timezone: singleForm.timezone,
           meetingLink: singleForm.meetingLink.trim(),
           meetingType: singleForm.meetingType,
+          isWeeklyMeeting: Boolean(singleForm.isWeeklyMeeting || singleForm.meetingType === 'WEEKLY'),
           location: singleForm.location.trim() || null,
           visibility: singleForm.visibility,
           departmentId: singleForm.visibility === 'DEPARTMENT_ONLY' && singleForm.departmentId ? singleForm.departmentId : null,
@@ -298,6 +302,7 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
           seriesTitle: multiCommon.seriesTitle.trim(),
           description: multiCommon.description.trim(),
           meetingType: multiCommon.meetingType,
+          isWeeklyMeeting: Boolean(multiCommon.isWeeklyMeeting || multiCommon.meetingType === 'WEEKLY'),
           timezone: multiCommon.timezone,
           visibility: multiCommon.visibility,
           departmentId: multiCommon.visibility === 'DEPARTMENT_ONLY' && multiCommon.departmentId ? multiCommon.departmentId : null,
@@ -328,6 +333,7 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
           seriesTitle: recurringForm.title.trim(),
           description: recurringForm.description.trim(),
           meetingType: recurringForm.meetingType,
+          isWeeklyMeeting: Boolean(recurringForm.isWeeklyMeeting ?? (recurringForm.pattern === 'WEEKLY' || recurringForm.meetingType === 'WEEKLY')),
           timezone: recurringForm.timezone,
           visibility: recurringForm.visibility,
           departmentId: recurringForm.visibility === 'DEPARTMENT_ONLY' && recurringForm.departmentId ? recurringForm.departmentId : null,
@@ -459,7 +465,10 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
                   <label className="text-xs font-medium text-neutral-300">Meeting Type</label>
                   <select
                     value={singleForm.meetingType}
-                    onChange={(e) => setSingleForm({ ...singleForm, meetingType: e.target.value })}
+                    onChange={(e) => setSingleForm({
+                      ...singleForm,
+                      meetingType: e.target.value
+                    })}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-white text-sm focus:border-blue-500 focus:outline-none"
                   >
                     {MEETING_TYPES.map(t => (
@@ -467,6 +476,28 @@ export const CreateMeetingModal = ({ isOpen, onClose, onSuccess }) => {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Weekly Meeting Classification Checkbox */}
+              <div className="p-3 bg-neutral-900/60 border border-neutral-800 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="single-weekly-toggle"
+                    checked={Boolean(singleForm.isWeeklyMeeting)}
+                    onChange={(e) => setSingleForm(prev => ({
+                      ...prev,
+                      isWeeklyMeeting: e.target.checked
+                    }))}
+                    className="w-4 h-4 rounded border-neutral-700 bg-neutral-900 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                  />
+                  <label htmlFor="single-weekly-toggle" className="text-xs font-semibold text-neutral-200 cursor-pointer">
+                    Classify as Weekly Meeting (Enables Founder Attendance Management)
+                  </label>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                  Attendance Tracking
+                </span>
               </div>
 
               {/* Date, Start Time, End Time & Duration */}

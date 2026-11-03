@@ -21,6 +21,7 @@ import {
 import { LiveCountdown } from './LiveCountdown';
 import Avatar from '../common/Avatar';
 import { meetingsApi } from '../../api/meetingsApi';
+import WeeklyAttendanceManager from './WeeklyAttendanceManager';
 
 export const MeetingDetailModal = ({
   isOpen,
@@ -45,6 +46,9 @@ export const MeetingDetailModal = ({
   // Edit Mode state
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
+
+  // Tab state (Meeting Details vs Weekly Attendance)
+  const [activeModalTab, setActiveModalTab] = useState('details');
 
   if (!isOpen || !meeting) return null;
 
@@ -189,6 +193,12 @@ export const MeetingDetailModal = ({
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
                 {meeting.meetingType.replace(/_/g, ' ')}
               </span>
+              {meeting.isWeeklyMeeting && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  Weekly Meeting · Attendance
+                </span>
+              )}
               <LiveCountdown
                 startTime={meeting.startTime}
                 endTime={meeting.endTime}
@@ -228,9 +238,57 @@ export const MeetingDetailModal = ({
           </div>
         )}
 
+        {/* Weekly Meeting Tab Switcher */}
+        {meeting.isWeeklyMeeting && !isEditing && (
+          <div className="flex border-b border-neutral-800 bg-neutral-900/40 px-6 pt-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveModalTab('details')}
+              className={`px-4 py-2 text-xs font-semibold border-b-2 transition ${
+                activeModalTab === 'details'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-neutral-400 hover:text-white'
+              }`}
+            >
+              Meeting Details
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveModalTab('attendance')}
+              className={`px-4 py-2 text-xs font-semibold border-b-2 transition flex items-center gap-1.5 ${
+                activeModalTab === 'attendance'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Attendance</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-bold">
+                Weekly
+              </span>
+            </button>
+          </div>
+        )}
+
         {/* Normal Content or Edit Form */}
         {!isEditing ? (
-          <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+          activeModalTab === 'attendance' && meeting.isWeeklyMeeting ? (
+            <div className="px-6 py-5 max-h-[70vh] overflow-y-auto">
+              <WeeklyAttendanceManager
+                meetingId={meeting.id}
+                isFounderOrAdmin={isFounderOrAdmin}
+                currentUser={currentUser}
+                onAttendanceUpdated={() => {
+                  if (onMeetingUpdated) {
+                    meetingsApi.getMeetingById(meeting.id).then(m => {
+                      if (m) onMeetingUpdated(m);
+                    });
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
             {/* Join Banner */}
             <div className="p-4 rounded-xl bg-gradient-to-r from-blue-950/50 via-neutral-900/60 to-neutral-900/80 border border-blue-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="space-y-1 text-center sm:text-left">
@@ -444,7 +502,8 @@ export const MeetingDetailModal = ({
               </div>
             )}
           </div>
-        ) : (
+        )
+      ) : (
           /* ================= EDIT MODE ================= */
           <form onSubmit={handleSaveEdit} className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
             <div className="space-y-1.5">
@@ -534,7 +593,7 @@ export const MeetingDetailModal = ({
         {/* Footer Actions */}
         {!isEditing && (
           <div className="px-6 py-4 border-t border-neutral-800 flex items-center justify-between bg-neutral-900/30">
-            {isFounderOrAdmin && meeting.status !== 'CANCELLED' ? (
+            {isFounderOrAdmin && meeting.status !== 'CANCELLED' && activeModalTab !== 'attendance' ? (
               <div className="flex items-center gap-2">
                 <button
                   type="button"

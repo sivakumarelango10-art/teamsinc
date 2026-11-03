@@ -73,6 +73,7 @@ export function formatMeetingResponse(row, now = new Date()) {
     timezone: row.timezone || 'UTC',
     meetingLink: row.meeting_link,
     meetingType: row.meeting_type || 'GENERAL',
+    isWeeklyMeeting: Boolean(row.is_weekly_meeting),
     location: row.location || null,
     status: row.status, // Stored status (SCHEDULED, COMPLETED, CANCELLED)
     computedStatus,     // Dynamic status (SCHEDULED, STARTING_SOON, LIVE, COMPLETED, CANCELLED)
@@ -190,6 +191,14 @@ export async function createMeeting(data, creatorUser) {
     throw err;
   }
 
+  const isWeekly = Boolean(
+    data.isWeeklyMeeting !== undefined
+      ? data.isWeeklyMeeting
+      : (data.is_weekly_meeting !== undefined
+          ? data.is_weekly_meeting
+          : (meetingType === 'WEEKLY'))
+  );
+
   // Idempotency check if idempotency key provided
   if (idempotencyKey) {
     const existing = await query(`
@@ -228,9 +237,10 @@ export async function createMeeting(data, creatorUser) {
       created_by,
       reminder_preferences,
       attachments,
-      idempotency_key
+      idempotency_key,
+      is_weekly_meeting
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'SCHEDULED', $12, $13, $14, $15, $16, $17
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'SCHEDULED', $12, $13, $14, $15, $16, $17, $18
     )
     RETURNING *;
   `;
@@ -252,7 +262,8 @@ export async function createMeeting(data, creatorUser) {
     creatorUser.id,
     JSON.stringify(reminderPreferences),
     JSON.stringify(attachments),
-    idempotencyKey || null
+    idempotencyKey || null,
+    isWeekly
   ];
 
   const res = await query(insertSql, insertParams);
@@ -327,6 +338,14 @@ export async function createMultipleSessions(payload, creatorUser) {
     payload.isRecurring || payload.mode === 'RECURRING' || payload.recurrenceRule
   );
 
+  const isWeeklySeries = Boolean(
+    payload.isWeeklyMeeting !== undefined
+      ? payload.isWeeklyMeeting
+      : (payload.is_weekly_meeting !== undefined
+          ? payload.is_weekly_meeting
+          : (payload.recurrenceRule?.type === 'WEEKLY' || payload.recurrenceRule?.frequency === 'WEEKLY' || (payload.meetingType || payload.seriesData?.meetingType) === 'WEEKLY'))
+  );
+
   const seriesTitle = (
     payload.seriesTitle ||
     payload.seriesData?.title ||
@@ -361,8 +380,8 @@ export async function createMultipleSessions(payload, creatorUser) {
     // Create Series Record
     const seriesRes = await query(`
       INSERT INTO public.meeting_series (
-        title, description, meeting_link, meeting_type, timezone, recurrence_rule, visibility, department_id, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        title, description, meeting_link, meeting_type, timezone, recurrence_rule, visibility, department_id, created_by, is_weekly_meeting
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id;
     `, [
       seriesTitle,
@@ -373,7 +392,8 @@ export async function createMultipleSessions(payload, creatorUser) {
       JSON.stringify(rule),
       seriesVisibility,
       seriesDept,
-      creatorUser.id
+      creatorUser.id,
+      isWeeklySeries
     ]);
     seriesId = seriesRes.rows[0].id;
 
@@ -406,7 +426,8 @@ export async function createMultipleSessions(payload, creatorUser) {
           visibility: seriesVisibility,
           departmentId: seriesDept,
           participants: payload.participantIds || payload.seriesData?.participantIds || [],
-          seriesId
+          seriesId,
+          isWeeklyMeeting: isWeeklySeries
         };
         const res = await createMeeting(occPayload, creatorUser);
         createdMeetings.push(res.meeting);
@@ -432,8 +453,8 @@ export async function createMultipleSessions(payload, creatorUser) {
   if (Array.isArray(sessions) && sessions.length > 0) {
     const seriesRes = await query(`
       INSERT INTO public.meeting_series (
-        title, description, meeting_link, meeting_type, timezone, visibility, department_id, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        title, description, meeting_link, meeting_type, timezone, visibility, department_id, created_by, is_weekly_meeting
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id;
     `, [
       seriesTitle,
@@ -443,7 +464,8 @@ export async function createMultipleSessions(payload, creatorUser) {
       seriesTimezone,
       seriesVisibility,
       seriesDept,
-      creatorUser.id
+      creatorUser.id,
+      isWeeklySeries
     ]);
     seriesId = seriesRes.rows[0].id;
 
@@ -463,7 +485,8 @@ export async function createMultipleSessions(payload, creatorUser) {
           visibility: s.visibility || seriesVisibility,
           departmentId: s.departmentId || seriesDept,
           participants: s.participants || payload.participantIds || [],
-          seriesId
+          seriesId,
+          isWeeklyMeeting: s.isWeeklyMeeting !== undefined ? Boolean(s.isWeeklyMeeting) : isWeeklySeries
         };
         const res = await createMeeting(sessionPayload, creatorUser);
         createdMeetings.push(res.meeting);
@@ -972,6 +995,12 @@ export async function updateMeeting(id, updates, modifyingUser) {
   if (updates.departmentId !== undefined) {
     updateClauses.push(`department_id = $${paramIdx++}`);
     params.push(updates.departmentId || null);
+  }
+
+  if (updates.isWeeklyMeeting !== undefined || updates.is_weekly_meeting !== undefined) {
+    const isW = Boolean(updates.isWeeklyMeeting !== undefined ? updates.isWeeklyMeeting : updates.is_weekly_meeting);
+    updateClauses.push(`is_weekly_meeting = $${paramIdx++}`);
+    params.push(isW);
   }
 
   if (updateClauses.length === 0) {

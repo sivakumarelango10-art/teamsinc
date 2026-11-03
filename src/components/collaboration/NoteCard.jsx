@@ -187,3 +187,4 @@ export const NoteCard = ({
 };
 
 export default NoteCard;
+

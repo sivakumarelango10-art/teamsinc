@@ -356,3 +356,4 @@ export const CreateNoteModal = ({
 };
 
 export default CreateNoteModal;
+

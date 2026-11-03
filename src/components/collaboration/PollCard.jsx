@@ -260,3 +260,4 @@ export const PollCard = ({
 };
 
 export default PollCard;
+

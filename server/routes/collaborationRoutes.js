@@ -1223,3 +1223,4 @@ router.patch('/notifications/:id/read', async (req, res, next) => {
 });
 
 export default router;
+

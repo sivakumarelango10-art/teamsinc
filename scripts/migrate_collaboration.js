@@ -74,3 +74,4 @@ async function runCollaborationMigration() {
 }
 
 runCollaborationMigration();
+

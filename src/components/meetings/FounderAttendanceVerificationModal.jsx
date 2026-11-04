@@ -292,6 +292,9 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
               <button type="button" onClick={registerDeviceAuthenticator} disabled={loading} className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold">
                 {loading ? 'Waiting for device…' : 'Set up device verification'}
               </button>
+              <button type="button" onClick={beginTotpFallback} disabled={loading} className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-neutral-200 text-xs font-semibold">
+                Use authenticator app instead
+              </button>
             </div>
           ) : step === 'webauthn-verify' ? (
             <div className="space-y-3">
@@ -302,6 +305,9 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
               </div>
               <button type="button" onClick={verifyDeviceAuthenticator} disabled={loading} className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold">
                 {loading ? 'Waiting for device…' : 'Verify with device'}
+              </button>
+              <button type="button" onClick={beginTotpFallback} disabled={loading} className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-neutral-200 text-xs font-semibold">
+                Use authenticator app instead
               </button>
             </div>
           ) : step === 'choose-totp' ? (

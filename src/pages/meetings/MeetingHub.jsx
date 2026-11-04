@@ -31,6 +31,7 @@ import MyAttendanceView from '../../components/meetings/MyAttendanceView';
 import AttendanceReportsView from '../../components/meetings/AttendanceReportsView';
 import Avatar from '../../components/common/Avatar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ActiveAttendanceBanner from '../../components/meetings/ActiveAttendanceBanner';
 
 const FOUNDER_EMAIL = 'sivakumarelango10@gmail.com';
 
@@ -338,6 +339,9 @@ export const MeetingHub = () => {
           )}
         </div>
       </div>
+
+      {/* Participants see an active five-minute weekly attendance window here. */}
+      {!isFounder && <ActiveAttendanceBanner />}
 
       {/* ================= NEXT SCHEDULED MEETING HERO ================= */}
       {stats.nextMeeting && (
@@ -765,6 +769,7 @@ export const MeetingHub = () => {
         isOpen={!!selectedMeeting}
         meeting={selectedMeeting}
         currentUser={profile || user}
+        isFounder={isFounder}
         isFounderOrAdmin={isFounderOrAdmin}
         onClose={() => setSelectedMeeting(null)}
         onMeetingUpdated={() => {

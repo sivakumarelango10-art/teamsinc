@@ -27,6 +27,7 @@ export const MeetingDetailModal = ({
   isOpen,
   meeting,
   currentUser,
+  isFounder = false,
   isFounderOrAdmin = false,
   onClose,
   onMeetingUpdated,
@@ -276,6 +277,7 @@ export const MeetingDetailModal = ({
             <div className="px-6 py-5 max-h-[70vh] overflow-y-auto">
               <WeeklyAttendanceManager
                 meetingId={meeting.id}
+                isFounder={isFounder}
                 isFounderOrAdmin={isFounderOrAdmin}
                 currentUser={currentUser}
                 onAttendanceUpdated={() => {

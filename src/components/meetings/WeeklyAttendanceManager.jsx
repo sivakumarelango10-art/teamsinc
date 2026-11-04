@@ -14,15 +14,20 @@ import {
   Info,
   Clock,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  Camera,
+  Radio,
+  Timer
 } from 'lucide-react';
 import { attendanceApi, calculateAttendancePercentage, getAttendanceStatusConfig } from '../../api/attendanceApi';
 import { supabase } from '../../api/supabase';
 import Avatar from '../common/Avatar';
 import LoadingSpinner from '../common/LoadingSpinner';
+import FounderAttendanceVerificationModal from './FounderAttendanceVerificationModal';
 
 export const WeeklyAttendanceManager = ({
   meetingId,
+  isFounder = false,
   isFounderOrAdmin = false,
   currentUser = null,
   onAttendanceUpdated = null
@@ -44,6 +49,11 @@ export const WeeklyAttendanceManager = ({
     unmarkedCount: 0,
     attendanceRate: 0
   });
+  const [liveSession, setLiveSession] = useState(null);
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [startingSession, setStartingSession] = useState(false);
+  const [sessionNow, setSessionNow] = useState(Date.now());
+  const [sessionRequestError, setSessionRequestError] = useState('');
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,25 +74,52 @@ export const WeeklyAttendanceManager = ({
     try {
       setLoading(true);
       setError(null);
-      const res = await attendanceApi.getMeetingAttendance(meetingId);
+      const res = isFounder
+        ? await attendanceApi.getLiveMeetingAttendance(meetingId)
+        : await attendanceApi.getMeetingAttendance(meetingId);
 
       if (!res.isEligible) {
         setIsEligible(false);
         setMeetingInfo(res.meeting || null);
+        setRoster([]);
+        setLiveSession(null);
         return;
       }
 
+      const normalizedRoster = (res.roster || []).map(member => ({
+        ...member,
+        fullName: member.fullName || member.name || 'Team Member',
+        notes: member.notes || member.correctionNote || ''
+      }));
+
       setIsEligible(true);
       setMeetingInfo(res.meeting);
+      setLiveSession(res.session || null);
       setStats(res.stats || {
-        totalEligible: res.roster?.length || 0,
+        totalEligible: normalizedRoster.length,
         presentCount: 0,
         absentCount: 0,
-        unmarkedCount: 0,
+        unmarkedCount: normalizedRoster.filter(m => m.status === 'UNMARKED').length,
         attendanceRate: 0
       });
-      setRoster(res.roster || []);
-      setOriginalRoster(JSON.parse(JSON.stringify(res.roster || [])));
+
+      let signedPhotoUrls = {};
+      if (isFounder && supabase) {
+        const signed = await Promise.all(normalizedRoster.map(async member => {
+          if (!member.photoPath) return [member.userId, null];
+          const { data, error: signError } = await supabase.storage
+            .from('weekly-attendance-photos')
+            .createSignedUrl(member.photoPath, 300);
+          return [member.userId, signError ? null : data?.signedUrl || null];
+        }));
+        signedPhotoUrls = Object.fromEntries(signed);
+      }
+
+      setRoster(normalizedRoster.map(member => ({
+        ...member,
+        photoUrl: signedPhotoUrls[member.userId] || null
+      })));
+      setOriginalRoster(JSON.parse(JSON.stringify(normalizedRoster)));
       setSelectedUserIds(new Set());
     } catch (err) {
       console.error('Failed to load meeting attendance:', err);
@@ -90,7 +127,7 @@ export const WeeklyAttendanceManager = ({
     } finally {
       setLoading(false);
     }
-  }, [meetingId]);
+  }, [meetingId, isFounder]);
 
   useEffect(() => {
     loadAttendance();
@@ -110,10 +147,17 @@ export const WeeklyAttendanceManager = ({
           table: 'meeting_attendance',
           filter: `meeting_id=eq.${meetingId}`
         },
-        () => {
-          // Refresh attendance when external changes occur
-          loadAttendance();
-        }
+        () => { loadAttendance(); }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meeting_attendance_sessions',
+          filter: `meeting_id=eq.${meetingId}`
+        },
+        () => { loadAttendance(); }
       )
       .subscribe();
 
@@ -147,10 +191,9 @@ export const WeeklyAttendanceManager = ({
     let present = 0;
     let absent = 0;
     let unmarked = 0;
-
     roster.forEach(r => {
       if (r.status === 'PRESENT') present++;
-      else if (r.status === 'ABSENT') absent++;
+      else if (r.status === 'ABSENT' || r.status === 'MISSED_WINDOW') absent++;
       else unmarked++;
     });
 
@@ -165,9 +208,40 @@ export const WeeklyAttendanceManager = ({
     };
   }, [roster]);
 
+  const canManageAttendance = isFounder && (!liveSession || liveSession.status === 'CLOSED');
+
+  useEffect(() => {
+    if (!liveSession?.expiresAt) return undefined;
+    const timer = window.setInterval(() => setSessionNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [liveSession?.expiresAt]);
+
+  useEffect(() => {
+    if (liveSession?.status === 'OPEN' && new Date(liveSession.expiresAt).getTime() <= sessionNow) {
+      loadAttendance();
+    }
+  }, [liveSession?.status, liveSession?.expiresAt, sessionNow, loadAttendance]);
+
+  const startAttendance = async () => {
+    setStartingSession(true);
+    setSessionRequestError('');
+    try {
+      await attendanceApi.startLiveAttendance(meetingId);
+      setVerificationOpen(false);
+      await loadAttendance();
+      setSuccessMessage('Five-minute attendance window opened. Eligible Members and Admins have been notified.');
+      if (onAttendanceUpdated) onAttendanceUpdated();
+    } catch (err) {
+      setSessionRequestError(err.message || 'Unable to start the attendance window.');
+      throw err;
+    } finally {
+      setStartingSession(false);
+    }
+  };
+
   // Handle single status change staged in local state
   const handleStatusChange = (userId, newStatus) => {
-    if (!isFounderOrAdmin) return;
+    if (!canManageAttendance) return;
     setRoster(prev => prev.map(member => {
       if (member.userId === userId) {
         return {
@@ -186,6 +260,7 @@ export const WeeklyAttendanceManager = ({
   };
 
   const handleSaveNote = (userId) => {
+    if (!canManageAttendance) return;
     setRoster(prev => prev.map(m => {
       if (m.userId === userId) {
         return { ...m, notes: activeNoteText.trim() };
@@ -216,7 +291,7 @@ export const WeeklyAttendanceManager = ({
 
   // Apply bulk update
   const handleApplyBulkAction = () => {
-    if (!bulkActionConfirm || selectedUserIds.size === 0) return;
+    if (!canManageAttendance || !bulkActionConfirm || selectedUserIds.size === 0) return;
 
     setRoster(prev => prev.map(member => {
       if (selectedUserIds.has(member.userId)) {
@@ -236,7 +311,7 @@ export const WeeklyAttendanceManager = ({
 
   // Save all changes to the database
   const handleSaveAttendance = async () => {
-    if (!isFounderOrAdmin || dirtyChanges.length === 0) return;
+    if (!canManageAttendance || dirtyChanges.length === 0) return;
 
     try {
       setSaving(true);
@@ -268,6 +343,7 @@ export const WeeklyAttendanceManager = ({
 
   // Quick mark all currently unmarked members as Present
   const handleQuickMarkAllPresent = () => {
+    if (!canManageAttendance) return;
     setRoster(prev => prev.map(member => ({
       ...member,
       status: 'PRESENT'
@@ -332,8 +408,96 @@ export const WeeklyAttendanceManager = ({
         </div>
       )}
 
+      {isFounder && (
+        <div className="rounded-2xl border border-amber-800/50 bg-gradient-to-r from-amber-950/30 via-neutral-950 to-neutral-950 p-4 sm:p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider font-bold text-amber-300">Founder attendance control</p>
+                <h3 className="text-sm font-bold text-white mt-0.5">
+                  {!liveSession ? 'Start five-minute attendance' : liveSession.status === 'OPEN' ? 'Attendance window is live' : 'Attendance session closed'}
+                </h3>
+                <p className="text-[11px] text-neutral-400 mt-1">
+                  {!liveSession
+                    ? 'Verify with your authenticator, then open the photo attendance window for eligible Admins and Members.'
+                    : liveSession.status === 'OPEN'
+                      ? 'Participants can submit one photo. Manual corrections become available after the window closes.'
+                      : 'Review photo submissions below and finalize missed participants.'}
+                </p>
+              </div>
+            </div>
+
+            {!liveSession ? (
+              <button
+                type="button"
+                onClick={() => setVerificationOpen(true)}
+                disabled={startingSession}
+                className="px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold flex items-center justify-center gap-2"
+              >
+                <Radio className="w-4 h-4" />
+                {startingSession ? 'Starting…' : 'Verify & Start Attendance'}
+              </button>
+            ) : liveSession.status === 'OPEN' ? (
+              <div className="min-w-[105px] rounded-xl border border-emerald-700/50 bg-emerald-950/30 px-4 py-2 text-center">
+                <div className="flex items-center justify-center gap-1 text-[10px] text-emerald-300">
+                  <Timer className="w-3 h-3" /> Time remaining
+                </div>
+                <div className="font-mono text-2xl font-bold tabular-nums text-emerald-200">
+                  {(() => {
+                    const seconds = Math.max(0, Math.ceil((new Date(liveSession.expiresAt).getTime() - sessionNow) / 1000));
+                    return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+                  })()}
+                </div>
+              </div>
+            ) : (
+              <span className="px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 text-xs font-semibold">Closed</span>
+            )}
+          </div>
+
+          {sessionRequestError && (
+            <div className="p-3 rounded-xl border border-rose-800 bg-rose-950/30 text-xs text-rose-200">{sessionRequestError}</div>
+          )}
+
+          {liveSession && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Present</span>
+                <p className="text-xl font-bold text-emerald-300">{liveStats.presentCount}</p>
+              </div>
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Not marked</span>
+                <p className="text-xl font-bold text-neutral-200">{liveStats.unmarkedCount}</p>
+              </div>
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Missed window</span>
+                <p className="text-xl font-bold text-amber-300">{liveStats.missedWindowCount || 0}</p>
+              </div>
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Eligible</span>
+                <p className="text-xl font-bold text-white">{liveStats.totalEligible}</p>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-neutral-500">
+            Founder verification prefers a device WebAuthn authenticator, with TOTP as a fallback. The photo evidence is reviewed by the Founder; TeamSync does not perform automatic face matching.
+          </p>
+        </div>
+      )}
+
+      {isFounder && (
+        <FounderAttendanceVerificationModal
+          isOpen={verificationOpen}
+          onClose={() => setVerificationOpen(false)}
+          onVerified={startAttendance}
+        />
+      )}
+
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="p-3.5 bg-neutral-900/60 border border-neutral-800 rounded-xl">
           <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Eligible</span>
           <p className="text-xl font-bold text-white mt-0.5">{liveStats.totalEligible}</p>
@@ -404,7 +568,7 @@ export const WeeklyAttendanceManager = ({
       </div>
 
       {/* Bulk Action Bar (if items selected and user is Founder/Admin) */}
-      {isFounderOrAdmin && selectedUserIds.size > 0 && (
+      {canManageAttendance && selectedUserIds.size > 0 && (
         <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 text-xs text-blue-200">
             <span className="font-semibold">{selectedUserIds.size}</span> members selected
@@ -482,7 +646,7 @@ export const WeeklyAttendanceManager = ({
       <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-950/60">
         <div className="px-4 py-3 bg-neutral-900/60 border-b border-neutral-800 flex items-center justify-between text-xs font-semibold text-neutral-400">
           <div className="flex items-center gap-3">
-            {isFounderOrAdmin && (
+            {canManageAttendance && (
               <input
                 type="checkbox"
                 checked={selectedUserIds.size > 0 && selectedUserIds.size === filteredIds.length}
@@ -514,7 +678,7 @@ export const WeeklyAttendanceManager = ({
                 >
                   {/* Member identity */}
                   <div className="flex items-center gap-3 min-w-0">
-                    {isFounderOrAdmin && (
+                    {canManageAttendance && (
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -522,14 +686,20 @@ export const WeeklyAttendanceManager = ({
                         className="w-4 h-4 rounded border-neutral-700 bg-neutral-900 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                       />
                     )}
-                    <Avatar
-                      user={{
-                        name: member.fullName,
-                        avatar_url: member.avatarUrl,
-                        email: member.email
-                      }}
-                      size="sm"
-                    />
+                    {member.photoUrl ? (
+                      <a href={member.photoUrl} target="_blank" rel="noreferrer" title="Open captured attendance photo" className="w-12 h-12 rounded-xl overflow-hidden border border-emerald-700/60 shrink-0">
+                        <img src={member.photoUrl} alt={member.fullName + ' attendance capture'} className="w-full h-full object-cover" />
+                      </a>
+                    ) : (
+                      <Avatar
+                        user={{
+                          name: member.fullName,
+                          avatar_url: member.avatarUrl,
+                          email: member.email
+                        }}
+                        size="sm"
+                      />
+                    )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-white truncate">
@@ -542,6 +712,11 @@ export const WeeklyAttendanceManager = ({
                         )}
                       </div>
                       <p className="text-[11px] text-neutral-400 truncate">{member.email}</p>
+                      {member.submittedAt && (
+                        <p className="text-[10px] text-emerald-300 mt-0.5">
+                          Photo submitted {new Date(member.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
                       {member.notes && (
                         <p className="text-[10px] text-neutral-400 italic flex items-center gap-1 mt-0.5">
                           <MessageSquare className="w-2.5 h-2.5" /> {member.notes}
@@ -553,7 +728,7 @@ export const WeeklyAttendanceManager = ({
                   {/* Actions & Status Selector */}
                   <div className="flex items-center gap-2 shrink-0">
                     {/* Read-only badge if not Founder/Admin */}
-                    {!isFounderOrAdmin ? (
+                    {!canManageAttendance ? (
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusCfg.bgColor} ${statusCfg.textColor} ${statusCfg.borderColor}`}>
                         {statusCfg.label}
                       </span>
@@ -646,7 +821,7 @@ export const WeeklyAttendanceManager = ({
       )}
 
       {/* Bottom Action Footer for Founder */}
-      {isFounderOrAdmin && (
+      {canManageAttendance && (
         <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
           <div className="flex items-center gap-2">
             <button

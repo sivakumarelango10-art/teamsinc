@@ -137,6 +137,7 @@ export const attendanceService = {
         totalEligible,
         presentCount,
         absentCount,
+        missedWindowCount,
         unmarkedCount,
         attendancePercentage,
         attendanceRate: attendancePercentage,
@@ -174,6 +175,27 @@ export const attendanceService = {
       const err = new Error('Attendance can only be marked for eligible weekly meetings.');
       err.statusCode = 400;
       throw err;
+    }
+
+    const liveSessionRes = await query(
+      `SELECT status, (expires_at <= now()) AS expired
+       FROM public.meeting_attendance_sessions
+       WHERE meeting_id = $1;`,
+      [meetingId]
+    );
+    const liveSession = liveSessionRes.rows[0];
+    if (liveSession) {
+      const isLive = liveSession.status === 'OPEN' && !liveSession.expired;
+      if (isLive) {
+        const err = new Error('Manual attendance changes are disabled while the five-minute photo attendance window is open.');
+        err.statusCode = 409;
+        throw err;
+      }
+      if (actorUser?.role !== 'FOUNDER') {
+        const err = new Error('Only the Founder can finalize or correct attendance after the live window closes.');
+        err.statusCode = 403;
+        throw err;
+      }
     }
 
     const client = await pool.connect();
@@ -325,12 +347,14 @@ export const attendanceService = {
 
     let presentCount = 0;
     let absentCount = 0;
+    let missedWindowCount = 0;
     let unmarkedCount = 0;
 
     const history = rows.map(r => {
       const status = r.status || 'UNMARKED';
       if (status === 'PRESENT') presentCount++;
       else if (status === 'ABSENT') absentCount++;
+      else if (status === 'MISSED_WINDOW') missedWindowCount++;
       else unmarkedCount++;
 
       return {
@@ -347,7 +371,7 @@ export const attendanceService = {
       };
     });
 
-    const totalHeld = presentCount + absentCount;
+    const totalHeld = presentCount + absentCount + missedWindowCount;
     const totalWeeklyMeetings = rows.length;
     const hasData = totalHeld > 0;
     const attendancePercentage = hasData 
@@ -360,7 +384,8 @@ export const attendanceService = {
         totalWeeklyMeetings,
         totalHeld,
         attendedCount: presentCount,
-        missedCount: absentCount,
+        missedCount: absentCount + missedWindowCount,
+        missedWindowCount,
         unmarkedCount,
         attendanceRate: attendancePercentage || 0,
         hasData
@@ -370,6 +395,7 @@ export const attendanceService = {
         totalHeld,
         presentCount,
         absentCount,
+        missedWindowCount,
         unmarkedCount,
         attendancePercentage,
         hasData
@@ -441,6 +467,7 @@ export const attendanceService = {
 
     let totalPresent = 0;
     let totalAbsent = 0;
+    let totalMissedWindow = 0;
     let totalUnmarked = 0;
 
     const memberStatsMap = new Map();
@@ -450,6 +477,7 @@ export const attendanceService = {
       const st = r.status;
       if (st === 'PRESENT') totalPresent++;
       else if (st === 'ABSENT') totalAbsent++;
+      else if (st === 'MISSED_WINDOW') totalMissedWindow++;
       else totalUnmarked++;
 
       // Member tracking
@@ -462,12 +490,14 @@ export const attendanceService = {
           department: r.department_name,
           presentCount: 0,
           absentCount: 0,
+          missedWindowCount: 0,
           unmarkedCount: 0
         });
       }
       const mem = memberStatsMap.get(r.user_id);
       if (st === 'PRESENT') mem.presentCount++;
       else if (st === 'ABSENT') mem.absentCount++;
+      else if (st === 'MISSED_WINDOW') mem.missedWindowCount++;
       else mem.unmarkedCount++;
 
       // Meeting tracking
@@ -478,34 +508,36 @@ export const attendanceService = {
           startTime: r.start_time,
           presentCount: 0,
           absentCount: 0,
+          missedWindowCount: 0,
           unmarkedCount: 0
         });
       }
       const mtg = meetingStatsMap.get(r.meeting_id);
       if (st === 'PRESENT') mtg.presentCount++;
       else if (st === 'ABSENT') mtg.absentCount++;
+      else if (st === 'MISSED_WINDOW') mtg.missedWindowCount++;
       else mtg.unmarkedCount++;
     });
 
-    const totalFinalized = totalPresent + totalAbsent;
+    const totalFinalized = totalPresent + totalAbsent + totalMissedWindow;
     const overallPercentage = totalFinalized > 0
       ? Math.round((totalPresent / totalFinalized) * 1000) / 10
       : 0;
 
     // Member analytics list
     const memberSummaries = Array.from(memberStatsMap.values()).map(m => {
-      const fin = m.presentCount + m.absentCount;
+      const fin = m.presentCount + m.absentCount + m.missedWindowCount;
       const pct = fin > 0 ? Math.round((m.presentCount / fin) * 1000) / 10 : 0;
       return {
         ...m,
         percentage: pct,
-        isAtRisk: m.absentCount >= 2 // Flag members with repeated absences
+        isAtRisk: (m.absentCount + m.missedWindowCount) >= 2 // Flag repeated absences or missed windows
       };
     });
 
     // Meeting comparisons
     const meetingSummaries = Array.from(meetingStatsMap.values()).map(m => {
-      const fin = m.presentCount + m.absentCount;
+      const fin = m.presentCount + m.absentCount + m.missedWindowCount;
       const pct = fin > 0 ? Math.round((m.presentCount / fin) * 1000) / 10 : 0;
       return {
         ...m,
@@ -520,6 +552,7 @@ export const attendanceService = {
         totalRecords: rows.length,
         totalPresent,
         totalAbsent,
+        totalMissedWindow,
         overallAttendanceRate: overallPercentage,
         atRiskMemberCount: memberSummaries.filter(m => m.isAtRisk).length
       },
@@ -527,6 +560,7 @@ export const attendanceService = {
         totalRecords: rows.length,
         totalPresent,
         totalAbsent,
+        totalMissedWindow,
         totalUnmarked,
         totalFinalized,
         overallPercentage,

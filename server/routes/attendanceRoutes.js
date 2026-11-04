@@ -1,8 +1,7 @@
 import express from 'express';
-import { requireUserAuth } from '../middleware/auth.js';
 import attendanceService from '../services/attendanceService.js';
 import liveAttendanceService from '../services/liveAttendanceService.js';
-import { requireVerifiedSupabaseUserAuth, requireRecentFounderMfa } from '../middleware/auth.js';
+import { requireUserAuth, requireVerifiedSupabaseUserAuth, requireRecentFounderMfa } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -10,7 +9,7 @@ const router = express.Router();
 router.use(requireUserAuth);
 
 // Sensitive live-photo attendance endpoints require a Supabase token verified by Auth.
-// The Founder start endpoint additionally requires a recent AAL2 TOTP MFA challenge.
+// The Founder start endpoint additionally requires recent AAL2 WebAuthn or TOTP MFA.
 router.post(
   '/meetings/:meetingId/live-session',
   requireVerifiedSupabaseUserAuth,
@@ -20,7 +19,8 @@ router.post(
       const result = await liveAttendanceService.startSession(
         req.params.meetingId,
         req.user,
-        req.attendanceVerifiedAt
+        req.attendanceVerifiedAt,
+        req.attendanceVerificationMethod
       );
       res.status(201).json(result);
     } catch (err) {

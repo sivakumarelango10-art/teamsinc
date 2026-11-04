@@ -67,7 +67,11 @@ async function closeExpiredSessions() {
       if (closed.rows.length) {
         const pending = await client.query(`
           UPDATE public.meeting_attendance
-          SET status = 'MISSED_WINDOW', marked_at = now(), marked_by = NULL, updated_at = now()
+          SET status = 'ABSENT',
+              marked_at = now(),
+              marked_by = NULL,
+              correction_note = 'Automatically marked absent: the five-minute photo attendance window expired without a submission.',
+              updated_at = now()
           WHERE attendance_session_id = $1 AND status = 'UNMARKED'
           RETURNING id, meeting_id, user_id;
         `, [item.id]);
@@ -76,7 +80,7 @@ async function closeExpiredSessions() {
           await client.query(`
             INSERT INTO public.meeting_attendance_history
               (attendance_id, meeting_id, user_id, previous_status, new_status, changed_by, correction_note)
-            VALUES ($1, $2, $3, 'UNMARKED', 'MISSED_WINDOW', NULL, 'Attendance window expired without a photo submission.');
+            VALUES ($1, $2, $3, 'UNMARKED', 'ABSENT', NULL, 'Automatically marked absent: the five-minute photo attendance window expired without a submission.');
           `, [row.id, row.meeting_id, row.user_id]);
         }
       }
@@ -91,9 +95,10 @@ async function closeExpiredSessions() {
 }
 
 export const liveAttendanceService = {
-  async startSession(meetingId, founder, verifiedAt) {
+  async startSession(meetingId, founder, verifiedAt, verificationMethod = 'SUPABASE_TOTP_MFA') {
     if (!isFounderUser(founder)) throw httpError(403, 'Only the Founder can start attendance.');
-    if (!verifiedAt || !Number.isFinite(new Date(verifiedAt).getTime())) {
+    if (!verifiedAt || !Number.isFinite(new Date(verifiedAt).getTime())
+      || !['SUPABASE_WEBAUTHN_MFA', 'SUPABASE_TOTP_MFA'].includes(verificationMethod)) {
       throw httpError(403, 'A recent Founder MFA verification is required.', 'FOUNDER_MFA_REQUIRED');
     }
 
@@ -145,9 +150,9 @@ export const liveAttendanceService = {
       const sessionResult = await client.query(`
         INSERT INTO public.meeting_attendance_sessions
           (meeting_id, started_by, status, verification_method, verified_at, started_at, expires_at)
-        VALUES ($1, $2, 'OPEN', 'SUPABASE_TOTP_MFA', $3, now(), now() + interval '5 minutes')
+        VALUES ($1, $2, 'OPEN', $4, $3, now(), now() + interval '5 minutes')
         RETURNING id, meeting_id, started_by, status, started_at, expires_at, verified_at, verification_method;
-      `, [meetingId, founder.id, verifiedAt]);
+      `, [meetingId, founder.id, verifiedAt, verificationMethod]);
       const session = sessionResult.rows[0];
 
       for (const participant of eligible) {
@@ -355,7 +360,9 @@ export const liveAttendanceService = {
       if (!session) throw httpError(404, 'Attendance session not found.');
       if (!session.is_weekly_meeting) throw httpError(400, 'Photo attendance is only available for weekly meetings.');
       if (session.meeting_status === 'CANCELLED') throw httpError(409, 'This meeting has been cancelled.');
-      if (session.status !== 'OPEN' || new Date(session.expires_at).getTime() <= Date.now()) {
+      const serverTime = await client.query('SELECT now() AS server_now');
+      const sessionExpired = new Date(session.expires_at).getTime() <= new Date(serverTime.rows[0].server_now).getTime();
+      if (session.status !== 'OPEN' || sessionExpired) {
         throw httpError(410, 'The five-minute attendance window has closed.', 'ATTENDANCE_WINDOW_CLOSED');
       }
 

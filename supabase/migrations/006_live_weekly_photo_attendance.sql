@@ -23,24 +23,75 @@ ALTER TABLE public.meeting_attendance
   ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS submission_method TEXT;
 
--- Preserve existing statuses while adding the explicit missed-window state.
-ALTER TABLE public.meeting_attendance
-  DROP CONSTRAINT IF EXISTS meeting_attendance_status_check;
-ALTER TABLE public.meeting_attendance
-  ADD CONSTRAINT meeting_attendance_status_check
-  CHECK (status IN ('PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'));
+-- Existing attendance status checks already allow PRESENT, ABSENT and UNMARKED.
+-- The expiry worker records non-submitters as ABSENT with an explanatory audit note.
+-- Use pg_cron when available so the deadline is enforced without a page refresh.
+CREATE OR REPLACE FUNCTION public.close_expired_meeting_attendance_sessions()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+DECLARE
+  closed_count integer := 0;
+BEGIN
+  WITH closed_sessions AS (
+    UPDATE public.meeting_attendance_sessions
+    SET status = 'CLOSED',
+        closed_at = COALESCE(closed_at, now())
+    WHERE status = 'OPEN'
+      AND expires_at <= now()
+    RETURNING id, meeting_id
+  ),
+  absent_rows AS (
+    UPDATE public.meeting_attendance a
+    SET status = 'ABSENT',
+        marked_at = now(),
+        marked_by = NULL,
+        correction_note = 'Automatically marked absent: the five-minute photo attendance window expired without a submission.',
+        updated_at = now()
+    FROM closed_sessions s
+    WHERE a.attendance_session_id = s.id
+      AND a.status = 'UNMARKED'
+    RETURNING a.id, a.meeting_id, a.user_id
+  ),
+  audit_rows AS (
+    INSERT INTO public.meeting_attendance_history
+      (attendance_id, meeting_id, user_id, previous_status, new_status, changed_by, correction_note)
+    SELECT
+      a.id,
+      a.meeting_id,
+      a.user_id,
+      'UNMARKED',
+      'ABSENT',
+      NULL,
+      'Automatically marked absent: the five-minute photo attendance window expired without a submission.'
+    FROM absent_rows a
+    RETURNING id
+  )
+  SELECT COUNT(*)::integer
+  INTO closed_count
+  FROM closed_sessions;
 
-ALTER TABLE public.meeting_attendance_history
-  DROP CONSTRAINT IF EXISTS meeting_attendance_history_previous_status_check;
-ALTER TABLE public.meeting_attendance_history
-  ADD CONSTRAINT meeting_attendance_history_previous_status_check
-  CHECK (previous_status IS NULL OR previous_status IN ('PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'));
+  RETURN closed_count;
+END;
+$function$;
 
-ALTER TABLE public.meeting_attendance_history
-  DROP CONSTRAINT IF EXISTS meeting_attendance_history_new_status_check;
-ALTER TABLE public.meeting_attendance_history
-  ADD CONSTRAINT meeting_attendance_history_new_status_check
-  CHECK (new_status IN ('PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'));
+REVOKE ALL ON FUNCTION public.close_expired_meeting_attendance_sessions() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.close_expired_meeting_attendance_sessions() TO service_role;
+
+DO $schedule$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS pg_cron;
+  PERFORM cron.schedule(
+    'teamsync-close-expired-attendance',
+    '* * * * *',
+    'SELECT public.close_expired_meeting_attendance_sessions();'
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE 'pg_cron could not be enabled or scheduled here; API requests will still reconcile expired sessions. Details: %', SQLERRM;
+END $schedule$;
 
 CREATE INDEX IF NOT EXISTS idx_attendance_sessions_open_expiry
   ON public.meeting_attendance_sessions(status, expires_at)
@@ -111,7 +162,21 @@ CREATE POLICY "Weekly attendance owners upload own photo"
   FOR INSERT TO authenticated
   WITH CHECK (
     bucket_id = 'weekly-attendance-photos'
-    AND (storage.foldername(name))[1] = auth.uid()::text
+    AND EXISTS (
+      SELECT 1
+      FROM public.profiles p
+      JOIN public.meeting_attendance a
+        ON a.user_id = p.id
+      JOIN public.meeting_attendance_sessions s
+        ON s.id = a.attendance_session_id
+      WHERE p.auth_user_id = auth.uid()
+        AND a.status = 'UNMARKED'
+        AND s.status = 'OPEN'
+        AND s.expires_at > now()
+        AND (storage.foldername(name))[1] = p.auth_user_id::text
+        AND (storage.foldername(name))[2] = s.meeting_id::text
+        AND (storage.foldername(name))[3] = s.id::text
+    )
   );
 
 DROP POLICY IF EXISTS "Weekly attendance owners and Founder read photos" ON storage.objects;

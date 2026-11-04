@@ -362,24 +362,29 @@ export function requireRecentFounderMfa(req, res, next) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const maxAgeSeconds = 5 * 60;
   const amr = Array.isArray(claims.amr) ? claims.amr : [];
-  const recentTotp = amr.some((entry) => {
-    const method = String(entry?.method || '').toLowerCase();
-    const timestamp = Number(entry?.timestamp);
-    return method === 'totp'
-      && Number.isFinite(timestamp)
-      && timestamp <= nowSeconds
-      && nowSeconds - timestamp <= maxAgeSeconds;
-  });
+  const recentFactor = amr
+    .filter((entry) => {
+      const method = String(entry?.method || '').toLowerCase();
+      const timestamp = Number(entry?.timestamp);
+      return ['webauthn', 'totp'].includes(method)
+        && Number.isFinite(timestamp)
+        && timestamp <= nowSeconds
+        && nowSeconds - timestamp <= maxAgeSeconds;
+    })
+    .sort((left, right) => Number(right.timestamp) - Number(left.timestamp))[0];
 
-  if (claims.aal !== 'aal2' || !recentTotp) {
+  if (claims.aal !== 'aal2' || !recentFactor) {
     return res.status(403).json({
       success: false,
       code: 'FOUNDER_MFA_REQUIRED',
-      error: 'Verify with your enrolled authenticator (TOTP MFA) within the last five minutes before starting attendance.'
+      error: 'Verify with your device authenticator (WebAuthn/passkey) or enrolled TOTP app within the last five minutes before starting attendance.'
     });
   }
 
-  req.attendanceVerifiedAt = new Date(nowSeconds * 1000).toISOString();
+  req.attendanceVerifiedAt = new Date(Number(recentFactor.timestamp) * 1000).toISOString();
+  req.attendanceVerificationMethod = String(recentFactor.method).toLowerCase() === 'webauthn'
+    ? 'SUPABASE_WEBAUTHN_MFA'
+    : 'SUPABASE_TOTP_MFA';
   return next();
 }
 

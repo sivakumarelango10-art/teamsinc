@@ -47,7 +47,6 @@ export const WeeklyAttendanceManager = ({
     presentCount: 0,
     absentCount: 0,
     unmarkedCount: 0,
-    missedWindowCount: 0,
     attendanceRate: 0
   });
   const [liveSession, setLiveSession] = useState(null);
@@ -101,7 +100,6 @@ export const WeeklyAttendanceManager = ({
         presentCount: 0,
         absentCount: 0,
         unmarkedCount: normalizedRoster.filter(m => m.status === 'UNMARKED').length,
-        missedWindowCount: normalizedRoster.filter(m => m.status === 'MISSED_WINDOW').length,
         attendanceRate: 0
       });
 
@@ -193,12 +191,9 @@ export const WeeklyAttendanceManager = ({
     let present = 0;
     let absent = 0;
     let unmarked = 0;
-    let missedWindow = 0;
-
     roster.forEach(r => {
       if (r.status === 'PRESENT') present++;
-      else if (r.status === 'ABSENT') absent++;
-      else if (r.status === 'MISSED_WINDOW') missedWindow++;
+      else if (r.status === 'ABSENT' || r.status === 'MISSED_WINDOW') absent++;
       else unmarked++;
     });
 
@@ -209,7 +204,6 @@ export const WeeklyAttendanceManager = ({
       presentCount: present,
       absentCount: absent,
       unmarkedCount: unmarked,
-      missedWindowCount: missedWindow,
       attendanceRate: rate
     };
   }, [roster]);
@@ -533,14 +527,6 @@ export const WeeklyAttendanceManager = ({
           <p className="text-xl font-bold text-neutral-300 mt-0.5">{liveStats.unmarkedCount}</p>
         </div>
 
-        <div className="p-3.5 bg-amber-950/20 border border-amber-900/40 rounded-xl">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-amber-300 uppercase tracking-wider">Missed Window</span>
-            <Timer className="w-3.5 h-3.5 text-amber-300" />
-          </div>
-          <p className="text-xl font-bold text-amber-200 mt-0.5">{liveStats.missedWindowCount || 0}</p>
-        </div>
-
         <div className="col-span-2 sm:col-span-1 p-3.5 bg-gradient-to-br from-blue-950/30 to-indigo-950/20 border border-blue-900/40 rounded-xl">
           <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider">Attendance %</span>
           <p className="text-xl font-bold text-blue-300 mt-0.5">
@@ -565,7 +551,7 @@ export const WeeklyAttendanceManager = ({
 
         {/* Status Filter Tabs */}
         <div className="flex items-center gap-1 p-1 bg-neutral-900 border border-neutral-800 rounded-xl">
-          {['ALL', 'PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'].map((tab) => (
+          {['ALL', 'PRESENT', 'ABSENT', 'UNMARKED'].map((tab) => (
             <button
               key={tab}
               onClick={() => setStatusFilter(tab)}

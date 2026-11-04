@@ -365,7 +365,7 @@ export function requireRecentFounderMfa(req, res, next) {
   const recentTotp = amr.some((entry) => {
     const method = String(entry?.method || '').toLowerCase();
     const timestamp = Number(entry?.timestamp);
-    return ['totp', 'otp'].includes(method)
+    return method === 'totp'
       && Number.isFinite(timestamp)
       && timestamp <= nowSeconds
       && nowSeconds - timestamp <= maxAgeSeconds;

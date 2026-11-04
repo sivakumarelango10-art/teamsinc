@@ -243,7 +243,7 @@ export const WeeklyAttendanceManager = ({
   }, [roster]);
 
   const liveWindowOpen = liveSession?.status === 'OPEN';
-  const canManageAttendance = isFounder && !liveWindowOpen;
+  const canManageAttendance = isFounder && liveSession?.status === 'CLOSED';
 
   useEffect(() => {
     if (!liveSession?.expiresAt) return undefined;
@@ -295,6 +295,7 @@ export const WeeklyAttendanceManager = ({
   };
 
   const handleSaveNote = (userId) => {
+    if (!canManageAttendance) return;
     setRoster(prev => prev.map(m => {
       if (m.userId === userId) {
         return { ...m, notes: activeNoteText.trim() };
@@ -325,7 +326,7 @@ export const WeeklyAttendanceManager = ({
 
   // Apply bulk update
   const handleApplyBulkAction = () => {
-    if (!bulkActionConfirm || selectedUserIds.size === 0) return;
+    if (!canManageAttendance || !bulkActionConfirm || selectedUserIds.size === 0) return;
 
     setRoster(prev => prev.map(member => {
       if (selectedUserIds.has(member.userId)) {
@@ -377,6 +378,7 @@ export const WeeklyAttendanceManager = ({
 
   // Quick mark all currently unmarked members as Present
   const handleQuickMarkAllPresent = () => {
+    if (!canManageAttendance) return;
     setRoster(prev => prev.map(member => ({
       ...member,
       status: 'PRESENT'

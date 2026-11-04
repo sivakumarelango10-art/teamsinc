@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(requireUserAuth);
 
 // Sensitive live-photo attendance endpoints require a Supabase token verified by Auth.
-// The Founder start endpoint additionally requires a recent AAL2 TOTP MFA challenge.
+// The Founder start endpoint additionally requires recent AAL2 WebAuthn or TOTP MFA.
 router.post(
   '/meetings/:meetingId/live-session',
   requireVerifiedSupabaseUserAuth,

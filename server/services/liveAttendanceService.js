@@ -95,9 +95,10 @@ async function closeExpiredSessions() {
 }
 
 export const liveAttendanceService = {
-  async startSession(meetingId, founder, verifiedAt) {
+  async startSession(meetingId, founder, verifiedAt, verificationMethod = 'SUPABASE_TOTP_MFA') {
     if (!isFounderUser(founder)) throw httpError(403, 'Only the Founder can start attendance.');
-    if (!verifiedAt || !Number.isFinite(new Date(verifiedAt).getTime())) {
+    if (!verifiedAt || !Number.isFinite(new Date(verifiedAt).getTime())
+      || !['SUPABASE_WEBAUTHN_MFA', 'SUPABASE_TOTP_MFA'].includes(verificationMethod)) {
       throw httpError(403, 'A recent Founder MFA verification is required.', 'FOUNDER_MFA_REQUIRED');
     }
 
@@ -149,9 +150,9 @@ export const liveAttendanceService = {
       const sessionResult = await client.query(`
         INSERT INTO public.meeting_attendance_sessions
           (meeting_id, started_by, status, verification_method, verified_at, started_at, expires_at)
-        VALUES ($1, $2, 'OPEN', 'SUPABASE_TOTP_MFA', $3, now(), now() + interval '5 minutes')
+        VALUES ($1, $2, 'OPEN', $4, $3, now(), now() + interval '5 minutes')
         RETURNING id, meeting_id, started_by, status, started_at, expires_at, verified_at, verification_method;
-      `, [meetingId, founder.id, verifiedAt]);
+      `, [meetingId, founder.id, verifiedAt, verificationMethod]);
       const session = sessionResult.rows[0];
 
       for (const participant of eligible) {

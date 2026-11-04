@@ -51,7 +51,6 @@ export const WeeklyAttendanceManager = ({
     attendanceRate: 0
   });
   const [liveSession, setLiveSession] = useState(null);
-  const [photoUrls, setPhotoUrls] = useState({});
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [startingSession, setStartingSession] = useState(false);
   const [sessionNow, setSessionNow] = useState(Date.now());
@@ -85,7 +84,6 @@ export const WeeklyAttendanceManager = ({
         setMeetingInfo(res.meeting || null);
         setRoster([]);
         setLiveSession(null);
-        setPhotoUrls({});
         return;
       }
 
@@ -107,6 +105,7 @@ export const WeeklyAttendanceManager = ({
         attendanceRate: 0
       });
 
+      let signedPhotoUrls = {};
       if (isFounder && supabase) {
         const signed = await Promise.all(normalizedRoster.map(async member => {
           if (!member.photoPath) return [member.userId, null];
@@ -115,14 +114,12 @@ export const WeeklyAttendanceManager = ({
             .createSignedUrl(member.photoPath, 300);
           return [member.userId, signError ? null : data?.signedUrl || null];
         }));
-        setPhotoUrls(Object.fromEntries(signed));
-      } else {
-        setPhotoUrls({});
+        signedPhotoUrls = Object.fromEntries(signed);
       }
 
       setRoster(normalizedRoster.map(member => ({
         ...member,
-        photoUrl: null
+        photoUrl: signedPhotoUrls[member.userId] || null
       })));
       setOriginalRoster(JSON.parse(JSON.stringify(normalizedRoster)));
       setSelectedUserIds(new Set());
@@ -137,31 +134,6 @@ export const WeeklyAttendanceManager = ({
   useEffect(() => {
     loadAttendance();
   }, [loadAttendance]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const signPhotos = async () => {
-      if (!isFounder || !supabase) return;
-      const entries = await Promise.all(roster.map(async member => {
-        if (!member.photoPath) return [member.userId, null];
-        const { data, error: signError } = await supabase.storage
-          .from('weekly-attendance-photos')
-          .createSignedUrl(member.photoPath, 300);
-        return [member.userId, signError ? null : data?.signedUrl || null];
-      }));
-      if (!cancelled) {
-        const next = Object.fromEntries(entries);
-        setPhotoUrls(next);
-        setRoster(prev => prev.map(member => ({
-          ...member,
-          photoUrl: next[member.userId] || null
-        })));
-      }
-    };
-    if (roster.some(member => member.photoPath)) signPhotos();
-    else setPhotoUrls({});
-    return () => { cancelled = true; };
-  }, [isFounder, roster.map(member => member.photoPath).join('|')]);
 
   // Realtime subscription for attendance updates
   useEffect(() => {
@@ -242,7 +214,6 @@ export const WeeklyAttendanceManager = ({
     };
   }, [roster]);
 
-  const liveWindowOpen = liveSession?.status === 'OPEN';
   const canManageAttendance = isFounder && liveSession?.status === 'CLOSED';
 
   useEffect(() => {

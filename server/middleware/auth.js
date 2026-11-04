@@ -350,8 +350,8 @@ export async function requireVerifiedSupabaseUserAuth(req, res, next) {
 
 /**
  * Founder-only step-up check. The Supabase access token must be AAL2 and contain
- * a recent TOTP/OTP AMR entry. A camera permission prompt or uploaded photograph
- * is never accepted as Founder identity verification.
+ * a recent WebAuthn MFA or TOTP AMR entry. A camera permission prompt or uploaded
+ * photograph is never accepted as Founder identity verification.
  */
 export function requireRecentFounderMfa(req, res, next) {
   if (!req.user || req.user.role !== 'FOUNDER') {

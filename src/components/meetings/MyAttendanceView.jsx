@@ -68,7 +68,8 @@ export const MyAttendanceView = () => {
         statusFilter === 'ALL' ||
         (statusFilter === 'PRESENT' && item.status === 'PRESENT') ||
         (statusFilter === 'ABSENT' && item.status === 'ABSENT') ||
-        (statusFilter === 'UNMARKED' && item.status === 'UNMARKED');
+        (statusFilter === 'UNMARKED' && item.status === 'UNMARKED') ||
+        (statusFilter === 'MISSED_WINDOW' && item.status === 'MISSED_WINDOW');
 
       return matchesSearch && matchesStatus;
     });
@@ -173,7 +174,8 @@ export const MyAttendanceView = () => {
             { id: 'ALL', label: 'All' },
             { id: 'PRESENT', label: 'Attended' },
             { id: 'ABSENT', label: 'Missed' },
-            { id: 'UNMARKED', label: 'Unmarked' }
+            { id: 'UNMARKED', label: 'Unmarked' },
+            { id: 'MISSED_WINDOW', label: 'Missed Window' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -246,11 +248,14 @@ export const MyAttendanceView = () => {
                       )}
                     </div>
 
-                    {item.notes && (
+                    {(item.correctionNote || item.notes) && (
                       <p className="text-[11px] text-neutral-400 italic flex items-center gap-1.5 pt-0.5">
                         <MessageSquare className="w-3 h-3 text-neutral-500 shrink-0" />
-                        <span>Note: {item.notes}</span>
+                        <span>Note: {item.correctionNote || item.notes}</span>
                       </p>
+                    )}
+                    {item.status === 'MISSED_WINDOW' && (
+                      <p className="text-[10px] text-amber-300 pt-0.5">Attendance window expired before photo submission.</p>
                     )}
                   </div>
 

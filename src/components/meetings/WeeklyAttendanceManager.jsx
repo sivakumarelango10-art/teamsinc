@@ -208,7 +208,7 @@ export const WeeklyAttendanceManager = ({
     };
   }, [roster]);
 
-  const canManageAttendance = isFounder && liveSession?.status === 'CLOSED';
+  const canManageAttendance = isFounder && (!liveSession || liveSession.status === 'CLOSED');
 
   useEffect(() => {
     if (!liveSession?.expiresAt) return undefined;

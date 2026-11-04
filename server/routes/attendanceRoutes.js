@@ -20,7 +20,8 @@ router.post(
       const result = await liveAttendanceService.startSession(
         req.params.meetingId,
         req.user,
-        req.attendanceVerifiedAt
+        req.attendanceVerifiedAt,
+        req.attendanceVerificationMethod
       );
       res.status(201).json(result);
     } catch (err) {

@@ -14,15 +14,21 @@ import {
   Info,
   Clock,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  Camera,
+  Radio,
+  Timer,
+  XCircle
 } from 'lucide-react';
 import { attendanceApi, calculateAttendancePercentage, getAttendanceStatusConfig } from '../../api/attendanceApi';
 import { supabase } from '../../api/supabase';
 import Avatar from '../common/Avatar';
 import LoadingSpinner from '../common/LoadingSpinner';
+import FounderAttendanceVerificationModal from './FounderAttendanceVerificationModal';
 
 export const WeeklyAttendanceManager = ({
   meetingId,
+  isFounder = false,
   isFounderOrAdmin = false,
   currentUser = null,
   onAttendanceUpdated = null
@@ -42,8 +48,15 @@ export const WeeklyAttendanceManager = ({
     presentCount: 0,
     absentCount: 0,
     unmarkedCount: 0,
+    missedWindowCount: 0,
     attendanceRate: 0
   });
+  const [liveSession, setLiveSession] = useState(null);
+  const [photoUrls, setPhotoUrls] = useState({});
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [startingSession, setStartingSession] = useState(false);
+  const [sessionNow, setSessionNow] = useState(Date.now());
+  const [sessionRequestError, setSessionRequestError] = useState('');
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,25 +77,55 @@ export const WeeklyAttendanceManager = ({
     try {
       setLoading(true);
       setError(null);
-      const res = await attendanceApi.getMeetingAttendance(meetingId);
+      const res = isFounder
+        ? await attendanceApi.getLiveMeetingAttendance(meetingId)
+        : await attendanceApi.getMeetingAttendance(meetingId);
 
       if (!res.isEligible) {
         setIsEligible(false);
         setMeetingInfo(res.meeting || null);
+        setRoster([]);
+        setLiveSession(null);
+        setPhotoUrls({});
         return;
       }
 
+      const normalizedRoster = (res.roster || []).map(member => ({
+        ...member,
+        fullName: member.fullName || member.name || 'Team Member',
+        notes: member.notes || member.correctionNote || ''
+      }));
+
       setIsEligible(true);
       setMeetingInfo(res.meeting);
+      setLiveSession(res.session || null);
       setStats(res.stats || {
-        totalEligible: res.roster?.length || 0,
+        totalEligible: normalizedRoster.length,
         presentCount: 0,
         absentCount: 0,
-        unmarkedCount: 0,
+        unmarkedCount: normalizedRoster.filter(m => m.status === 'UNMARKED').length,
+        missedWindowCount: normalizedRoster.filter(m => m.status === 'MISSED_WINDOW').length,
         attendanceRate: 0
       });
-      setRoster(res.roster || []);
-      setOriginalRoster(JSON.parse(JSON.stringify(res.roster || [])));
+
+      if (isFounder && supabase) {
+        const signed = await Promise.all(normalizedRoster.map(async member => {
+          if (!member.photoPath) return [member.userId, null];
+          const { data, error: signError } = await supabase.storage
+            .from('weekly-attendance-photos')
+            .createSignedUrl(member.photoPath, 300);
+          return [member.userId, signError ? null : data?.signedUrl || null];
+        }));
+        setPhotoUrls(Object.fromEntries(signed));
+      } else {
+        setPhotoUrls({});
+      }
+
+      setRoster(normalizedRoster.map(member => ({
+        ...member,
+        photoUrl: null
+      })));
+      setOriginalRoster(JSON.parse(JSON.stringify(normalizedRoster)));
       setSelectedUserIds(new Set());
     } catch (err) {
       console.error('Failed to load meeting attendance:', err);
@@ -90,11 +133,36 @@ export const WeeklyAttendanceManager = ({
     } finally {
       setLoading(false);
     }
-  }, [meetingId]);
+  }, [meetingId, isFounder]);
 
   useEffect(() => {
     loadAttendance();
   }, [loadAttendance]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const signPhotos = async () => {
+      if (!isFounder || !supabase) return;
+      const entries = await Promise.all(roster.map(async member => {
+        if (!member.photoPath) return [member.userId, null];
+        const { data, error: signError } = await supabase.storage
+          .from('weekly-attendance-photos')
+          .createSignedUrl(member.photoPath, 300);
+        return [member.userId, signError ? null : data?.signedUrl || null];
+      }));
+      if (!cancelled) {
+        const next = Object.fromEntries(entries);
+        setPhotoUrls(next);
+        setRoster(prev => prev.map(member => ({
+          ...member,
+          photoUrl: next[member.userId] || null
+        })));
+      }
+    };
+    if (roster.some(member => member.photoPath)) signPhotos();
+    else setPhotoUrls({});
+    return () => { cancelled = true; };
+  }, [isFounder, roster.map(member => member.photoPath).join('|')]);
 
   // Realtime subscription for attendance updates
   useEffect(() => {
@@ -110,10 +178,17 @@ export const WeeklyAttendanceManager = ({
           table: 'meeting_attendance',
           filter: `meeting_id=eq.${meetingId}`
         },
-        () => {
-          // Refresh attendance when external changes occur
-          loadAttendance();
-        }
+        () => { loadAttendance(); }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meeting_attendance_sessions',
+          filter: `meeting_id=eq.${meetingId}`
+        },
+        () => { loadAttendance(); }
       )
       .subscribe();
 
@@ -147,10 +222,12 @@ export const WeeklyAttendanceManager = ({
     let present = 0;
     let absent = 0;
     let unmarked = 0;
+    let missedWindow = 0;
 
     roster.forEach(r => {
       if (r.status === 'PRESENT') present++;
       else if (r.status === 'ABSENT') absent++;
+      else if (r.status === 'MISSED_WINDOW') missedWindow++;
       else unmarked++;
     });
 
@@ -161,13 +238,46 @@ export const WeeklyAttendanceManager = ({
       presentCount: present,
       absentCount: absent,
       unmarkedCount: unmarked,
+      missedWindowCount: missedWindow,
       attendanceRate: rate
     };
   }, [roster]);
 
+  const liveWindowOpen = liveSession?.status === 'OPEN';
+  const canManageAttendance = isFounder && !liveWindowOpen;
+
+  useEffect(() => {
+    if (!liveSession?.expiresAt) return undefined;
+    const timer = window.setInterval(() => setSessionNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [liveSession?.expiresAt]);
+
+  useEffect(() => {
+    if (liveSession?.status === 'OPEN' && new Date(liveSession.expiresAt).getTime() <= sessionNow) {
+      loadAttendance();
+    }
+  }, [liveSession?.status, liveSession?.expiresAt, sessionNow, loadAttendance]);
+
+  const startAttendance = async () => {
+    setStartingSession(true);
+    setSessionRequestError('');
+    try {
+      await attendanceApi.startLiveAttendance(meetingId);
+      setVerificationOpen(false);
+      await loadAttendance();
+      setSuccessMessage('Five-minute attendance window opened. Eligible Members and Admins have been notified.');
+      if (onAttendanceUpdated) onAttendanceUpdated();
+    } catch (err) {
+      setSessionRequestError(err.message || 'Unable to start the attendance window.');
+      throw err;
+    } finally {
+      setStartingSession(false);
+    }
+  };
+
   // Handle single status change staged in local state
   const handleStatusChange = (userId, newStatus) => {
-    if (!isFounderOrAdmin) return;
+    if (!canManageAttendance) return;
     setRoster(prev => prev.map(member => {
       if (member.userId === userId) {
         return {
@@ -236,7 +346,7 @@ export const WeeklyAttendanceManager = ({
 
   // Save all changes to the database
   const handleSaveAttendance = async () => {
-    if (!isFounderOrAdmin || dirtyChanges.length === 0) return;
+    if (!canManageAttendance || dirtyChanges.length === 0) return;
 
     try {
       setSaving(true);
@@ -404,7 +514,7 @@ export const WeeklyAttendanceManager = ({
       </div>
 
       {/* Bulk Action Bar (if items selected and user is Founder/Admin) */}
-      {isFounderOrAdmin && selectedUserIds.size > 0 && (
+      {canManageAttendance && selectedUserIds.size > 0 && (
         <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 text-xs text-blue-200">
             <span className="font-semibold">{selectedUserIds.size}</span> members selected
@@ -482,7 +592,7 @@ export const WeeklyAttendanceManager = ({
       <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-950/60">
         <div className="px-4 py-3 bg-neutral-900/60 border-b border-neutral-800 flex items-center justify-between text-xs font-semibold text-neutral-400">
           <div className="flex items-center gap-3">
-            {isFounderOrAdmin && (
+            {canManageAttendance && (
               <input
                 type="checkbox"
                 checked={selectedUserIds.size > 0 && selectedUserIds.size === filteredIds.length}
@@ -514,7 +624,7 @@ export const WeeklyAttendanceManager = ({
                 >
                   {/* Member identity */}
                   <div className="flex items-center gap-3 min-w-0">
-                    {isFounderOrAdmin && (
+                    {canManageAttendance && (
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -553,7 +663,7 @@ export const WeeklyAttendanceManager = ({
                   {/* Actions & Status Selector */}
                   <div className="flex items-center gap-2 shrink-0">
                     {/* Read-only badge if not Founder/Admin */}
-                    {!isFounderOrAdmin ? (
+                    {!canManageAttendance ? (
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusCfg.bgColor} ${statusCfg.textColor} ${statusCfg.borderColor}`}>
                         {statusCfg.label}
                       </span>
@@ -646,7 +756,7 @@ export const WeeklyAttendanceManager = ({
       )}
 
       {/* Bottom Action Footer for Founder */}
-      {isFounderOrAdmin && (
+      {canManageAttendance && (
         <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
           <div className="flex items-center gap-2">
             <button

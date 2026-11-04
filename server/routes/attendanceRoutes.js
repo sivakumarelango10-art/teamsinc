@@ -1,8 +1,7 @@
 import express from 'express';
-import { requireUserAuth } from '../middleware/auth.js';
 import attendanceService from '../services/attendanceService.js';
 import liveAttendanceService from '../services/liveAttendanceService.js';
-import { requireVerifiedSupabaseUserAuth, requireRecentFounderMfa } from '../middleware/auth.js';
+import { requireUserAuth, requireVerifiedSupabaseUserAuth, requireRecentFounderMfa } from '../middleware/auth.js';
 
 const router = express.Router();
 

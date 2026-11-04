@@ -443,6 +443,94 @@ export const WeeklyAttendanceManager = ({
         </div>
       )}
 
+      {isFounder && (
+        <div className="rounded-2xl border border-amber-800/50 bg-gradient-to-r from-amber-950/30 via-neutral-950 to-neutral-950 p-4 sm:p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider font-bold text-amber-300">Founder attendance control</p>
+                <h3 className="text-sm font-bold text-white mt-0.5">
+                  {!liveSession ? 'Start five-minute attendance' : liveSession.status === 'OPEN' ? 'Attendance window is live' : 'Attendance session closed'}
+                </h3>
+                <p className="text-[11px] text-neutral-400 mt-1">
+                  {!liveSession
+                    ? 'Verify with your authenticator, then open the photo attendance window for eligible Admins and Members.'
+                    : liveSession.status === 'OPEN'
+                      ? 'Participants can submit one photo. Manual corrections become available after the window closes.'
+                      : 'Review photo submissions below and finalize missed participants.'}
+                </p>
+              </div>
+            </div>
+
+            {!liveSession ? (
+              <button
+                type="button"
+                onClick={() => setVerificationOpen(true)}
+                disabled={startingSession}
+                className="px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold flex items-center justify-center gap-2"
+              >
+                <Radio className="w-4 h-4" />
+                {startingSession ? 'Starting…' : 'Verify & Start Attendance'}
+              </button>
+            ) : liveSession.status === 'OPEN' ? (
+              <div className="min-w-[105px] rounded-xl border border-emerald-700/50 bg-emerald-950/30 px-4 py-2 text-center">
+                <div className="flex items-center justify-center gap-1 text-[10px] text-emerald-300">
+                  <Timer className="w-3 h-3" /> Time remaining
+                </div>
+                <div className="font-mono text-2xl font-bold tabular-nums text-emerald-200">
+                  {(() => {
+                    const seconds = Math.max(0, Math.ceil((new Date(liveSession.expiresAt).getTime() - sessionNow) / 1000));
+                    return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+                  })()}
+                </div>
+              </div>
+            ) : (
+              <span className="px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 text-xs font-semibold">Closed</span>
+            )}
+          </div>
+
+          {sessionRequestError && (
+            <div className="p-3 rounded-xl border border-rose-800 bg-rose-950/30 text-xs text-rose-200">{sessionRequestError}</div>
+          )}
+
+          {liveSession && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Present</span>
+                <p className="text-xl font-bold text-emerald-300">{liveStats.presentCount}</p>
+              </div>
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Not marked</span>
+                <p className="text-xl font-bold text-neutral-200">{liveStats.unmarkedCount}</p>
+              </div>
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Missed window</span>
+                <p className="text-xl font-bold text-amber-300">{liveStats.missedWindowCount || 0}</p>
+              </div>
+              <div className="rounded-xl bg-black/30 border border-neutral-800 p-3">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">Eligible</span>
+                <p className="text-xl font-bold text-white">{liveStats.totalEligible}</p>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-neutral-500">
+            Founder start verification uses Supabase TOTP MFA. This is a secure second factor, not Face ID or automatic facial recognition.
+          </p>
+        </div>
+      )}
+
+      {isFounder && (
+        <FounderAttendanceVerificationModal
+          isOpen={verificationOpen}
+          onClose={() => setVerificationOpen(false)}
+          onVerified={startAttendance}
+        />
+      )}
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="p-3.5 bg-neutral-900/60 border border-neutral-800 rounded-xl">

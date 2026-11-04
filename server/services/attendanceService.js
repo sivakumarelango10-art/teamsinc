@@ -178,12 +178,14 @@ export const attendanceService = {
     }
 
     const liveSessionRes = await query(
-      'SELECT status, expires_at FROM public.meeting_attendance_sessions WHERE meeting_id = $1;',
+      `SELECT status, (expires_at <= now()) AS expired
+       FROM public.meeting_attendance_sessions
+       WHERE meeting_id = $1;`,
       [meetingId]
     );
     const liveSession = liveSessionRes.rows[0];
     if (liveSession) {
-      const isLive = liveSession.status === 'OPEN' && new Date(liveSession.expires_at).getTime() > Date.now();
+      const isLive = liveSession.status === 'OPEN' && !liveSession.expired;
       if (isLive) {
         const err = new Error('Manual attendance changes are disabled while the five-minute photo attendance window is open.');
         err.statusCode = 409;

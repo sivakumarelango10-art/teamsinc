@@ -63,6 +63,14 @@ export function getAttendanceStatusConfig(status) {
         borderColor: 'border-rose-200 dark:border-rose-800/60',
         dotColor: 'bg-rose-500'
       };
+    case 'MISSED_WINDOW':
+      return {
+        label: 'Missed Window',
+        textColor: 'text-amber-700 dark:text-amber-300',
+        bgColor: 'bg-amber-50 dark:bg-amber-950/40',
+        borderColor: 'border-amber-200 dark:border-amber-800/60',
+        dotColor: 'bg-amber-500'
+      };
     case 'UNMARKED':
     default:
       return {
@@ -132,7 +140,7 @@ export const attendanceApi = {
           const status = record ? record.status : 'UNMARKED';
           if (status === 'PRESENT') present++;
           else if (status === 'ABSENT') absent++;
-          else unmarked++;
+          else if (h.status === 'MISSED_WINDOW') missedWindow++; else unmarked++;
 
           return {
             userId: p.id,
@@ -214,7 +222,7 @@ export const attendanceApi = {
         const { data: records } = await supabase
           .from('meeting_attendance')
           .select(`
-            id, status, notes, marked_at, updated_at,
+            id, status, correction_note, marked_at, updated_at,
             meeting:meetings!meeting_attendance_meeting_id_fkey(id, title, start_time, end_time, is_weekly_meeting, status)
           `)
           .eq('user_id', userId)
@@ -230,7 +238,7 @@ export const attendanceApi = {
             endTime: r.meeting.end_time,
             meetingStatus: r.meeting.status,
             status: r.status,
-            notes: r.notes,
+            notes: r.correction_note,
             markedAt: r.marked_at,
             updatedAt: r.updated_at
           }));
@@ -241,7 +249,7 @@ export const attendanceApi = {
 
         history.forEach(h => {
           if (h.status === 'PRESENT') attended++;
-          else if (h.status === 'ABSENT') missed++;
+          else if (h.status === 'ABSENT' || h.status === 'MISSED_WINDOW') missed++;
           else unmarked++;
         });
 

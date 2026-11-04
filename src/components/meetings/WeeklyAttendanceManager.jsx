@@ -532,7 +532,7 @@ export const WeeklyAttendanceManager = ({
       )}
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="p-3.5 bg-neutral-900/60 border border-neutral-800 rounded-xl">
           <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Eligible</span>
           <p className="text-xl font-bold text-white mt-0.5">{liveStats.totalEligible}</p>
@@ -562,6 +562,14 @@ export const WeeklyAttendanceManager = ({
           <p className="text-xl font-bold text-neutral-300 mt-0.5">{liveStats.unmarkedCount}</p>
         </div>
 
+        <div className="p-3.5 bg-amber-950/20 border border-amber-900/40 rounded-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-amber-300 uppercase tracking-wider">Missed Window</span>
+            <Timer className="w-3.5 h-3.5 text-amber-300" />
+          </div>
+          <p className="text-xl font-bold text-amber-200 mt-0.5">{liveStats.missedWindowCount || 0}</p>
+        </div>
+
         <div className="col-span-2 sm:col-span-1 p-3.5 bg-gradient-to-br from-blue-950/30 to-indigo-950/20 border border-blue-900/40 rounded-xl">
           <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider">Attendance %</span>
           <p className="text-xl font-bold text-blue-300 mt-0.5">
@@ -586,7 +594,7 @@ export const WeeklyAttendanceManager = ({
 
         {/* Status Filter Tabs */}
         <div className="flex items-center gap-1 p-1 bg-neutral-900 border border-neutral-800 rounded-xl">
-          {['ALL', 'PRESENT', 'ABSENT', 'UNMARKED'].map((tab) => (
+          {['ALL', 'PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'].map((tab) => (
             <button
               key={tab}
               onClick={() => setStatusFilter(tab)}
@@ -721,14 +729,20 @@ export const WeeklyAttendanceManager = ({
                         className="w-4 h-4 rounded border-neutral-700 bg-neutral-900 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                       />
                     )}
-                    <Avatar
-                      user={{
-                        name: member.fullName,
-                        avatar_url: member.avatarUrl,
-                        email: member.email
-                      }}
-                      size="sm"
-                    />
+                    {member.photoUrl ? (
+                      <a href={member.photoUrl} target="_blank" rel="noreferrer" title="Open captured attendance photo" className="w-12 h-12 rounded-xl overflow-hidden border border-emerald-700/60 shrink-0">
+                        <img src={member.photoUrl} alt={member.fullName + ' attendance capture'} className="w-full h-full object-cover" />
+                      </a>
+                    ) : (
+                      <Avatar
+                        user={{
+                          name: member.fullName,
+                          avatar_url: member.avatarUrl,
+                          email: member.email
+                        }}
+                        size="sm"
+                      />
+                    )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-white truncate">
@@ -741,6 +755,11 @@ export const WeeklyAttendanceManager = ({
                         )}
                       </div>
                       <p className="text-[11px] text-neutral-400 truncate">{member.email}</p>
+                      {member.submittedAt && (
+                        <p className="text-[10px] text-emerald-300 mt-0.5">
+                          Photo submitted {new Date(member.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
                       {member.notes && (
                         <p className="text-[10px] text-neutral-400 italic flex items-center gap-1 mt-0.5">
                           <MessageSquare className="w-2.5 h-2.5" /> {member.notes}

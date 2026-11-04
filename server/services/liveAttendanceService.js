@@ -359,7 +359,9 @@ export const liveAttendanceService = {
       if (!session) throw httpError(404, 'Attendance session not found.');
       if (!session.is_weekly_meeting) throw httpError(400, 'Photo attendance is only available for weekly meetings.');
       if (session.meeting_status === 'CANCELLED') throw httpError(409, 'This meeting has been cancelled.');
-      if (session.status !== 'OPEN' || new Date(session.expires_at).getTime() <= Date.now()) {
+      const serverTime = await client.query('SELECT now() AS server_now');
+      const sessionExpired = new Date(session.expires_at).getTime() <= new Date(serverTime.rows[0].server_now).getTime();
+      if (session.status !== 'OPEN' || sessionExpired) {
         throw httpError(410, 'The five-minute attendance window has closed.', 'ATTENDANCE_WINDOW_CLOSED');
       }
 

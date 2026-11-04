@@ -17,8 +17,7 @@ import {
   MessageSquare,
   Camera,
   Radio,
-  Timer,
-  XCircle
+  Timer
 } from 'lucide-react';
 import { attendanceApi, calculateAttendancePercentage, getAttendanceStatusConfig } from '../../api/attendanceApi';
 import { supabase } from '../../api/supabase';

@@ -12,7 +12,7 @@ const formatRemaining = (expiresAt, now) => {
 };
 
 export const ActiveAttendanceBanner = () => {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -70,8 +70,8 @@ export const ActiveAttendanceBanner = () => {
 
   useEffect(() => {
     if (!session?.expiresAt || now < new Date(session.expiresAt).getTime()) return;
-    // Server decides closure and records MISSED_WINDOW; this refresh merely asks
-    // the server to reconcile the expired session.
+    // The database expiry job and API reconciliation close the session and mark
+    // any participant without a photo as Absent.
     refresh();
   }, [session?.expiresAt, now, refresh]);
 
@@ -79,7 +79,7 @@ export const ActiveAttendanceBanner = () => {
 
   const countdown = formatRemaining(session.expiresAt, now);
   const alreadySubmitted = session.myStatus === 'PRESENT';
-  const missedWindow = session.myStatus === 'MISSED_WINDOW' || countdown.seconds <= 0;
+  const missedWindow = countdown.seconds <= 0;
 
   return (
     <>

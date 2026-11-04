@@ -1,11 +1,71 @@
 import express from 'express';
 import { requireUserAuth } from '../middleware/auth.js';
 import attendanceService from '../services/attendanceService.js';
+import liveAttendanceService from '../services/liveAttendanceService.js';
+import { requireVerifiedSupabaseUserAuth, requireRecentFounderMfa } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// All attendance routes require an authenticated user session
+// All legacy attendance endpoints retain their current authenticated-session guard.
 router.use(requireUserAuth);
+
+// Sensitive live-photo attendance endpoints require a Supabase token verified by Auth.
+// The Founder start endpoint additionally requires a recent AAL2 TOTP MFA challenge.
+router.post(
+  '/meetings/:meetingId/live-session',
+  requireVerifiedSupabaseUserAuth,
+  requireRecentFounderMfa,
+  async (req, res, next) => {
+    try {
+      const result = await liveAttendanceService.startSession(
+        req.params.meetingId,
+        req.user,
+        req.attendanceVerifiedAt
+      );
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.get('/active-session', requireVerifiedSupabaseUserAuth, async (req, res, next) => {
+  try {
+    res.status(200).json(await liveAttendanceService.getActiveSessionForUser(req.user));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get(
+  '/meetings/:meetingId/live-session',
+  requireVerifiedSupabaseUserAuth,
+  async (req, res, next) => {
+    try {
+      res.status(200).json(await liveAttendanceService.getFounderRoster(req.params.meetingId, req.user));
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/sessions/:sessionId/submit',
+  requireVerifiedSupabaseUserAuth,
+  async (req, res, next) => {
+    try {
+      const result = await liveAttendanceService.submitPhoto(
+        req.params.sessionId,
+        req.user,
+        req.body?.photoPath
+      );
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 
 /**
  * 1. GET /api/v1/attendance/meetings/:meetingId

@@ -7,7 +7,7 @@ const isRecentTotpMethod = (methods = []) => {
   return methods.some((item) => {
     const method = String(item?.method || '').toLowerCase();
     const timestamp = Number(item?.timestamp);
-    return ['totp', 'otp'].includes(method)
+    return method === 'totp'
       && Number.isFinite(timestamp)
       && timestamp <= now
       && now - timestamp <= 300;

@@ -23,24 +23,8 @@ ALTER TABLE public.meeting_attendance
   ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS submission_method TEXT;
 
--- Preserve existing statuses while adding the explicit missed-window state.
-ALTER TABLE public.meeting_attendance
-  DROP CONSTRAINT IF EXISTS meeting_attendance_status_check;
-ALTER TABLE public.meeting_attendance
-  ADD CONSTRAINT meeting_attendance_status_check
-  CHECK (status IN ('PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'));
-
-ALTER TABLE public.meeting_attendance_history
-  DROP CONSTRAINT IF EXISTS meeting_attendance_history_previous_status_check;
-ALTER TABLE public.meeting_attendance_history
-  ADD CONSTRAINT meeting_attendance_history_previous_status_check
-  CHECK (previous_status IS NULL OR previous_status IN ('PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'));
-
-ALTER TABLE public.meeting_attendance_history
-  DROP CONSTRAINT IF EXISTS meeting_attendance_history_new_status_check;
-ALTER TABLE public.meeting_attendance_history
-  ADD CONSTRAINT meeting_attendance_history_new_status_check
-  CHECK (new_status IN ('PRESENT', 'ABSENT', 'UNMARKED', 'MISSED_WINDOW'));
+-- Existing attendance status checks already allow PRESENT, ABSENT and UNMARKED.
+-- The expiry worker records non-submitters as ABSENT with an explanatory audit note.
 
 CREATE INDEX IF NOT EXISTS idx_attendance_sessions_open_expiry
   ON public.meeting_attendance_sessions(status, expires_at)

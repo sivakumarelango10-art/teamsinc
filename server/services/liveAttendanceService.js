@@ -67,7 +67,11 @@ async function closeExpiredSessions() {
       if (closed.rows.length) {
         const pending = await client.query(`
           UPDATE public.meeting_attendance
-          SET status = 'MISSED_WINDOW', marked_at = now(), marked_by = NULL, updated_at = now()
+          SET status = 'ABSENT',
+              marked_at = now(),
+              marked_by = NULL,
+              correction_note = 'Automatically marked absent: the five-minute photo attendance window expired without a submission.',
+              updated_at = now()
           WHERE attendance_session_id = $1 AND status = 'UNMARKED'
           RETURNING id, meeting_id, user_id;
         `, [item.id]);
@@ -76,7 +80,7 @@ async function closeExpiredSessions() {
           await client.query(`
             INSERT INTO public.meeting_attendance_history
               (attendance_id, meeting_id, user_id, previous_status, new_status, changed_by, correction_note)
-            VALUES ($1, $2, $3, 'UNMARKED', 'MISSED_WINDOW', NULL, 'Attendance window expired without a photo submission.');
+            VALUES ($1, $2, $3, 'UNMARKED', 'ABSENT', NULL, 'Automatically marked absent: the five-minute photo attendance window expired without a submission.');
           `, [row.id, row.meeting_id, row.user_id]);
         }
       }

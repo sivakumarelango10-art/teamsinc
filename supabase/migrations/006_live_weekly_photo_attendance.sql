@@ -31,7 +31,7 @@ RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $function$
 DECLARE
   closed_count integer := 0;
 BEGIN
@@ -75,12 +75,12 @@ BEGIN
 
   RETURN closed_count;
 END;
-$;
+$function$;
 
 REVOKE ALL ON FUNCTION public.close_expired_meeting_attendance_sessions() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.close_expired_meeting_attendance_sessions() TO service_role;
 
-DO $
+DO $schedule$
 BEGIN
   CREATE EXTENSION IF NOT EXISTS pg_cron;
   PERFORM cron.schedule(
@@ -91,7 +91,7 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN
     RAISE NOTICE 'pg_cron could not be enabled or scheduled here; API requests will still reconcile expired sessions. Details: %', SQLERRM;
-END $;
+END $schedule$;
 
 CREATE INDEX IF NOT EXISTS idx_attendance_sessions_open_expiry
   ON public.meeting_attendance_sessions(status, expires_at)

@@ -95,7 +95,21 @@ CREATE POLICY "Weekly attendance owners upload own photo"
   FOR INSERT TO authenticated
   WITH CHECK (
     bucket_id = 'weekly-attendance-photos'
-    AND (storage.foldername(name))[1] = auth.uid()::text
+    AND EXISTS (
+      SELECT 1
+      FROM public.profiles p
+      JOIN public.meeting_attendance a
+        ON a.user_id = p.id
+      JOIN public.meeting_attendance_sessions s
+        ON s.id = a.attendance_session_id
+      WHERE p.auth_user_id = auth.uid()
+        AND a.status = 'UNMARKED'
+        AND s.status = 'OPEN'
+        AND s.expires_at > now()
+        AND (storage.foldername(name))[1] = p.auth_user_id::text
+        AND (storage.foldername(name))[2] = s.meeting_id::text
+        AND (storage.foldername(name))[3] = s.id::text
+    )
   );
 
 DROP POLICY IF EXISTS "Weekly attendance owners and Founder read photos" ON storage.objects;

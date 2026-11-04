@@ -7,12 +7,15 @@ const recentFactorMethod = (methods = []) => {
   const recent = methods.find((item) => {
     const method = String(item?.method || '').toLowerCase();
     const timestamp = Number(item?.timestamp);
-    return ['webauthn', 'totp'].includes(method)
+    return ['mfa/webauthn', 'webauthn', 'mfa/totp', 'totp'].includes(method)
       && Number.isFinite(timestamp)
       && timestamp <= now
       && now - timestamp <= 300;
   });
-  return recent ? String(recent.method).toLowerCase() : null;
+  const method = recent ? String(recent.method).toLowerCase() : null;
+  if (method === 'mfa/webauthn' || method === 'webauthn') return 'webauthn';
+  if (method === 'mfa/totp' || method === 'totp') return 'totp';
+  return null;
 };
 
 const webAuthnAvailable = () => Boolean(

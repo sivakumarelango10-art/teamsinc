@@ -118,6 +118,7 @@ export const AttendanceCaptureModal = ({ isOpen, session, onClose, onSubmitted }
         setError('The captured photo is larger than 2 MB. Please retake it in better lighting.');
         return;
       }
+      stopCamera();
       releasePreview();
       const url = URL.createObjectURL(blob);
       previewUrlRef.current = url;

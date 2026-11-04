@@ -1,18 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Fingerprint, ShieldCheck, Smartphone, X } from 'lucide-react';
 import { supabase } from '../../api/supabase';
 
-const isRecentTotpMethod = (methods = []) => {
+const recentFactorMethod = (methods = []) => {
   const now = Math.floor(Date.now() / 1000);
-  return methods.some((item) => {
+  const recent = methods.find((item) => {
     const method = String(item?.method || '').toLowerCase();
     const timestamp = Number(item?.timestamp);
-    return method === 'totp'
+    return ['webauthn', 'totp'].includes(method)
       && Number.isFinite(timestamp)
       && timestamp <= now
       && now - timestamp <= 300;
   });
+  return recent ? String(recent.method).toLowerCase() : null;
 };
+
+const webAuthnAvailable = () => Boolean(
+  typeof window !== 'undefined'
+  && window.isSecureContext
+  && typeof window.PublicKeyCredential !== 'undefined'
+  && navigator.credentials
+);
+
+const getWebAuthnOptions = () => ({
+  rpId: window.location.hostname,
+  rpOrigins: [window.location.origin]
+});
 
 export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified }) => {
   const [loading, setLoading] = useState(false);
@@ -22,6 +35,7 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [step, setStep] = useState('loading');
+  const [webAuthnReady, setWebAuthnReady] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -31,16 +45,21 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
       setInitializing(true);
       setError('');
       setCode('');
+      setEnrollment(null);
+      setFactor(null);
       setStep('loading');
+      setWebAuthnReady(webAuthnAvailable());
+
       try {
         if (!supabase) throw new Error('Supabase authentication is not configured.');
 
         const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
         if (assuranceError) throw assuranceError;
-        if (assurance?.currentLevel === 'aal2' && isRecentTotpMethod(assurance.currentAuthenticationMethods || [])) {
+        const currentMethod = recentFactorMethod(assurance?.currentAuthenticationMethods || []);
+        if (assurance?.currentLevel === 'aal2' && currentMethod) {
           if (!cancelled) {
             setStep('verified');
-            await onVerified?.();
+            await onVerified?.(currentMethod);
           }
           return;
         }
@@ -48,39 +67,25 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
         const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
         if (factorsError) throw factorsError;
         const allFactors = factorsData?.all || [];
+        const verifiedWebAuthn = allFactors.find((item) =>
+          (item.factor_type === 'webauthn' || item.type === 'webauthn') && item.status === 'verified'
+        );
         const verifiedTotp = allFactors.find((item) =>
           (item.factor_type === 'totp' || item.type === 'totp') && item.status === 'verified'
         );
 
-        if (verifiedTotp) {
-          if (!cancelled) {
-            setFactor(verifiedTotp);
-            setStep('verify');
-          }
-          return;
-        }
-
-        // Remove an abandoned, unverified enrollment before creating a fresh QR code.
-        const pendingTotp = allFactors.find((item) =>
-          (item.factor_type === 'totp' || item.type === 'totp') && item.status !== 'verified'
-        );
-        if (pendingTotp?.id) {
-          const { error: removeError } = await supabase.auth.mfa.unenroll({ factorId: pendingTotp.id });
-          if (removeError) throw removeError;
-        }
-
-        const { data: enrolled, error: enrollError } = await supabase.auth.mfa.enroll({
-          factorType: 'totp',
-          friendlyName: 'TeamSync Founder Attendance Verification'
-        });
-        if (enrollError) throw enrollError;
-        if (!enrolled?.id || !enrolled?.totp?.qr_code) {
-          throw new Error('Supabase did not return a TOTP enrollment QR code.');
-        }
         if (!cancelled) {
-          setEnrollment(enrolled);
-          setFactor({ id: enrolled.id, factor_type: 'totp', status: 'unverified' });
-          setStep('enroll');
+          if (webAuthnAvailable() && verifiedWebAuthn) {
+            setFactor(verifiedWebAuthn);
+            setStep('webauthn-verify');
+          } else if (webAuthnAvailable()) {
+            setStep('webauthn-register');
+          } else if (verifiedTotp) {
+            setFactor(verifiedTotp);
+            setStep('totp-verify');
+          } else {
+            setStep('choose-totp');
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -98,7 +103,118 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
 
   if (!isOpen) return null;
 
-  const verify = async (event) => {
+  const confirmRecentMfaAndStart = async (expectedMethod) => {
+    const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assuranceError) throw assuranceError;
+
+    const method = recentFactorMethod(assurance?.currentAuthenticationMethods || []);
+    if (assurance?.currentLevel !== 'aal2' || !method || (expectedMethod && method !== expectedMethod)) {
+      throw new Error('Supabase did not confirm a recent AAL2 verification. Attendance was not started.');
+    }
+
+    setStep('verified');
+    await onVerified?.(method);
+  };
+
+  const registerDeviceAuthenticator = async () => {
+    if (!webAuthnAvailable()) {
+      setError('This browser or device does not support WebAuthn. Use the authenticator-app fallback.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const { error: registerError } = await supabase.auth.mfa.webauthn.register({
+        friendlyName: 'TeamSync Founder device authenticator',
+        webauthn: getWebAuthnOptions()
+      }, {
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          residentKey: 'preferred',
+          userVerification: 'required'
+        }
+      });
+
+      if (registerError) throw registerError;
+      await confirmRecentMfaAndStart('webauthn');
+    } catch (err) {
+      setError(err.message || 'Device verification could not be completed. You can use the authenticator-app fallback.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyDeviceAuthenticator = async () => {
+    if (!factor?.id) {
+      setError('No verified device authenticator is registered. Set one up or use the authenticator-app fallback.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const { error: authenticateError } = await supabase.auth.mfa.webauthn.authenticate({
+        factorId: factor.id,
+        webauthn: getWebAuthnOptions()
+      }, {
+        userVerification: 'required'
+      });
+
+      if (authenticateError) throw authenticateError;
+      await confirmRecentMfaAndStart('webauthn');
+    } catch (err) {
+      setError(err.message || 'Device verification could not be completed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const beginTotpFallback = async () => {
+    setLoading(true);
+    setError('');
+    setCode('');
+    try {
+      const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
+      if (factorsError) throw factorsError;
+      const verifiedTotp = (factorsData?.all || []).find((item) =>
+        (item.factor_type === 'totp' || item.type === 'totp') && item.status === 'verified'
+      );
+
+      if (verifiedTotp) {
+        setFactor(verifiedTotp);
+        setStep('totp-verify');
+        return;
+      }
+
+      const pendingTotp = (factorsData?.all || []).find((item) =>
+        (item.factor_type === 'totp' || item.type === 'totp') && item.status !== 'verified'
+      );
+      if (pendingTotp?.id) {
+        const { error: removeError } = await supabase.auth.mfa.unenroll({ factorId: pendingTotp.id });
+        if (removeError) throw removeError;
+      }
+
+      const { data: enrolled, error: enrollError } = await supabase.auth.mfa.enroll({
+        factorType: 'totp',
+        friendlyName: 'TeamSync Founder attendance fallback'
+      });
+      if (enrollError) throw enrollError;
+      if (!enrolled?.id || !enrolled?.totp?.qr_code) {
+        throw new Error('Supabase did not return a TOTP enrollment QR code.');
+      }
+
+      setEnrollment(enrolled);
+      setFactor({ id: enrolled.id, factor_type: 'totp', status: 'unverified' });
+      setStep('totp-enroll');
+    } catch (err) {
+      setError(err.message || 'Unable to set up authenticator-app fallback.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyTotp = async (event) => {
     event.preventDefault();
     if (!factor?.id || !/^\d{6,8}$/.test(code.trim())) {
       setError('Enter the current 6–8 digit code from your authenticator app.');
@@ -108,7 +224,7 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
     setLoading(true);
     setError('');
     try {
-      if (step === 'enroll') {
+      if (step === 'totp-enroll') {
         const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: factor.id });
         if (challengeError) throw challengeError;
         const { error: verifyError } = await supabase.auth.mfa.verify({
@@ -125,20 +241,17 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
         if (verifyError) throw verifyError;
       }
 
-      const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (assuranceError) throw assuranceError;
-      if (assurance?.currentLevel !== 'aal2' || !isRecentTotpMethod(assurance.currentAuthenticationMethods || [])) {
-        throw new Error('Supabase did not confirm a recent AAL2 authenticator verification. Attendance was not started.');
-      }
-
-      setStep('verified');
-      await onVerified?.();
+      await confirmRecentMfaAndStart('totp');
     } catch (err) {
       setError(err.message || 'The authenticator code could not be verified.');
     } finally {
       setLoading(false);
     }
   };
+
+  const qrSrc = enrollment?.totp?.qr_code
+    ? `data:image/svg+xml;utf8,${encodeURIComponent(enrollment.totp.qr_code)}`
+    : '';
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" role="presentation">
@@ -160,7 +273,7 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
 
         <div className="p-5 space-y-4">
           <div className="p-3 rounded-xl border border-amber-800/50 bg-amber-950/20 text-[11px] leading-relaxed text-amber-100/90">
-            This step uses your enrolled Supabase authenticator (TOTP MFA). It is a secure second-factor check, not Face ID or facial recognition. Device biometrics are not guaranteed by this method.
+            Founder verification prefers your device authenticator (Face ID, Touch ID, Windows Hello, or the device method configured for your passkey). If your device does not support it, use the authenticator-app fallback.
           </div>
 
           {initializing || step === 'loading' ? (
@@ -169,23 +282,53 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
             <div className="flex items-center gap-2 text-sm text-emerald-300">
               <CheckCircle2 className="w-5 h-5" /> Founder identity verified for this action.
             </div>
-          ) : (
-            <>
-              {step === 'enroll' && enrollment?.totp?.qr_code && (
+          ) : step === 'webauthn-register' ? (
+            <div className="space-y-3">
+              <div className="text-center space-y-2">
+                <Fingerprint className="w-10 h-10 mx-auto text-amber-300" />
+                <p className="text-sm font-semibold text-white">Set up device biometric verification</p>
+                <p className="text-xs leading-relaxed text-neutral-400">Your browser will open the device's secure passkey prompt. The device may ask for Face ID, Touch ID, Windows Hello, or another platform verification method.</p>
+              </div>
+              <button type="button" onClick={registerDeviceAuthenticator} disabled={loading} className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold">
+                {loading ? 'Waiting for device…' : 'Set up device verification'}
+              </button>
+            </div>
+          ) : step === 'webauthn-verify' ? (
+            <div className="space-y-3">
+              <div className="text-center space-y-2">
+                <Fingerprint className="w-10 h-10 mx-auto text-amber-300" />
+                <p className="text-sm font-semibold text-white">Verify with your device</p>
+                <p className="text-xs leading-relaxed text-neutral-400">Approve the secure passkey prompt using the device verification method you enrolled.</p>
+              </div>
+              <button type="button" onClick={verifyDeviceAuthenticator} disabled={loading} className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold">
+                {loading ? 'Waiting for device…' : 'Verify with device'}
+              </button>
+            </div>
+          ) : step === 'choose-totp' ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs text-neutral-300">
+                <Smartphone className="w-4 h-4 text-neutral-400" />
+                Device passkey verification is unavailable or not configured in this browser.
+              </div>
+              <button type="button" onClick={beginTotpFallback} disabled={loading} className="w-full py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-white text-xs font-semibold">
+                {loading ? 'Preparing…' : 'Use authenticator app instead'}
+              </button>
+            </div>
+          ) : step === 'totp-enroll' || step === 'totp-verify' ? (
+            <div className="space-y-3">
+              {step === 'totp-enroll' && qrSrc && (
                 <div className="space-y-3 text-center">
-                  <p className="text-xs text-neutral-300">Scan this QR code with your authenticator app, then enter the generated code.</p>
+                  <p className="text-xs text-neutral-300">Scan this QR code with your authenticator app, then enter its current code.</p>
                   <div className="inline-flex p-3 rounded-xl bg-white">
-                    <img src={enrollment.totp.qr_code} alt="Authenticator enrollment QR code" className="w-44 h-44" />
+                    <img src={qrSrc} alt="Authenticator enrollment QR code" className="w-44 h-44" />
                   </div>
-                  <p className="text-[10px] text-neutral-500">Keep your authenticator secret private. Do not share a screenshot of this QR code.</p>
+                  <p className="text-[10px] text-neutral-500">Keep the QR code and secret private.</p>
                 </div>
               )}
-
-              {step === 'verify' && (
+              {step === 'totp-verify' && (
                 <p className="text-xs text-neutral-300">Enter the current code from your enrolled authenticator app.</p>
               )}
-
-              <form onSubmit={verify} className="space-y-3">
+              <form onSubmit={verifyTotp} className="space-y-3">
                 <label className="block text-xs font-medium text-neutral-300" htmlFor="founder-totp-code">Authenticator code</label>
                 <input
                   id="founder-totp-code"
@@ -198,10 +341,17 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
                   className="w-full px-3 py-3 rounded-xl bg-neutral-900 border border-neutral-700 text-center text-lg tracking-[0.35em] font-mono text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
                 <button type="submit" disabled={loading || !/^\d{6,8}$/.test(code)} className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold transition">
-                  {loading ? 'Verifying…' : step === 'enroll' ? 'Verify and enable authenticator' : 'Verify Founder'}
+                  {loading ? 'Verifying…' : step === 'totp-enroll' ? 'Verify and enable authenticator' : 'Verify Founder'}
                 </button>
               </form>
-            </>
+            </div>
+          ) : (
+            <div className="space-y-3 text-xs text-neutral-300">
+              <p>Unable to initialize device verification. You can still use the authenticator-app fallback.</p>
+              <button type="button" onClick={beginTotpFallback} disabled={loading} className="w-full py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-white text-xs font-semibold">
+                Use authenticator app instead
+              </button>
+            </div>
           )}
 
           {error && (
@@ -209,6 +359,10 @@ export const FounderAttendanceVerificationModal = ({ isOpen, onClose, onVerified
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
+          )}
+
+          {webAuthnReady && ['webauthn-register', 'webauthn-verify'].includes(step) && (
+            <p className="text-[10px] text-neutral-500">WebAuthn MFA must be enabled in Supabase Auth for the TeamSync production domain before this device prompt can succeed.</p>
           )}
         </div>
       </div>

@@ -265,6 +265,51 @@ export const attendanceApi = {
   },
 
   /**
+   * Live photo-attendance endpoints use strict, verified Supabase bearer auth.
+   * They intentionally do not fall back to direct client-side table writes.
+   */
+  async requestLive(path, options = {}) {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {})
+      }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || `Attendance request failed (${response.status}).`);
+      error.status = response.status;
+      error.code = data.code || null;
+      throw error;
+    }
+    return data;
+  },
+
+  async getLiveMeetingAttendance(meetingId) {
+    return this.requestLive(`/meetings/${encodeURIComponent(meetingId)}/live-session`);
+  },
+
+  async startLiveAttendance(meetingId) {
+    return this.requestLive(`/meetings/${encodeURIComponent(meetingId)}/live-session`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+  },
+
+  async getActiveLiveSession() {
+    return this.requestLive('/active-session');
+  },
+
+  async submitLiveAttendance(sessionId, photoPath) {
+    return this.requestLive(`/sessions/${encodeURIComponent(sessionId)}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ photoPath })
+    });
+  },
+
+  /**
    * 4. Get Organization-Wide Attendance Reports & Analytics (Founder / Admin)
    */
   async getAttendanceReports(filters = {}) {

@@ -260,3 +260,126 @@ export function requireAdminOrFounder(req, res, next) {
 }
 
 export default requireApiKey;
+
+/**
+ * Strict Supabase-authenticated user middleware for sensitive attendance actions.
+ * Unlike legacy workspace headers, this path requires a valid Supabase access token
+ * confirmed by Supabase Auth and maps it to a server-owned profile.
+ */
+export async function requireVerifiedSupabaseUserAuth(req, res, next) {
+  try {
+    const authorization = req.headers.authorization;
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'A valid Supabase session is required.' });
+    }
+
+    const token = authorization.slice(7).trim();
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'A valid Supabase session is required.' });
+    }
+
+    const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !anonKey) {
+      return res.status(503).json({ success: false, error: 'Secure attendance authentication is not configured on the server.' });
+    }
+
+    const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!authResponse.ok) {
+      return res.status(401).json({ success: false, error: 'Your Supabase session is invalid or expired. Please sign in again.' });
+    }
+
+    const authUser = await authResponse.json();
+    if (!authUser?.id) {
+      return res.status(401).json({ success: false, error: 'Supabase did not return an authenticated user.' });
+    }
+
+    const parts = token.split('.');
+    let claims = null;
+    try {
+      claims = parts.length === 3
+        ? JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+        : null;
+    } catch {
+      claims = null;
+    }
+    if (!claims || claims.sub !== authUser.id) {
+      return res.status(401).json({ success: false, error: 'The authenticated session claims are invalid.' });
+    }
+
+    const { query } = await import('../db.js');
+    const profileResult = await query(
+      `SELECT id, auth_user_id, full_name, email, role, is_active
+       FROM public.profiles
+       WHERE auth_user_id = $1
+       LIMIT 1;`,
+      [authUser.id]
+    );
+
+    const profile = profileResult.rows[0];
+    if (!profile) {
+      return res.status(403).json({ success: false, error: 'Your authenticated account is not linked to a TeamSync profile.' });
+    }
+    if (!profile.is_active) {
+      return res.status(403).json({ success: false, error: 'Your TeamSync account is inactive.' });
+    }
+
+    req.user = {
+      id: profile.id,
+      auth_user_id: profile.auth_user_id,
+      full_name: profile.full_name,
+      email: profile.email,
+      role: profile.role,
+      is_active: profile.is_active,
+      authMethod: 'VERIFIED_SUPABASE_JWT'
+    };
+    req.authClaims = claims;
+    req.supabaseAccessToken = token;
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * Founder-only step-up check. The Supabase access token must be AAL2 and contain
+ * a recent TOTP/OTP AMR entry. A camera permission prompt or uploaded photograph
+ * is never accepted as Founder identity verification.
+ */
+export function requireRecentFounderMfa(req, res, next) {
+  if (!req.user || req.user.role !== 'FOUNDER') {
+    return res.status(403).json({ success: false, error: 'Only the Founder can start a live attendance session.' });
+  }
+
+  const claims = req.authClaims || {};
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const maxAgeSeconds = 5 * 60;
+  const amr = Array.isArray(claims.amr) ? claims.amr : [];
+  const recentTotp = amr.some((entry) => {
+    const method = String(entry?.method || '').toLowerCase();
+    const timestamp = Number(entry?.timestamp);
+    return ['totp', 'otp'].includes(method)
+      && Number.isFinite(timestamp)
+      && timestamp <= nowSeconds
+      && nowSeconds - timestamp <= maxAgeSeconds;
+  });
+
+  if (claims.aal !== 'aal2' || !recentTotp) {
+    return res.status(403).json({
+      success: false,
+      code: 'FOUNDER_MFA_REQUIRED',
+      error: 'Verify with your enrolled authenticator (TOTP MFA) within the last five minutes before starting attendance.'
+    });
+  }
+
+  req.attendanceVerifiedAt = new Date(nowSeconds * 1000).toISOString();
+  return next();
+}
+

@@ -483,7 +483,7 @@ export const WeeklyAttendanceManager = ({
           )}
 
           <p className="text-[10px] text-neutral-500">
-            Founder start verification uses Supabase TOTP MFA. This is a secure second factor, not Face ID or automatic facial recognition.
+            Founder verification prefers a device WebAuthn authenticator, with TOTP as a fallback. The photo evidence is reviewed by the Founder; TeamSync does not perform automatic face matching.
           </p>
         </div>
       )}

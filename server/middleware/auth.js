@@ -366,7 +366,7 @@ export function requireRecentFounderMfa(req, res, next) {
     .filter((entry) => {
       const method = String(entry?.method || '').toLowerCase();
       const timestamp = Number(entry?.timestamp);
-      return ['webauthn', 'totp'].includes(method)
+      return ['mfa/webauthn', 'webauthn', 'mfa/totp', 'totp'].includes(method)
         && Number.isFinite(timestamp)
         && timestamp <= nowSeconds
         && nowSeconds - timestamp <= maxAgeSeconds;
@@ -382,7 +382,7 @@ export function requireRecentFounderMfa(req, res, next) {
   }
 
   req.attendanceVerifiedAt = new Date(Number(recentFactor.timestamp) * 1000).toISOString();
-  req.attendanceVerificationMethod = String(recentFactor.method).toLowerCase() === 'webauthn'
+  req.attendanceVerificationMethod = ['mfa/webauthn', 'webauthn'].includes(String(recentFactor.method).toLowerCase())
     ? 'SUPABASE_WEBAUTHN_MFA'
     : 'SUPABASE_TOTP_MFA';
   return next();
